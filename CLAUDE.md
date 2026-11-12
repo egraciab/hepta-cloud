@@ -79,9 +79,8 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
 
 ## Pendientes
 
-- [ ] **Contraseña inicial de los tenants (bloquea el lanzamiento del 30-nov):** código listo el 2026-11-12
-      (ver `infra/README.md`). Falta: probar el alta en staging de tenants, reemplazar el script y la API en
-      `HGSVRLNX104`, desplegar acá y correr `auditar_clave_admin.sh` sobre los tenants que ya existen.
+- [ ] **Plan Despegue con Inventario y Punto de venta a la vista** (alta de ensayo del 2026-11-12): según el plan
+      son de Crecimiento. Ningún módulo propio los pide; ver qué módulo de terceros los arrastra y decidir.
 - [ ] **`HGSVRLNX104`: el usuario `odoo` tiene `sudo` total sin contraseña** (`(ALL) NOPASSWD: ALL`, visto el
       2026-11-12). Es el usuario que corre el Odoo de todos los clientes y la API de alta: limitarlo a los
       comandos que usa el alta (`psql`/`createdb` como postgres) y probar el alta después.
@@ -94,3 +93,6 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
 
 - 2026-11-12 — Repo creado desde producción (sin secretos). Fuga de `site_config` cerrada, secretos enmascarados
   en el Admin, rotación de las claves de provisión, perimetral, RetoPA y SMTP. Límite de intentos en el login.
+- 2026-11-12 — Alta de tenants sin `admin`/`admin`: script y API nuevos en `HGSVRLNX104` (instalan el plan, contraseña
+  al azar para `admin`, usuario propio del cliente), alta en segundo plano y flujo del Admin ordenado. Probado en
+  producción con dos altas de ensayo (Crecimiento y Despegue). `tienda2` era el único tenant con la clave de fábrica.
