@@ -68,6 +68,9 @@ En el `.env`: `DB_*`, `JWT_SECRET`, `HEPTA_SECRET_KEY` (cifra las credenciales d
 - [ ] **Contraseña inicial de los tenants (bloquea el lanzamiento del 30-nov):** código listo el 2026-11-12
       (ver `infra/README.md`). Falta: probar el alta en staging de tenants, reemplazar el script y la API en
       `HGSVRLNX104`, desplegar acá y correr `auditar_clave_admin.sh` sobre los tenants que ya existen.
+- [ ] **`HGSVRLNX104`: el usuario `odoo` tiene `sudo` total sin contraseña** (`(ALL) NOPASSWD: ALL`, visto el
+      2026-11-12). Es el usuario que corre el Odoo de todos los clientes y la API de alta: limitarlo a los
+      comandos que usa el alta (`psql`/`createdb` como postgres) y probar el alta después.
 - [ ] API perimetral: validar `domain` y `db` en `/vhost` y sacar la lista de suspendidos de `/health`.
 - [ ] Limitar el puerto 8888 de las dos APIs a la IP de HEPTA Cloud (hoy escuchan en todas las interfaces, sin TLS).
 - [ ] El alta espera hasta 11 minutos con la conexión abierta: pasarla a segundo plano con estado consultable.
