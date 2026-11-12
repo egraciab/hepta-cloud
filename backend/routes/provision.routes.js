@@ -2,7 +2,7 @@ const router = require('express').Router();
 const retopa = (() => { try { return require('./retopa'); } catch(e) { return null; } })();
 const pool   = require('../config/db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
-const { credencialesDe, textoCredenciales, quitarClaveDeFabrica, detalleError, avisoAlta } = require('../config/credenciales_alta');
+const alta   = require('../services/alta');
 
 router.use(requireAuth, requireAdmin);
 
@@ -22,78 +22,29 @@ router.get('/health', async (req, res) => {
 });
 
 // ── POST /api/admin/provision ─────────────────────────────────
+// Inicia el alta y responde enseguida (202). El alta sigue en segundo plano: el Admin
+// consulta el avance en /jobs/:id. Ver services/alta.js.
 router.post('/', async (req, res) => {
   const { user_id, tenant, plan, label } = req.body;
-  if (!user_id || !tenant)
-    return res.status(400).json({ success: false, error: 'user_id y tenant son requeridos' });
-  if (!/^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(tenant))
-    return res.status(400).json({ success: false, error: 'Tenant inválido' });
-  if (plan === 'enterprise')
-    return res.status(400).json({ success: false, error: 'El plan Empresa se arma a medida: no tiene alta automática' });
-
   try {
-    const cfg = await getConfig();
-    const { rows: existing } = await pool.query(
-      "SELECT id FROM instances WHERE db_name=$1", [`${tenant}.erp.hepta.com.py`]
-    );
-    if (existing.length)
-      return res.status(409).json({ success: false, error: `El tenant '${tenant}' ya existe` });
-
-    const { rows: userRows } = await pool.query(
-      'SELECT id, email, full_name FROM users WHERE id=$1', [user_id]
-    );
-    if (!userRows.length)
-      return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
-    const user = userRows[0];
-
-    console.log(`[provision] Iniciando: tenant=${tenant} plan=${plan} user=${user.email}`);
-
-    const apiRes = await fetch(`${cfg.provision_api_url}/provision`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-API-Key': cfg.provision_api_key },
-      body: JSON.stringify({
-        tenant, plan: plan||'starter',
-        client_name: user.full_name||'', client_email: user.email||''
-      }),
-      signal: AbortSignal.timeout(660000),
-    });
-    const apiData = await apiRes.json();
-    if (!apiRes.ok || !apiData.success)
-      return res.status(500).json({ success: false, error: detalleError(apiData, 'Error en provisioning') });
-
-    const { rows: instRows } = await pool.query(
-      `INSERT INTO instances (user_id,label,instance_url,db_name,plan,odoo_version,status,activated_at)
-       VALUES ($1,$2,$3,$4,$5,'19.0','active',NOW()) RETURNING *`,
-      [user_id, label||`${tenant} — Odoo CE`, apiData.url, apiData.db, plan||'starter']
-    );
-
-    await logAction(req, 'provision_instance', `instance:${instRows[0].id}`,
-      { tenant, plan, url: apiData.url, credenciales: apiData.credentials || 'sin_dato' });
-
-    // Email de bienvenida. La contraseña inicial viaja solo en ese correo: no se guarda ni
-    // se devuelve al navegador. Por eso se espera el envío: si falla, el Admin se entera.
-    const cred = credencialesDe(apiData);
-    const correoEnviado = await sendWelcomeEmail({
-      to:            user.email,
-      nombre:        user.full_name || user.email,
-      instancia_url: apiData.url,
-      plan:          plan || 'starter',
-      cred,
-    });
-
-    console.log(`[provision] OK: tenant=${tenant} url=${apiData.url} credenciales=${apiData.credentials || 'sin_dato'}`);
-    res.json({ success: true, data: {
-      instance: instRows[0], url: apiData.url, tenant,
-      credenciales_enviadas: !!cred && correoEnviado, usuario_cliente: cred ? cred.usuario : null,
-      aviso: avisoAlta(apiData, cred, correoEnviado, tenant),
-    } });
-
+    const job = await alta.iniciarAlta({ userId: user_id, tenant, plan, label, actorId: req.user.id });
+    res.status(202).json({ success: true, data: { job } });
   } catch (err) {
-    if (err.name === 'TimeoutError')
-      return res.status(504).json({ success: false, error: 'Timeout: provisioning tardó más de 11 minutos' });
-    console.error('[provision]', err.message);
-    res.status(500).json({ success: false, error: err.message });
+    if (!(err instanceof alta.ErrorAlta)) console.error('[provision]', err.message);
+    res.status(err.status || 500).json({ success: false, error: err.message });
   }
+});
+
+// ── GET /api/admin/provision/jobs ─────────────────────────────
+// Altas en curso y las terminadas en las últimas 24 h
+router.get('/jobs', (req, res) => {
+  res.json({ success: true, data: alta.listarAltas() });
+});
+
+router.get('/jobs/:id', (req, res) => {
+  const job = alta.verAlta(req.params.id);
+  if (!job) return res.status(404).json({ success: false, error: 'No hay registro de esa alta (¿se reinició el servidor?). Mirá la lista de instancias.' });
+  res.json({ success: true, data: job });
 });
 
 // ── POST /api/admin/provision/suspend/:id ─────────────────────
@@ -186,77 +137,6 @@ async function logAction(req, action, target, detail) {
     );
   } catch(e) {}
 }
-
-async function sendWelcomeEmail({ to, nombre, instancia_url, plan, cred }) {
-  const nodemailer = require('nodemailer');
-  try {
-    const { rows: smtpRows } = await pool.query(
-      "SELECT key,value FROM site_config WHERE key LIKE 'smtp%' OR key='logo_url'"
-    );
-    const smtp = Object.fromEntries(smtpRows.map(r => [r.key, r.value]));
-    const logoUrl = smtp.logo_url || '';
-    if (!smtp.smtp_host) { console.log('[welcome_email] SMTP no configurado'); return false; }
-
-    const { rows: tplRows } = await pool.query(
-      "SELECT subject, body_html FROM email_templates WHERE slug='welcome_client'"
-    );
-    if (!tplRows[0]) { console.log('[welcome_email] Plantilla no encontrada'); return false; }
-
-    const logoHtml = logoUrl
-      ? `<img src="${logoUrl}" alt="Hepta Cloud" style="max-height:40px;max-width:180px;object-fit:contain"/>`
-      : `<div style="display:inline-block;background:#1254A4;border-radius:6px;padding:8px 14px"><span style="color:#ffffff;font-size:14px;font-weight:600;letter-spacing:.5px">HEPTA CLOUD</span></div>`;
-
-    const replace = (str) => str
-      .replace(/\{\{nombre\}\}/g, nombre)
-      .replace(/\{\{instancia_url\}\}/g, instancia_url)
-      .replace(/\{\{plan\}\}/g, plan)
-      .replace(/\{\{logo_html\}\}/g, logoHtml);
-
-    // Cargar textos editables de email
-    const { rows: wcRows } = await pool.query(
-      "SELECT key,value FROM site_config WHERE key LIKE 'email_wc_%' OR key='site_url'"
-    );
-    const wc = Object.fromEntries(wcRows.map(r=>[r.key,r.value]));
-    const portalUrl = wc.email_wc_portal_url || wc.site_url + '/portal' || 'https://cloud.hepta.com.py/portal';
-
-    const paso1 = textoCredenciales(cred, wc.email_wc_paso1_desc);
-    const replaceWc = (str) => quitarClaveDeFabrica(replace(str), paso1)
-      .replace(/\{\{email_titulo\}\}/g,       wc.email_wc_titulo       || '¡Tu sistema está listo!')
-      .replace(/\{\{email_subtitulo\}\}/g,    wc.email_wc_subtitulo    || 'Ya podés acceder a tu sistema')
-      .replace(/\{\{email_cuerpo\}\}/g,       wc.email_wc_cuerpo       || 'tu instancia fue provisionada y está activa.')
-      .replace(/\{\{email_paso1_titulo\}\}/g, wc.email_wc_paso1_titulo || 'Ingresá con las credenciales de administrador')
-      .replace(/\{\{email_paso1_desc\}\}/g,   paso1)
-      .replace(/\{\{email_paso2_titulo\}\}/g, wc.email_wc_paso2_titulo || 'Configurá tu empresa')
-      .replace(/\{\{email_paso2_desc\}\}/g,   wc.email_wc_paso2_desc   || 'Nombre, RUC, logo y datos de facturación')
-      .replace(/\{\{email_paso3_titulo\}\}/g, wc.email_wc_paso3_titulo || 'Explorá tu portal de cliente')
-      .replace(/\{\{email_paso3_desc\}\}/g,   wc.email_wc_paso3_desc   || 'Gestioná tu suscripción, facturas y soporte')
-      .replace(/\{\{email_cierre\}\}/g,       wc.email_wc_cierre       || '¿Necesitás ayuda? Respondé este email.')
-      .replace(/\{\{email_version\}\}/g,      wc.email_wc_version      || 'Hepta Cloud v19')
-      .replace(/\{\{portal_url\}\}/g,         portalUrl);
-
-    const transporter = nodemailer.createTransport({
-      host: smtp.smtp_host,
-      port: parseInt(smtp.smtp_port) || 465,
-      secure: smtp.smtp_secure === 'true',
-      auth: { user: smtp.smtp_user, pass: smtp.smtp_pass },
-      tls: { rejectUnauthorized: false },
-    });
-
-    await transporter.sendMail({
-      from:    `${smtp.smtp_from_name} <${smtp.smtp_from_email}>`,
-      to,
-      subject: replaceWc(tplRows[0].subject),
-      html:    replaceWc(tplRows[0].body_html),
-    });
-
-    console.log(`[welcome_email] Enviado a ${to}`);
-    return true;
-  } catch (err) {
-    console.error('[welcome_email] Error:', err.message);
-    return false;
-  }
-}
-
 
 // ── GET /api/admin/provision/retopa/categories ───────────────
 router.get('/retopa/categories', async (req, res) => {

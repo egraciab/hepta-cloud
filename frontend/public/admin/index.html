@@ -564,6 +564,13 @@
           </div>
         </div>
 
+        <!-- Altas en curso y recientes (se actualiza sola) -->
+        <div class="card" id="altas-card" style="margin-bottom:16px;display:none">
+          <div class="card-header"><div class="card-title">Altas en curso y recientes</div>
+            <span class="text-muted text-sm">Siguen aunque cierres esta página</span></div>
+          <div class="card-body" id="altas-lista" style="padding-top:8px"></div>
+        </div>
+
         <div class="card">
           <div class="card-header">
             <div class="card-title">Instancias de clientes</div>
@@ -692,11 +699,16 @@
     <div class="modal-title">Nueva instancia — Provisionar</div>
     <div class="alert alert-error" id="prov-err"></div>
 
+    <div id="prov-form">
     <div class="form-group">
-      <label class="form-label">Cliente *</label>
+      <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Usuario del cliente *</span>
+        <a href="#" onclick="provNuevoUsuario();return false" style="font-size:12px;color:var(--blue);font-weight:500">+ Nuevo usuario</a>
+      </label>
       <select class="form-select" id="prov-user-id">
-        <option value="">Seleccioná un cliente...</option>
+        <option value="">Seleccioná un usuario...</option>
       </select>
+      <div class="form-hint">Es quien va a entrar al sistema: su correo es su usuario y ahí le llega la contraseña.</div>
     </div>
     <div class="form-group">
       <label class="form-label">Subdominio *</label>
@@ -713,20 +725,21 @@
     <div class="form-group">
       <label class="form-label">Plan</label>
       <select class="form-select" id="prov-plan">
-        <option value="starter">Starter</option>
-        <option value="professional">Professional</option>
-        <option value="enterprise">Enterprise</option>
+        <option value="starter">Despegue — sitio, CRM, ventas y facturación básica</option>
+        <option value="professional">Crecimiento — suma factura electrónica, tienda, PdV e inventario</option>
       </select>
+      <div class="form-hint">El plan Empresa se arma a medida, sin alta automática.</div>
     </div>
     <div class="form-group">
-      <label class="form-label">Label (nombre amigable)</label>
+      <label class="form-label">Nombre para mostrar</label>
       <input class="form-input" id="prov-label" placeholder="Ej: Sistema de gestión de Pedro"/>
+    </div>
     </div>
 
     <!-- Paso 1: Instancia -->
     <div id="prov-step1">
       <div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:var(--radius);padding:12px;font-size:12px;color:#92400E;margin-bottom:16px">
-        ⚠️ Este proceso puede tardar <strong>3-8 minutos</strong>. No cerrés esta ventana mientras se procesa.
+El alta tarda <strong>de 2 a 8 minutos</strong> y sigue aunque cierres esta ventana. Al terminar, el cliente recibe por correo su usuario y su contraseña.
       </div>
     </div>
 
@@ -763,8 +776,12 @@
 
     <div id="prov-progress" style="display:none;text-align:center;padding:20px 0">
       <div class="spinner" style="width:32px;height:32px;border-width:3px;margin:0 auto 12px;border-color:rgba(18,84,164,.2);border-top-color:var(--blue)"></div>
-      <div style="font-size:13px;color:var(--gray-600)" id="prov-progress-text">Iniciando provisioning...</div>
+      <div style="font-size:13px;color:var(--gray-600)" id="prov-progress-text">Iniciando el alta...</div>
+      <div style="font-size:12px;color:var(--gray-600);margin-top:6px" id="prov-progress-time"></div>
+      <div style="font-size:12px;color:var(--gray-600);margin-top:10px">Podés cerrar esta ventana: el alta sigue y la ves en “Altas en curso”.</div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="closeProvisionModal();loadInstances()">Cerrar y seguir trabajando</button>
     </div>
+    <div class="alert" id="prov-aviso" style="background:#FEF3C7;border:1px solid #FCD34D;color:#92400E;white-space:pre-wrap"></div>
 
     <div class="modal-footer" id="prov-modal-footer">
       <button class="btn btn-secondary" onclick="closeProvisionModal()">Cancelar</button>
@@ -899,9 +916,12 @@
       <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="user-email"/></div>
     </div>
     <div class="grid-2">
-      <div class="form-group"><label class="form-label">Contraseña <span class="text-muted">(vacío = no cambiar)</span></label><input class="form-input" type="password" id="user-password"/></div>
+      <div class="form-group"><label class="form-label">Contraseña <span class="text-muted" id="user-pass-hint">(vacío = no cambiar)</span></label><input class="form-input" type="password" id="user-password" autocomplete="new-password"/></div>
       <div class="form-group"><label class="form-label">Rol</label><select class="form-select" id="user-role-select"><option value="client">Client</option><option value="admin">Admin</option><option value="godmode">Godmode</option></select></div>
     </div>
+    <div class="form-group"><label class="form-label">Cliente (entidad fiscal)</label>
+      <select class="form-select" id="user-client"><option value="">— Sin vincular —</option></select>
+      <div class="form-hint" id="user-client-hint">A quién se le factura lo de este usuario. Se puede vincular después desde Clientes.</div></div>
     <div class="form-group"><label class="form-label">Partner del tenant maestro</label><input class="form-input" type="number" id="user-odoo-id"/><div class="form-hint">res.partner del Odoo de tenants. El del ERP vive en billing_customers.</div></div>
     <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="user-active" checked/> Usuario activo</label></div>
     <div class="alert alert-error" id="user-err"></div>
@@ -949,8 +969,13 @@
       <div class="form-group"><label class="form-label">Ciudad</label><input class="form-input" id="client-ciudad"/></div>
       <div class="form-group"><label class="form-label">Departamento</label><input class="form-input" id="client-departamento"/></div>
     </div>
-    <div class="form-group" id="client-user-group"><label class="form-label">Vincular a un usuario del portal</label>
-      <select class="form-select" id="client-user"><option value="">— Ninguno por ahora —</option></select></div>
+    <div class="form-group" id="client-user-group"><label class="form-label">Usuarios del portal vinculados</label>
+      <div id="client-users-lista" style="margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px">
+        <select class="form-select" id="client-user" style="flex:1"><option value="">— Elegí un usuario —</option></select>
+        <button class="btn btn-secondary btn-sm" id="client-user-btn" onclick="clientVincular()" type="button">Vincular</button>
+      </div>
+      <div class="form-hint" id="client-user-hint"></div></div>
     <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
       <input type="checkbox" id="client-forzar-dv"/> Forzar el DV aunque no coincida con el cálculo</label></div>
     <div class="alert alert-error" id="client-err"></div>
@@ -1003,8 +1028,14 @@ async function api(method,path,body){
   const opts={method,headers:authHeaders()};
   if(body) opts.body=JSON.stringify(body);
   const res=await fetch(API+path,opts);
-  const data=await res.json();
   if(res.status===401){doLogout();throw new Error('Sesión expirada');}
+  let data;
+  try{ data=await res.json(); }
+  catch(e){
+    // El proxy devolvió una página (corte por tiempo, servidor reiniciando) en vez de datos
+    const motivo=res.status===504||res.status===502?'el servidor tardó demasiado o se está reiniciando':'respuesta inesperada del servidor';
+    return {success:false,error:`No se pudo completar (${res.status}): ${motivo}. Probá de nuevo en un momento.`};
+  }
   return data;
 }
 function showAlert(id,type,msg,duration=3000){
@@ -1386,8 +1417,8 @@ async function loadUsers(){
   if(!data.data.length){tbody.innerHTML='<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">Sin usuarios.</td></tr>';return;}
   tbody.innerHTML=data.data.map(u=>`
     <tr>
-      <td><strong>${u.full_name}</strong></td>
-      <td>${u.email}</td>
+      <td><strong>${esc(u.full_name)}</strong>${(u.clientes||[]).length?`<div class="text-muted text-sm">${u.clientes.map(c=>esc(c.razon_social)).join(' · ')}</div>`:'<div class="text-sm" style="color:#B45309">Sin cliente vinculado</div>'}</td>
+      <td>${esc(u.email)}</td>
       <td><span class="badge badge-blue">${u.role}</span></td>
       <td>${u.odoo_partner_id||'<span class="text-muted">—</span>'}</td>
       <td class="text-muted text-sm">${u.last_login_at?new Date(u.last_login_at).toLocaleDateString('es-PY'):'Nunca'}</td>
@@ -1398,28 +1429,53 @@ async function loadUsers(){
       </td>
     </tr>`).join('');
 }
-function openUserModal(u){
+let _userDespues=null;   // qué hacer después de guardar (lo usa el alta para volver con el usuario creado)
+async function openUserModal(u,despues){
+  _userDespues=despues||null;
   document.getElementById('user-modal-title').textContent=u?'Editar usuario':'Nuevo usuario';
   document.getElementById('user-id').value=u?.id||'';
   document.getElementById('user-name-input').value=u?.full_name||'';
   document.getElementById('user-email').value=u?.email||'';
   document.getElementById('user-password').value='';
+  document.getElementById('user-pass-hint').textContent=u?'(vacío = no cambiar)':'(vacío = se genera sola; le llega al cliente con el alta)';
   document.getElementById('user-role-select').value=u?.role||'client';
   document.getElementById('user-odoo-id').value=u?.odoo_partner_id||'';
   document.getElementById('user-active').checked=u?u.is_active:true;
   document.getElementById('user-email').disabled=!!u;
   document.getElementById('user-err').className='alert alert-error';
+  // Entidades fiscales para vincular
+  const sel=document.getElementById('user-client');
+  const ya=(u?.clientes||[]).map(c=>c.id);
+  sel.innerHTML='<option value="">'+(u?'— No agregar otro —':'— Sin vincular —')+'</option>';
+  const cl=await api('GET','/admin/clients');
+  if(cl.success) cl.data.filter(c=>!ya.includes(c.id)).forEach(c=>{
+    sel.innerHTML+=`<option value="${c.id}">${esc(c.razon_social)} (${c.tipo_doc.toUpperCase()} ${esc(c.numero_doc)}${c.dv?'-'+esc(c.dv):''})</option>`;
+  });
+  document.getElementById('user-client-hint').textContent=(u?.clientes||[]).length
+    ?'Ya vinculado a: '+u.clientes.map(c=>c.razon_social).join(', ')+'. Podés sumarle otro.'
+    :'A quién se le factura lo de este usuario. También se vincula desde Clientes.';
   document.getElementById('user-modal').classList.add('open');
 }
 function closeUserModal(){document.getElementById('user-modal').classList.remove('open');}
 async function saveUser(){
   const id=document.getElementById('user-id').value;
-  const body={full_name:document.getElementById('user-name-input').value,email:document.getElementById('user-email').value,role:document.getElementById('user-role-select').value,odoo_partner_id:parseInt(document.getElementById('user-odoo-id').value)||null,is_active:document.getElementById('user-active').checked};
+  const cliente=document.getElementById('user-client').value;
+  const body={full_name:document.getElementById('user-name-input').value.trim(),email:document.getElementById('user-email').value.trim(),role:document.getElementById('user-role-select').value,odoo_partner_id:parseInt(document.getElementById('user-odoo-id').value)||null,is_active:document.getElementById('user-active').checked};
   const pass=document.getElementById('user-password').value; if(pass) body.password=pass;
+  if(!id&&cliente) body.billing_customer_id=cliente;
+  const err=document.getElementById('user-err');
   const data=id?await api('PUT',`/admin/users/${id}`,body):await api('POST','/admin/users',body);
-  if(data.success){closeUserModal();loadUsers();}
-  else{const err=document.getElementById('user-err');err.textContent=data.error;err.className='alert alert-error show';}
+  if(!data.success){err.textContent=data.error;err.className='alert alert-error show';return;}
+  if(id&&cliente){
+    const v=await api('POST',`/admin/clients/${cliente}/usuarios`,{user_id:parseInt(id)});
+    if(!v.success){err.textContent='Se guardó el usuario, pero no se pudo vincular al cliente: '+(v.error||'');err.className='alert alert-error show';return;}
+  }
+  closeUserModal(); loadUsers();
+  if(_userDespues){const f=_userDespues;_userDespues=null;f(data.data);}
 }
+
+// Texto seguro para meter en HTML
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
 // ── CLIENTES (entidades fiscales) ──────────────────────────
 let CLIENTES=[];
@@ -1491,19 +1547,43 @@ async function openClientModal(id){
   document.getElementById('client-numero').disabled=bloquear;
   document.getElementById('client-dv').disabled=bloquear;
   document.getElementById('client-tipo-doc').disabled=bloquear;
-  // Selector de usuario, solo en el alta
-  const grupo=document.getElementById('client-user-group');
-  grupo.style.display=c?'none':'';
-  if(!c){
-    const us=await api('GET','/admin/users');
-    const sel=document.getElementById('client-user');
-    sel.innerHTML='<option value="">— Ninguno por ahora —</option>'+
-      (us.success?us.data.filter(u=>u.role==='client').map(u=>`<option value="${u.id}">${u.full_name} (${u.email})</option>`).join(''):'');
-  }
+  await clientCargarUsuarios(c);
   clientToggleDV(); clientSugerirDV();
   document.getElementById('client-modal').classList.add('open');
 }
 function closeClientModal(){document.getElementById('client-modal').classList.remove('open');}
+
+// Usuarios vinculados al cliente. En un cliente nuevo se elige uno y se vincula al guardar;
+// en uno que ya existe se vincula y desvincula al momento.
+async function clientCargarUsuarios(c){
+  const lista=document.getElementById('client-users-lista');
+  const vinculados=c?(c.usuarios||[]):[];
+  lista.innerHTML=vinculados.length
+    ?vinculados.map(u=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);margin-bottom:4px;font-size:13px">
+        <span><strong>${esc(u.full_name)}</strong> <span class="text-muted">${esc(u.email)}</span></span>
+        <a href="#" onclick="clientDesvincular('${c.id}',${u.id});return false" style="color:var(--red);font-size:12px">Quitar</a></div>`).join('')
+    :(c?'<div class="text-muted text-sm" style="margin-bottom:4px">Ninguno todavía.</div>':'');
+  const us=await api('GET','/admin/users');
+  const ya=vinculados.map(u=>u.id);
+  const sel=document.getElementById('client-user');
+  sel.innerHTML=`<option value="">${c?'— Elegí un usuario —':'— Ninguno por ahora —'}</option>`+
+    (us.success?us.data.filter(u=>u.role==='client'&&!ya.includes(u.id)).map(u=>`<option value="${u.id}">${esc(u.full_name)} (${esc(u.email)})</option>`).join(''):'');
+  document.getElementById('client-user-btn').style.display=c?'':'none';
+  document.getElementById('client-user-hint').textContent=c?'':'Se vincula al guardar. Si el usuario todavía no existe, crealo en Usuarios y elegí este cliente ahí.';
+}
+async function clientVincular(){
+  const id=document.getElementById('client-id').value, uid=document.getElementById('client-user').value;
+  if(!id||!uid) return;
+  const r=await api('POST',`/admin/clients/${id}/usuarios`,{user_id:parseInt(uid)});
+  const err=document.getElementById('client-err');
+  if(!r.success){err.textContent=r.error;err.className='alert alert-error show';return;}
+  await loadClients(); await clientCargarUsuarios(CLIENTES.find(x=>x.id===id));
+}
+async function clientDesvincular(id,uid){
+  const r=await api('DELETE',`/admin/clients/${id}/usuarios/${uid}`);
+  if(!r.success){alert(r.error||'No se pudo quitar');return;}
+  await loadClients(); await clientCargarUsuarios(CLIENTES.find(x=>x.id===id));
+}
 
 async function saveClient(){
   const id=document.getElementById('client-id').value;
@@ -1722,7 +1802,7 @@ async function loadPayments() {
     return;
   }
 
-  const statusLabel = { pending:'Pendiente', provisioned:'Provisionado', cancelled:'Cancelado' };
+  const statusLabel = { pending:'Pendiente', provisioning:'Alta en curso', provisioned:'Provisionado', cancelled:'Cancelado' };
   const statusColor = { pending:'badge-blue', provisioned:'badge-green', cancelled:'badge-gray' };
   const planLabel   = { starter:'Despegue', professional:'Crecimiento', enterprise:'Empresa' };
 
@@ -1762,13 +1842,21 @@ async function confirmPayment() {
   if (!subdomain) { alert('Ingresá el subdominio'); return; }
 
   const data = await api('POST', `/admin/payment-requests/${id}/confirm`, { subdomain, label });
-  if (data.success) {
-    document.getElementById('pay-confirm-modal').classList.remove('open');
-    showAlert('pay-ok', 'success', `✓ ${data.message}`);
-    if (data.aviso) alert(data.aviso);
-    loadPayments();
+  if (!data.success) { showAlert('pay-err', 'error', data.error, 8000); return; }
+  document.getElementById('pay-confirm-modal').classList.remove('open');
+  if (!data.data || !data.data.job) { showAlert('pay-ok', 'success', `✓ ${data.message}`); loadPayments(); return; }
+
+  // El alta corre en el servidor (2 a 8 minutos): se avisa acá cuando termina
+  showAlert('pay-ok', 'success', `✓ ${data.message} Tarda de 2 a 8 minutos; te aviso acá cuando termine.`, 0);
+  loadPayments();
+  const job = await seguirAlta(data.data.job.id);
+  loadPayments();
+  if (job.estado === 'ok') {
+    showAlert('pay-ok', 'success', `✓ ${job.tenant} quedó listo.` + (job.credenciales_enviadas ? ' El cliente recibió su usuario y contraseña por correo.' : ''), 0);
+    if (job.aviso) alert(job.aviso);
   } else {
-    showAlert('pay-err', 'error', data.error);
+    document.getElementById('pay-ok').className = 'alert alert-success';
+    showAlert('pay-err', 'error', `El alta de ${subdomain} falló: ${job.error || 'sin detalle'}. La solicitud volvió a pendiente.`, 0);
   }
 }
 
@@ -1780,7 +1868,7 @@ async function cancelPayment(id) {
 
 // ── INSTANCES ──────────────────────────────────────────────
 async function loadInstances(){
-  checkProvisionApi();
+  checkProvisionApi(); loadAltas();
   const data=await api('GET','/admin/instances');
   if(!data.success) return;
   const tbody=document.getElementById('instances-tbody');
@@ -1795,7 +1883,7 @@ async function loadInstances(){
       <td><strong>${i.full_name||'—'}</strong><div class="text-sm text-muted">${i.email||''}</div></td>
       <td><code style="font-size:12px">${i.db_name||'—'}</code></td>
       <td>${i.instance_url?`<a href="${i.instance_url}" target="_blank" style="color:var(--blue);font-size:12px">${i.instance_url}</a>`:'—'}</td>
-      <td><span class="badge badge-blue">${i.plan}</span></td>
+      <td><span class="badge badge-blue">${({starter:'Despegue',professional:'Crecimiento',enterprise:'Empresa'})[i.plan]||i.plan}</span></td>
       <td><span class="badge ${statusMap[i.status]||'badge-gray'}">${statusLabel[i.status]||i.status}</span></td>
       <td class="text-sm text-muted">${i.activated_at?new Date(i.activated_at).toLocaleDateString('es-PY'):'—'}</td>
       <td style="display:flex;gap:4px;flex-wrap:wrap">
@@ -1849,6 +1937,7 @@ let _provisionedInstanceId = null;
 
 function goToStep2(instanceId, userData){
   _provisionedInstanceId = instanceId;
+  document.getElementById('prov-form').style.display='none';
   document.getElementById('prov-step1').style.display='none';
   document.getElementById('prov-step2').style.display='block';
   document.getElementById('prov-modal-footer').style.display='none';
@@ -1888,21 +1977,35 @@ async function submitRetopaListing(){
   loadInstances();
 }
 
-async function openProvisionModal(){
-  // Cargar usuarios clientes
+async function provCargarUsuarios(seleccionar){
   const data=await api('GET','/admin/users');
   const sel=document.getElementById('prov-user-id');
-  sel.innerHTML='<option value="">Seleccioná un cliente...</option>';
+  sel.innerHTML='<option value="">Seleccioná un usuario...</option>';
   if(data.success){
-    data.data.forEach(u=>{
-      sel.innerHTML+=`<option value="${u.id}">${u.full_name} (${u.email}) [${u.role}]</option>`;
+    data.data.filter(u=>u.is_active&&u.role==='client').forEach(u=>{
+      const cl=(u.clientes||[]).map(c=>c.razon_social).join(', ');
+      sel.innerHTML+=`<option value="${u.id}" data-nombre="${esc(u.full_name)}">${esc(u.full_name)} (${esc(u.email)})${cl?' — '+esc(cl):''}</option>`;
     });
   }
+  if(seleccionar) sel.value=String(seleccionar);
+}
+// "+ Nuevo usuario" dentro del alta: abre el formulario de usuario y vuelve con él elegido
+function provNuevoUsuario(){
+  openUserModal(null, async u=>{ await provCargarUsuarios(u.id); });
+}
+
+async function openProvisionModal(){
+  await provCargarUsuarios();
   document.getElementById('prov-tenant').value='';
   document.getElementById('prov-label').value='';
   document.getElementById('prov-plan').value='starter';
   document.getElementById('prov-url-preview').innerHTML='https://<em>subdominio</em>.erp.hepta.com.py';
   document.getElementById('prov-err').className='alert alert-error';
+  document.getElementById('prov-aviso').className='alert';
+  document.getElementById('prov-form').style.display='';
+  document.getElementById('prov-step1').style.display='';
+  document.getElementById('prov-step2').style.display='none';
+  document.getElementById('prov-step2-footer').style.display='none';
   document.getElementById('prov-progress').style.display='none';
   document.getElementById('prov-modal-footer').style.display='flex';
   document.getElementById('provision-modal').classList.add('open');
@@ -1917,64 +2020,93 @@ function updateProvisionPreview(){
   else el.innerHTML='https://<em>subdominio</em>.erp.hepta.com.py';
 }
 
+function provError(msg){
+  document.getElementById('prov-progress').style.display='none';
+  document.getElementById('prov-form').style.display='';
+  document.getElementById('prov-step1').style.display='';
+  document.getElementById('prov-modal-footer').style.display='flex';
+  const err=document.getElementById('prov-err');
+  err.textContent=msg||'No se pudo completar el alta.';
+  err.className='alert alert-error show';
+}
+const duracion=s=>s<60?`${s} s`:`${Math.floor(s/60)} min ${String(s%60).padStart(2,'0')} s`;
+
+// Consulta un alta cada 8 s hasta que termina. `cada` recibe el estado en cada consulta.
+async function seguirAlta(jobId,cada){
+  for(;;){
+    let r;
+    try{ r=await api('GET',`/admin/provision/jobs/${jobId}`); }catch(e){ r={success:false,error:e.message}; }
+    if(r.success){
+      if(cada) cada(r.data);
+      if(r.data.estado!=='en_curso') return r.data;
+    } else if(/No hay registro/.test(r.error||'')) {
+      return {estado:'error',error:r.error};
+    }
+    await new Promise(ok=>setTimeout(ok,8000));
+  }
+}
+
 async function runProvisioning(){
-  const userId=document.getElementById('prov-user-id').value;
+  const sel=document.getElementById('prov-user-id');
+  const userId=sel.value;
   const tenant=document.getElementById('prov-tenant').value.trim().toLowerCase();
   const plan=document.getElementById('prov-plan').value;
   const label=document.getElementById('prov-label').value.trim();
+  const nombre=sel.options[sel.selectedIndex]?.dataset?.nombre||'';
 
-  if(!userId||!tenant){
-    const err=document.getElementById('prov-err');
-    err.textContent='Cliente y subdominio son requeridos.';
-    err.className='alert alert-error show';
-    return;
-  }
+  if(!userId||!tenant){ provError('Elegí el usuario del cliente y cargá el subdominio.'); return; }
+  if(!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(tenant)||tenant.length<2){ provError('Subdominio inválido: solo letras, números y guiones.'); return; }
 
-  // Mostrar progreso
-  document.getElementById('prov-modal-footer').style.display='none';
-  document.getElementById('prov-progress').style.display='block';
   document.getElementById('prov-err').className='alert alert-error';
+  document.getElementById('prov-modal-footer').style.display='none';
 
-  const msgs=[
-    'Creando base de datos...',
-    'Inicializando Odoo CE v19...',
-    'Configurando módulos base...',
-    'Configurando dominio...',
-    'Casi listo...',
-  ];
-  let mi=0;
-  const ticker=setInterval(()=>{
-    document.getElementById('prov-progress-text').textContent=msgs[Math.min(mi++,msgs.length-1)];
-  }, 60000);
+  let data;
+  try{ data=await api('POST','/admin/provision',{user_id:parseInt(userId),tenant,plan,label}); }
+  catch(e){ provError(e.message||'Error de conexión.'); return; }
+  if(!data.success){ provError(data.error); return; }
 
-  try{
-    const data=await api('POST','/admin/provision',{user_id:parseInt(userId),tenant,plan,label});
-    clearInterval(ticker);
+  // El alta ya corre en el servidor: desde acá solo se mira cómo va
+  document.getElementById('prov-form').style.display='none';
+  document.getElementById('prov-step1').style.display='none';
+  document.getElementById('prov-progress').style.display='block';
+  loadAltas();
+  const job=await seguirAlta(data.data.job.id,j=>{
+    document.getElementById('prov-progress-text').textContent=j.paso+'...';
+    document.getElementById('prov-progress-time').textContent=`${j.tenant}.erp.hepta.com.py · plan ${j.plan_nombre} · hace ${duracion(j.segundos)}`;
+  });
+  loadAltas(); loadInstances();
+  if(!document.getElementById('provision-modal').classList.contains('open')) return;   // la cerraron: el resultado queda en "Altas"
+  if(job.estado!=='ok'){ provError(job.error); return; }
 
-    if(data.success){
-      if(data.data.aviso) alert(data.data.aviso);
-      // Ir al paso 2 — ficha en RetoPA
-      const selUser = document.getElementById('prov-user-id');
-      const userData = selUser ? {
-        full_name: selUser.options[selUser.selectedIndex]?.text?.split(' (')[0],
-        phone: null
-      } : null;
-      goToStep2(data.data.instance.id, userData);
-    } else {
-      document.getElementById('prov-progress').style.display='none';
-      document.getElementById('prov-modal-footer').style.display='flex';
-      const err=document.getElementById('prov-err');
-      err.textContent=data.error||'Error en el provisioning.';
-      err.className='alert alert-error show';
-    }
-  }catch(e){
-    clearInterval(ticker);
-    document.getElementById('prov-progress').style.display='none';
-    document.getElementById('prov-modal-footer').style.display='flex';
-    const err=document.getElementById('prov-err');
-    err.textContent=e.message||'Error de conexión.';
-    err.className='alert alert-error show';
-  }
+  const aviso=document.getElementById('prov-aviso');
+  if(job.aviso){ aviso.textContent='Atención: '+job.aviso; aviso.className='alert show'; }
+  goToStep2(job.instance_id,{full_name:nombre,phone:null});
+}
+
+// ── Altas en curso y recientes (tarjeta de Instancias) ────────
+let _altasTimer=null;
+async function loadAltas(){
+  let r; try{ r=await api('GET','/admin/provision/jobs'); }catch(e){ return; }
+  const card=document.getElementById('altas-card'), lista=document.getElementById('altas-lista');
+  if(!card||!r.success) return;
+  card.style.display=r.data.length?'':'none';
+  const color={en_curso:'badge-blue',ok:'badge-green',error:'badge-red'}, texto={en_curso:'En curso',ok:'Lista',error:'Falló'};
+  lista.innerHTML=r.data.map(j=>`
+    <div style="padding:10px 0;border-bottom:1px solid var(--gray-200);font-size:13px">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+        <span><span class="badge ${color[j.estado]}">${texto[j.estado]}</span>
+          <strong style="margin-left:6px">${esc(j.tenant)}.erp.hepta.com.py</strong>
+          <span class="text-muted">· ${esc(j.plan_nombre)} · ${esc(j.usuario)}</span></span>
+        <span class="text-muted text-sm">${j.estado==='en_curso'?esc(j.paso)+' · hace '+duracion(j.segundos):'tardó '+duracion(j.segundos)}</span>
+      </div>
+      ${j.estado==='ok'?`<div class="text-sm" style="margin-top:4px;color:var(--gray-600)">${j.credenciales_enviadas?'Usuario y contraseña enviados al cliente por correo.':(j.correo_enviado?'Correo de bienvenida enviado (sin contraseña nueva).':'El correo de bienvenida no salió.')}</div>`:''}
+      ${j.aviso?`<div style="margin-top:6px;background:#FEF3C7;border:1px solid #FCD34D;color:#92400E;border-radius:var(--radius);padding:8px 10px;font-size:12px">${esc(j.aviso)}</div>`:''}
+      ${j.error?`<div style="margin-top:6px;background:var(--red-pale);color:var(--red);border-radius:var(--radius);padding:8px 10px;font-size:12px;white-space:pre-wrap">${esc(j.error)}</div>`:''}
+    </div>`).join('');
+  // Mientras haya alguna en curso y la sección esté a la vista, se refresca sola
+  clearTimeout(_altasTimer);
+  const visible=document.getElementById('section-instances').classList.contains('active');
+  if(visible&&r.data.some(j=>j.estado==='en_curso')) _altasTimer=setTimeout(async()=>{await loadAltas(); if(!(await api('GET','/admin/provision/jobs')).data?.some(j=>j.estado==='en_curso')) loadInstances();},10000);
 }
 
 async function deleteInstance(id,label){

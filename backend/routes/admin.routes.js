@@ -228,27 +228,52 @@ router.put('/email-templates/:id', async (req, res) => {
 // ── Usuarios ─────────────────────────────────────────────────
 router.get('/users', async (req, res) => {
   try {
+    // "clientes": las entidades fiscales a las que está vinculado cada usuario
     const { rows } = await pool.query(
-      'SELECT id,email,full_name,role,is_active,tenant_partner_id AS odoo_partner_id,last_login_at,created_at FROM users ORDER BY created_at DESC'
+      `SELECT u.id,u.email,u.full_name,u.role,u.is_active,u.tenant_partner_id AS odoo_partner_id,
+              u.last_login_at,u.created_at,
+              COALESCE(c.lista, '[]'::json) AS clientes
+         FROM users u
+         LEFT JOIN LATERAL (
+           SELECT json_agg(json_build_object('id', bc.id, 'razon_social', bc.razon_social)) AS lista
+             FROM account_billing_customers abc
+             JOIN billing_customers bc ON bc.id = abc.billing_customer_id
+            WHERE abc.user_id = u.id
+         ) c ON true
+        ORDER BY u.created_at DESC`
     );
     res.json({ success: true, data: rows });
-  } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
+  } catch (err) { console.error('[admin/users GET]', err.message); res.status(500).json({ success: false, error: 'Error interno' }); }
 });
 
+// Alta de usuario. La contraseña es opcional: si no se carga, queda una al azar que nadie
+// conoce y el cliente recibe la suya en el correo de bienvenida del alta de su sistema.
+// billing_customer_id (opcional) lo vincula de entrada a su entidad fiscal.
 router.post('/users', requireGodmode, async (req, res) => {
-  const { email, password, full_name, role, odoo_partner_id } = req.body;
-  if (!email || !password || !full_name)
-    return res.status(400).json({ success: false, error: 'Email, contraseña y nombre requeridos' });
+  const { email, password, full_name, role, odoo_partner_id, billing_customer_id } = req.body;
+  if (!email || !full_name)
+    return res.status(400).json({ success: false, error: 'Nombre y correo son obligatorios' });
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(email).trim()))
+    return res.status(400).json({ success: false, error: 'El correo no parece válido' });
+  if (password && String(password).length < 8)
+    return res.status(400).json({ success: false, error: 'La contraseña tiene que tener al menos 8 caracteres' });
   try {
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password || require('crypto').randomBytes(24).toString('base64url'), 10);
     const { rows } = await pool.query(
       `INSERT INTO users (email,password_hash,full_name,role,tenant_partner_id)
        VALUES ($1,$2,$3,$4,$5) RETURNING id,email,full_name,role`,
       [email.toLowerCase().trim(),hash,full_name.trim(),role||'client',odoo_partner_id||null]
     );
+    if (billing_customer_id) {
+      await pool.query(
+        `INSERT INTO account_billing_customers (user_id, billing_customer_id, rol)
+         VALUES ($1,$2,'titular') ON CONFLICT DO NOTHING`,
+        [rows[0].id, billing_customer_id]);
+    }
     res.json({ success: true, data: rows[0] });
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ success: false, error: 'Email ya registrado' });
+    console.error('[admin/users POST]', err.message);
     res.status(500).json({ success: false, error: 'Error interno' });
   }
 });

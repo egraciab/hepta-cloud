@@ -3,7 +3,7 @@ const pool       = require('../config/db');
 const bcrypt     = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
-const { credencialesDe, textoCredenciales, detalleError, avisoAlta } = require('../config/credenciales_alta');
+const alta = require('../services/alta');
 
 // ── Email helper: usa la config SMTP de site_config. No lanza (loguea y sigue) ──
 async function sendMailHC({ to, subject, html }) {
@@ -218,85 +218,30 @@ router.post('/admin/payment-requests/:id/confirm', requireAuth, requireAdmin, as
     if (!subdomain)
       return res.status(400).json({ success: false, error: 'subdomain requerido para provisionar' });
 
-    // Obtener config de APIs
-    const { rows: cfgRows } = await pool.query(
-      "SELECT key,value FROM site_config WHERE key IN ('provision_api_url','provision_api_key')"
-    );
-    const cfg = Object.fromEntries(cfgRows.map(r => [r.key, r.value]));
+    if (pr.status === 'provisioning')
+      return res.status(409).json({ success: false, error: 'Esa solicitud ya tiene un alta en curso' });
 
-    // Marcar en curso: el cliente ve "Provisionando" en el portal mientras corre el script
+    // El alta corre en segundo plano (services/alta.js): crea la instancia, marca la solicitud
+    // como provisionada y manda el correo de bienvenida. Si falla, la solicitud vuelve a pendiente.
     await pool.query(
       `UPDATE payment_requests SET status='provisioning', confirmed_by=$1, confirmed_at=NOW(), updated_at=NOW() WHERE id=$2`,
       [req.user.id, pr.id]
     );
-
-    // Llamar a la API de provisioning
-    const apiRes = await fetch(`${cfg.provision_api_url}/provision`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-API-Key': cfg.provision_api_key },
-      body: JSON.stringify({
-        tenant:       subdomain,
-        plan:         pr.plan,
-        client_name:  pr.full_name || '',
-        client_email: pr.email || '',
-      }),
-      signal: AbortSignal.timeout(660000),
-    });
-    const apiData = await apiRes.json();
-    if (!apiRes.ok || !apiData.success) {
-      // Falló el provisioning → volver a 'pending' para poder reintentar
-      await pool.query(
-        "UPDATE payment_requests SET status='pending', updated_at=NOW() WHERE id=$1",
-        [pr.id]
-      );
-      return res.status(500).json({ success: false, error: detalleError(apiData, 'Error en provisioning') });
-    }
-
-    // Crear instancia en HC
-    const { rows: instRows } = await pool.query(
-      `INSERT INTO instances (user_id,label,instance_url,db_name,plan,odoo_version,status,activated_at)
-       VALUES ($1,$2,$3,$4,$5,'19.0','active',NOW()) RETURNING *`,
-      [pr.uid, label || `${subdomain} — Odoo CE`, apiData.url, apiData.db, pr.plan]
-    );
-
-    // Actualizar solicitud
-    await pool.query(
-      `UPDATE payment_requests SET
-         status='provisioned', confirmed_by=$1,
-         confirmed_at=NOW(), instance_id=$2, updated_at=NOW()
-       WHERE id=$3`,
-      [req.user.id, instRows[0].id, pr.id]
-    );
-
-    // Email de bienvenida (sistema listo) — usa el helper compartido.
-    // La contraseña inicial viaja solo en este correo: no se guarda ni se devuelve.
-    const cred = credencialesDe(apiData);
-    const correoEnviado = await sendMailHC({
-      to: pr.email,
-      subject: `¡Tu sistema Hepta Cloud está listo, ${pr.full_name?.split(' ')[0] || ''}!`,
-      html: `<h2>¡Bienvenido a Hepta Cloud!</h2>
-        <p>Tu pago fue confirmado y tu sistema ya está activo.</p>
-        <p><strong>URL:</strong> <a href="${apiData.url}">${apiData.url}</a></p>
-        <p><strong>Plan:</strong> ${pr.plan}</p>
-        <p>${textoCredenciales(cred)}</p>`,
-    });
-
-    res.json({
-      success: true,
-      data: { instance: instRows[0], url: apiData.url, credenciales_enviadas: !!cred && correoEnviado },
-      aviso: avisoAlta(apiData, cred, correoEnviado, subdomain),
-      message: `Pago confirmado y ${subdomain} provisionado.`,
-    });
-  } catch(err) {
-    console.error('[payment/confirm]', err.message);
-    // No dejar la solicitud pegada en 'provisioning' si algo cortó a mitad
+    let job;
     try {
+      job = await alta.iniciarAlta({
+        userId: pr.uid, tenant: subdomain, plan: pr.plan, label,
+        actorId: req.user.id, paymentRequestId: pr.id,
+      });
+    } catch (e) {
       await pool.query(
-        "UPDATE payment_requests SET status='pending', updated_at=NOW() WHERE id=$1 AND status='provisioning'",
-        [req.params.id]
-      );
-    } catch(_) {}
-    res.status(500).json({ success: false, error: err.message });
+        "UPDATE payment_requests SET status='pending', updated_at=NOW() WHERE id=$1 AND status='provisioning'", [pr.id]);
+      throw e;
+    }
+    res.status(202).json({ success: true, data: { job }, message: `Pago confirmado. Alta de ${job.tenant} en curso.` });
+  } catch(err) {
+    if (!(err instanceof alta.ErrorAlta)) console.error('[payment/confirm]', err.message);
+    res.status(err.status || 500).json({ success: false, error: err.message });
   }
 });
 

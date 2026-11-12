@@ -27,6 +27,8 @@ backend/routes/              # admin, admin_mail, auth, clients, credentials, le
 backend/config/              # db, odoo (XML-RPC), credenciales, secretos (AES-256-GCM), site_config_publico,
                              # credenciales_alta (texto del correo de bienvenida; la clave inicial no se guarda)
 infra/                       # copia de la API perimetral y dónde vive lo demás (API y script de alta)
+backend/services/alta.js     # alta de un tenant en segundo plano (trabajos en memoria) y correo de bienvenida;
+                             # la usan el alta manual (provision.routes) y la confirmación de pago (payments.routes)
 backend/services/mailcow/    # cliente de mailcow, DNS y Cloudflare para el servicio de correo
 backend/scripts/             # import_mail, provision_mail, avisar_credenciales (se corren a mano)
 sql/, backend/migrate_*.sql, migracion_*.sql   # migraciones (se aplican a mano; no editar las ya aplicadas)
@@ -63,6 +65,18 @@ En el `.env`: `DB_*`, `JWT_SECRET`, `HEPTA_SECRET_KEY` (cifra las credenciales d
   infraestructura: pedir la salida exacta del comando.
 - Idioma: español rioplatense con voseo en comentarios, mensajes y docs. Respuestas de API `{ success, data?, error?, code? }`.
 
+## Alta de un tenant (flujo del Admin)
+
+1. **Usuario** del portal (Usuarios → Nuevo, o "+ Nuevo usuario" dentro del alta). Sin contraseña: se genera sola.
+   Ahí mismo se lo vincula a su **Cliente** (entidad fiscal); también se vincula y desvincula desde Clientes → Editar.
+2. **Instancias → Nueva instancia**: usuario, subdominio y plan (`starter` = Despegue, `professional` = Crecimiento;
+   Empresa no tiene alta automática). `POST /api/admin/provision` responde 202 con un trabajo y el Admin consulta
+   `GET /api/admin/provision/jobs/:id` cada 8 s. El alta sigue aunque se cierre la ventana ("Altas en curso").
+3. Al terminar se registra la instancia y sale el correo de bienvenida con el usuario y la contraseña del sistema
+   y, si el usuario nunca entró al portal, también la del portal. Si algo queda a medias, el trabajo trae un `aviso`.
+
+No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minuto y el alta tarda de 2 a 10.
+
 ## Pendientes
 
 - [ ] **Contraseña inicial de los tenants (bloquea el lanzamiento del 30-nov):** código listo el 2026-11-12
@@ -73,7 +87,6 @@ En el `.env`: `DB_*`, `JWT_SECRET`, `HEPTA_SECRET_KEY` (cifra las credenciales d
       comandos que usa el alta (`psql`/`createdb` como postgres) y probar el alta después.
 - [ ] API perimetral: validar `domain` y `db` en `/vhost` y sacar la lista de suspendidos de `/health`.
 - [ ] Limitar el puerto 8888 de las dos APIs a la IP de HEPTA Cloud (hoy escuchan en todas las interfaces, sin TLS).
-- [ ] El alta espera hasta 11 minutos con la conexión abierta: pasarla a segundo plano con estado consultable.
 - [ ] RetoPA: la ficha del cliente se crea solo con un botón del Admin; enganchar al alta si se ofrece en el plan.
 - [ ] Entorno de prueba (no existe) y pasar los JS en línea de los HTML a archivos.
 
