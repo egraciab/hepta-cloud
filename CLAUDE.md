@@ -24,7 +24,9 @@ backend/server.js            # arranque, CORS, rate limit, montaje de rutas (el 
 backend/middleware/auth.js   # JWT Bearer: requireAuth, requireAdmin (admin|godmode), requireGodmode
 backend/routes/              # admin, admin_mail, auth, clients, credentials, leads, payments, portal,
                              # portal_mail, provision, public, public_mail; retopa.js es un helper, no un router
-backend/config/              # db, odoo (XML-RPC), credenciales, secretos (AES-256-GCM), site_config_publico
+backend/config/              # db, odoo (XML-RPC), credenciales, secretos (AES-256-GCM), site_config_publico,
+                             # credenciales_alta (texto del correo de bienvenida; la clave inicial no se guarda)
+infra/                       # copia de la API perimetral y dónde vive lo demás (API y script de alta)
 backend/services/mailcow/    # cliente de mailcow, DNS y Cloudflare para el servicio de correo
 backend/scripts/             # import_mail, provision_mail, avisar_credenciales (se corren a mano)
 sql/, backend/migrate_*.sql, migracion_*.sql   # migraciones (se aplican a mano; no editar las ya aplicadas)
@@ -48,6 +50,8 @@ En el `.env`: `DB_*`, `JWT_SECRET`, `HEPTA_SECRET_KEY` (cifra las credenciales d
 - **Secretos:** nunca en el repo, nunca por chat. Se generan en KeePass y se pegan en el servidor (`nano`, o
   `read -rs`). `.env`, `backups/`, dumps y copias `*.bak-*` están en `.gitignore`. Antes de commitear SQL con
   `INSERT INTO site_config`, verificar que no lleve valores reales.
+- **Contraseña inicial del cliente:** la genera la API de alta y llega una sola vez. Va al correo de
+  bienvenida y a ningún otro lado: ni base, ni `admin_logs`, ni `console.log`, ni respuesta al navegador.
 - **`/api/site-config` es público.** Solo entrega claves que no son sensibles según
   `backend/config/site_config_publico.js`. Una clave nueva con una credencial tiene que terminar en `_key`,
   `_token`, `_pass`, `_password` o `_secret`, o empezar con un prefijo interno (`smtp_`, `provision_`,
@@ -61,9 +65,10 @@ En el `.env`: `DB_*`, `JWT_SECRET`, `HEPTA_SECRET_KEY` (cifra las credenciales d
 
 ## Pendientes
 
-- [ ] **Contraseña inicial de los tenants:** hoy nacen con `admin` / `admin` y el correo de bienvenida lo dice.
-      Generar una al azar por cliente en el script de alta (bloquea el lanzamiento del 30-nov).
-- [ ] Traer a este repo (`infra/`) el script `provision_tenant.sh` y las APIs de provisión y perimetral, sin `.env`.
+- [ ] **Contraseña inicial de los tenants (bloquea el lanzamiento del 30-nov):** código listo el 2026-11-12
+      (ver `infra/README.md`). Falta: probar el alta en staging de tenants, reemplazar el script y la API en
+      `HGSVRLNX104`, desplegar acá y correr `auditar_clave_admin.sh` sobre los tenants que ya existen.
+- [ ] API perimetral: validar `domain` y `db` en `/vhost` y sacar la lista de suspendidos de `/health`.
 - [ ] Limitar el puerto 8888 de las dos APIs a la IP de HEPTA Cloud (hoy escuchan en todas las interfaces, sin TLS).
 - [ ] El alta espera hasta 11 minutos con la conexión abierta: pasarla a segundo plano con estado consultable.
 - [ ] RetoPA: la ficha del cliente se crea solo con un botón del Admin; enganchar al alta si se ofrece en el plan.

@@ -1765,6 +1765,7 @@ async function confirmPayment() {
   if (data.success) {
     document.getElementById('pay-confirm-modal').classList.remove('open');
     showAlert('pay-ok', 'success', `✓ ${data.message}`);
+    if (data.aviso) alert(data.aviso);
     loadPayments();
   } else {
     showAlert('pay-err', 'error', data.error);
@@ -1951,6 +1952,7 @@ async function runProvisioning(){
     clearInterval(ticker);
 
     if(data.success){
+      if(data.data.aviso) alert(data.data.aviso);
       // Ir al paso 2 — ficha en RetoPA
       const selUser = document.getElementById('prov-user-id');
       const userData = selUser ? {

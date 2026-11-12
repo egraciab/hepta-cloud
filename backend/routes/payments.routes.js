@@ -3,14 +3,15 @@ const pool       = require('../config/db');
 const bcrypt     = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { credencialesDe, textoCredenciales, detalleError, avisoAlta } = require('../config/credenciales_alta');
 
 // ── Email helper: usa la config SMTP de site_config. No lanza (loguea y sigue) ──
 async function sendMailHC({ to, subject, html }) {
-  if (!to) return;
+  if (!to) return false;
   try {
     const { rows } = await pool.query("SELECT key,value FROM site_config WHERE key LIKE 'smtp%'");
     const s = Object.fromEntries(rows.map(r => [r.key, r.value]));
-    if (!s.smtp_host) return;
+    if (!s.smtp_host) return false;
     const transporter = nodemailer.createTransport({
       host: s.smtp_host, port: parseInt(s.smtp_port) || 465,
       secure: s.smtp_secure === 'true',
@@ -21,8 +22,10 @@ async function sendMailHC({ to, subject, html }) {
       from: `${s.smtp_from_name || 'Hepta Cloud'} <${s.smtp_from_email || s.smtp_user}>`,
       to, subject, html,
     });
+    return true;
   } catch (e) {
     console.error('[sendMailHC]', e.message);
+    return false;
   }
 }
 
@@ -246,7 +249,7 @@ router.post('/admin/payment-requests/:id/confirm', requireAuth, requireAdmin, as
         "UPDATE payment_requests SET status='pending', updated_at=NOW() WHERE id=$1",
         [pr.id]
       );
-      return res.status(500).json({ success: false, error: apiData.detail || 'Error en provisioning' });
+      return res.status(500).json({ success: false, error: detalleError(apiData, 'Error en provisioning') });
     }
 
     // Crear instancia en HC
@@ -265,20 +268,23 @@ router.post('/admin/payment-requests/:id/confirm', requireAuth, requireAdmin, as
       [req.user.id, instRows[0].id, pr.id]
     );
 
-    // Email de bienvenida (sistema listo) — usa el helper compartido
-    sendMailHC({
+    // Email de bienvenida (sistema listo) — usa el helper compartido.
+    // La contraseña inicial viaja solo en este correo: no se guarda ni se devuelve.
+    const cred = credencialesDe(apiData);
+    const correoEnviado = await sendMailHC({
       to: pr.email,
       subject: `¡Tu sistema Hepta Cloud está listo, ${pr.full_name?.split(' ')[0] || ''}!`,
       html: `<h2>¡Bienvenido a Hepta Cloud!</h2>
         <p>Tu pago fue confirmado y tu sistema ya está activo.</p>
         <p><strong>URL:</strong> <a href="${apiData.url}">${apiData.url}</a></p>
         <p><strong>Plan:</strong> ${pr.plan}</p>
-        <p>Usuario: admin / Contraseña: admin (cambiala al primer ingreso)</p>`,
+        <p>${textoCredenciales(cred)}</p>`,
     });
 
     res.json({
       success: true,
-      data: { instance: instRows[0], url: apiData.url },
+      data: { instance: instRows[0], url: apiData.url, credenciales_enviadas: !!cred && correoEnviado },
+      aviso: avisoAlta(apiData, cred, correoEnviado, subdomain),
       message: `Pago confirmado y ${subdomain} provisionado.`,
     });
   } catch(err) {

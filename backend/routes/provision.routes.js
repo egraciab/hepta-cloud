@@ -2,6 +2,7 @@ const router = require('express').Router();
 const retopa = (() => { try { return require('./retopa'); } catch(e) { return null; } })();
 const pool   = require('../config/db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { credencialesDe, textoCredenciales, quitarClaveDeFabrica, detalleError, avisoAlta } = require('../config/credenciales_alta');
 
 router.use(requireAuth, requireAdmin);
 
@@ -27,6 +28,8 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ success: false, error: 'user_id y tenant son requeridos' });
   if (!/^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(tenant))
     return res.status(400).json({ success: false, error: 'Tenant inválido' });
+  if (plan === 'enterprise')
+    return res.status(400).json({ success: false, error: 'El plan Empresa se arma a medida: no tiene alta automática' });
 
   try {
     const cfg = await getConfig();
@@ -56,7 +59,7 @@ router.post('/', async (req, res) => {
     });
     const apiData = await apiRes.json();
     if (!apiRes.ok || !apiData.success)
-      return res.status(500).json({ success: false, error: apiData.detail||apiData.error||'Error en provisioning' });
+      return res.status(500).json({ success: false, error: detalleError(apiData, 'Error en provisioning') });
 
     const { rows: instRows } = await pool.query(
       `INSERT INTO instances (user_id,label,instance_url,db_name,plan,odoo_version,status,activated_at)
@@ -65,18 +68,25 @@ router.post('/', async (req, res) => {
     );
 
     await logAction(req, 'provision_instance', `instance:${instRows[0].id}`,
-      { tenant, plan, url: apiData.url });
+      { tenant, plan, url: apiData.url, credenciales: apiData.credentials || 'sin_dato' });
 
-    // Email de bienvenida en background
-    sendWelcomeEmail({
+    // Email de bienvenida. La contraseña inicial viaja solo en ese correo: no se guarda ni
+    // se devuelve al navegador. Por eso se espera el envío: si falla, el Admin se entera.
+    const cred = credencialesDe(apiData);
+    const correoEnviado = await sendWelcomeEmail({
       to:            user.email,
       nombre:        user.full_name || user.email,
       instancia_url: apiData.url,
       plan:          plan || 'starter',
+      cred,
     });
 
-    console.log(`[provision] OK: tenant=${tenant} url=${apiData.url}`);
-    res.json({ success: true, data: { instance: instRows[0], url: apiData.url, tenant } });
+    console.log(`[provision] OK: tenant=${tenant} url=${apiData.url} credenciales=${apiData.credentials || 'sin_dato'}`);
+    res.json({ success: true, data: {
+      instance: instRows[0], url: apiData.url, tenant,
+      credenciales_enviadas: !!cred && correoEnviado, usuario_cliente: cred ? cred.usuario : null,
+      aviso: avisoAlta(apiData, cred, correoEnviado, tenant),
+    } });
 
   } catch (err) {
     if (err.name === 'TimeoutError')
@@ -177,7 +187,7 @@ async function logAction(req, action, target, detail) {
   } catch(e) {}
 }
 
-async function sendWelcomeEmail({ to, nombre, instancia_url, plan }) {
+async function sendWelcomeEmail({ to, nombre, instancia_url, plan, cred }) {
   const nodemailer = require('nodemailer');
   try {
     const { rows: smtpRows } = await pool.query(
@@ -185,12 +195,12 @@ async function sendWelcomeEmail({ to, nombre, instancia_url, plan }) {
     );
     const smtp = Object.fromEntries(smtpRows.map(r => [r.key, r.value]));
     const logoUrl = smtp.logo_url || '';
-    if (!smtp.smtp_host) { console.log('[welcome_email] SMTP no configurado'); return; }
+    if (!smtp.smtp_host) { console.log('[welcome_email] SMTP no configurado'); return false; }
 
     const { rows: tplRows } = await pool.query(
       "SELECT subject, body_html FROM email_templates WHERE slug='welcome_client'"
     );
-    if (!tplRows[0]) { console.log('[welcome_email] Plantilla no encontrada'); return; }
+    if (!tplRows[0]) { console.log('[welcome_email] Plantilla no encontrada'); return false; }
 
     const logoHtml = logoUrl
       ? `<img src="${logoUrl}" alt="Hepta Cloud" style="max-height:40px;max-width:180px;object-fit:contain"/>`
@@ -209,12 +219,13 @@ async function sendWelcomeEmail({ to, nombre, instancia_url, plan }) {
     const wc = Object.fromEntries(wcRows.map(r=>[r.key,r.value]));
     const portalUrl = wc.email_wc_portal_url || wc.site_url + '/portal' || 'https://cloud.hepta.com.py/portal';
 
-    const replaceWc = (str) => replace(str)
+    const paso1 = textoCredenciales(cred, wc.email_wc_paso1_desc);
+    const replaceWc = (str) => quitarClaveDeFabrica(replace(str), paso1)
       .replace(/\{\{email_titulo\}\}/g,       wc.email_wc_titulo       || '¡Tu sistema está listo!')
       .replace(/\{\{email_subtitulo\}\}/g,    wc.email_wc_subtitulo    || 'Ya podés acceder a tu sistema')
       .replace(/\{\{email_cuerpo\}\}/g,       wc.email_wc_cuerpo       || 'tu instancia fue provisionada y está activa.')
       .replace(/\{\{email_paso1_titulo\}\}/g, wc.email_wc_paso1_titulo || 'Ingresá con las credenciales de administrador')
-      .replace(/\{\{email_paso1_desc\}\}/g,   wc.email_wc_paso1_desc   || 'Usuario: admin · Contraseña: admin')
+      .replace(/\{\{email_paso1_desc\}\}/g,   paso1)
       .replace(/\{\{email_paso2_titulo\}\}/g, wc.email_wc_paso2_titulo || 'Configurá tu empresa')
       .replace(/\{\{email_paso2_desc\}\}/g,   wc.email_wc_paso2_desc   || 'Nombre, RUC, logo y datos de facturación')
       .replace(/\{\{email_paso3_titulo\}\}/g, wc.email_wc_paso3_titulo || 'Explorá tu portal de cliente')
@@ -239,8 +250,10 @@ async function sendWelcomeEmail({ to, nombre, instancia_url, plan }) {
     });
 
     console.log(`[welcome_email] Enviado a ${to}`);
+    return true;
   } catch (err) {
     console.error('[welcome_email] Error:', err.message);
+    return false;
   }
 }
 
