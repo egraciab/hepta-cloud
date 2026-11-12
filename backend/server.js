@@ -50,10 +50,14 @@ app.use('/api', paymentsRoutes);
 app.use('/api',        publicRoutes);
 
 // ── Site config público ──────────────────────────────────────
+// SOLO lo que el sitio necesita mostrar. site_config también guarda credenciales (SMTP, claves de
+// las APIs de provisión, perimetral y RetoPA, token de Cloudflare): esas NUNCA salen por acá.
+// Hasta el 2026-11-12 este endpoint devolvía la tabla entera.
+const { esClaveSensible } = require('./config/site_config_publico');
 app.get('/api/site-config', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT key, value FROM site_config ORDER BY key');
-    const data = Object.fromEntries(rows.map(r => [r.key, r.value]));
+    const data = Object.fromEntries(rows.filter(r => !esClaveSensible(r.key)).map(r => [r.key, r.value]));
     res.json({ success: true, data });
   } catch (err) {
     res.status(500).json({ success: false, error: 'Error interno' });

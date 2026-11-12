@@ -1,4 +1,5 @@
 const router     = require('express').Router();
+const { esSecreto, MASCARA } = require('../config/site_config_publico');
 const bcrypt     = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const path       = require('path');
@@ -20,7 +21,8 @@ router.get('/config', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT key, value FROM site_config ORDER BY key');
     const config = Object.fromEntries(rows.map(r => [r.key, r.value]));
-    if (config.smtp_pass && config.smtp_pass.length > 0) config.smtp_pass = '••••••••';
+    // Los secretos no viajan al navegador: se muestran enmascarados (el PUT ignora la máscara).
+    for (const k of Object.keys(config)) if (esSecreto(k) && config[k]) config[k] = MASCARA;
     res.json({ success: true, data: config });
   } catch (err) {
     console.error('[admin/config GET]', err.message);
@@ -34,7 +36,7 @@ router.put('/config', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Body inválido' });
   try {
     for (const [key, value] of Object.entries(updates)) {
-      if (key === 'smtp_pass' && value.startsWith('•')) continue;
+      if (esSecreto(key) && typeof value === 'string' && value.startsWith('•')) continue;
       await pool.query(
         `INSERT INTO site_config (key, value, updated_at) VALUES ($1,$2,NOW())
          ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=NOW()`,
