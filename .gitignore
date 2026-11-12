@@ -1,0 +1,25 @@
+node_modules/
+.env
+*.log
+.DS_Store
+dist/
+
+# ── HEPTA Cloud: nunca al repositorio ──
+.env
+.env.*
+!.env.example
+!utils/.env.example
+node_modules/
+backups/
+uploads/
+*.tar.gz
+*.zip
+*.dump
+*.bak
+*.log
+*.pem
+*.key
+*.p12
+__pycache__/
+*.bak-*
+*.bkp-*

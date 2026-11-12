@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Hepta Cloud</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{--navy:#0D1F5C;--blue:#1254A4;--gray-100:#F3F4F6;--gray-200:#E5E7EB;--gray-600:#6B7280;--gray-800:#1F2937}
+    body{font-family:'Exo 2',sans-serif;color:var(--gray-800);background:#fff;line-height:1.7}
+    nav{background:var(--navy);padding:0 5%;height:56px;display:flex;align-items:center;justify-content:space-between}
+    .nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+    .nav-logo-icon{width:28px;height:28px;background:var(--blue);border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;overflow:hidden}
+    .nav-logo-icon img{width:100%;height:100%;object-fit:contain}
+    .nav-logo-text{color:#fff;font-size:14px;font-weight:700;letter-spacing:.5px}
+    .nav-logo-text span{color:rgba(255,255,255,.5);font-weight:400}
+    .nav-back{color:rgba(255,255,255,.7);font-size:13px;text-decoration:none;display:flex;align-items:center;gap:6px}
+    .nav-back:hover{color:#fff}
+    .legal-wrap{max-width:760px;margin:0 auto;padding:48px 24px 80px}
+    .legal-wrap h1{font-size:28px;font-weight:700;color:var(--navy);margin-bottom:8px}
+    .legal-updated{font-size:13px;color:var(--gray-600);margin-bottom:36px;padding-bottom:20px;border-bottom:1px solid var(--gray-200)}
+    .legal-content h2{font-size:18px;font-weight:700;color:var(--navy);margin:28px 0 10px}
+    .legal-content h3{font-size:16px;font-weight:600;color:var(--navy);margin:20px 0 8px}
+    .legal-content p{margin-bottom:14px;font-size:15px;color:var(--gray-800)}
+    .legal-content ul,.legal-content ol{margin:0 0 14px 24px}
+    .legal-content li{font-size:15px;color:var(--gray-800);margin-bottom:6px}
+    .legal-content a{color:var(--blue)}
+    .legal-content strong{color:var(--navy)}
+    footer{background:var(--gray-100);border-top:1px solid var(--gray-200);padding:24px 5%;text-align:center;font-size:13px;color:var(--gray-600)}
+    .spinner{display:flex;justify-content:center;padding:48px;color:var(--gray-600)}
+  </style>
+</head>
+<body>
+<nav>
+  <a href="/" class="nav-logo">
+    <div class="nav-logo-icon" id="nav-logo">H7</div>
+    <div class="nav-logo-text">HEPTA <span>CLOUD</span></div>
+  </a>
+  <a href="/" class="nav-back">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+    Volver al inicio
+  </a>
+</nav>
+
+<div class="legal-wrap">
+  <div id="page-content" class="spinner">Cargando...</div>
+</div>
+
+<footer>© 2026 Hepta Cloud · Asunción, Paraguay</footer>
+
+<script>
+const slug = location.pathname.replace(/\//g,'') || 'terminos';
+
+async function loadPage() {
+  try {
+    // Logo
+    const cfg = await fetch('/api/site-config').then(r=>r.json());
+    if (cfg.success && cfg.data.logo_url) {
+      document.getElementById('nav-logo').innerHTML = `<img src="${cfg.data.logo_url}" alt="Logo"/>`;
+    }
+
+    const res = await fetch(`/api/pages/${slug}`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    document.title = `${data.data.title} — Hepta Cloud`;
+    document.getElementById('page-content').innerHTML = `
+      <div class="legal-content">${data.data.content}</div>
+    `;
+  } catch(e) {
+    document.getElementById('page-content').innerHTML = `<p>Contenido no disponible.</p>`;
+  }
+}
+
+loadPage();
+</script>
+</body>
+</html>

@@ -1,0 +1,2894 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Admin — Hepta Cloud</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--navy:#0D1F5C;--blue:#1254A4;--blue-light:#1A6FD4;--blue-pale:#E6F1FB;--teal:#1D9E75;--teal-pale:#E1F5EE;--red:#DC2626;--red-pale:#FEF2F2;--gray-50:#F9FAFB;--gray-100:#F3F4F6;--gray-200:#E5E7EB;--gray-400:#9CA3AF;--gray-600:#6B7280;--gray-800:#1F2937;--white:#fff;--radius:8px;--sidebar:220px}
+    body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;color:var(--gray-800);background:var(--gray-100);display:flex;min-height:100vh}
+    .sidebar{width:var(--sidebar);background:var(--navy);display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;height:100vh;z-index:50}
+    .sidebar-logo{padding:20px 16px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:10px}
+    .logo-icon{width:32px;height:32px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;flex-shrink:0;overflow:hidden}
+    .logo-icon img{width:100%;height:100%;object-fit:contain}
+    .logo-text{color:#fff;font-size:14px;font-weight:700;letter-spacing:.5px}
+    .logo-text span{color:rgba(255,255,255,.5);font-weight:400}
+    .sidebar-menu{flex:1;padding:12px 0;overflow-y:auto}
+    .menu-group{padding:16px 16px 6px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:rgba(255,255,255,.35);text-transform:uppercase}
+    .menu-item{display:flex;align-items:center;gap:10px;padding:9px 16px;color:rgba(255,255,255,.65);cursor:pointer;transition:.15s;border-left:3px solid transparent;font-size:13px}
+    .menu-item:hover{background:rgba(255,255,255,.07);color:#fff}
+    .menu-item.active{background:rgba(255,255,255,.1);color:#fff;border-left-color:var(--blue-light)}
+    .menu-item svg{width:16px;height:16px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2}
+    .sidebar-footer{padding:14px 16px;border-top:1px solid rgba(255,255,255,.1)}
+    .sidebar-user{display:flex;align-items:center;gap:10px}
+    .user-avatar{width:32px;height:32px;background:var(--blue);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;flex-shrink:0}
+    .user-info{flex:1;min-width:0}
+    .user-name{color:#fff;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .user-role{color:rgba(255,255,255,.45);font-size:11px}
+    .btn-logout{background:none;border:none;color:rgba(255,255,255,.45);cursor:pointer;padding:4px;display:flex;align-items:center}
+    .btn-logout:hover{color:#fff}
+    .btn-logout svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2}
+    .main{margin-left:var(--sidebar);flex:1;display:flex;flex-direction:column}
+    .topbar{background:#fff;border-bottom:1px solid var(--gray-200);padding:0 24px;height:56px;display:flex;align-items:center;position:sticky;top:0;z-index:40}
+    .topbar-title{font-size:16px;font-weight:600;color:var(--navy)}
+    .content{padding:24px;flex:1}
+    .card{background:#fff;border-radius:var(--radius);border:1px solid var(--gray-200);overflow:hidden;margin-bottom:16px}
+    .card-header{padding:16px 20px;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between}
+    .card-title{font-size:14px;font-weight:600;color:var(--navy)}
+    .card-body{padding:20px}
+    .section{display:none}.section.active{display:block}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+    .form-group{margin-bottom:16px}
+    .form-label{display:block;font-size:12px;font-weight:600;color:var(--gray-600);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+    .form-input,.form-select,.form-textarea{width:100%;padding:9px 12px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit;color:var(--gray-800);outline:none;transition:border-color .15s;background:#fff}
+    .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--blue)}
+    .form-textarea{resize:vertical;min-height:80px;font-family:monospace;font-size:12px}
+    .form-hint{font-size:11px;color:var(--gray-400);margin-top:4px}
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;border:none;transition:.15s}
+    .btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{background:var(--blue-light)}
+    .btn-secondary{background:var(--gray-100);color:var(--gray-800);border:1px solid var(--gray-200)}.btn-secondary:hover{background:var(--gray-200)}
+    .btn-danger{background:var(--red);color:#fff}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2}
+    .table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse}
+    thead th{padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.5px;background:var(--gray-50);border-bottom:1px solid var(--gray-200)}
+    tbody td{padding:12px 14px;border-bottom:1px solid var(--gray-100);font-size:13px;vertical-align:middle}
+    tbody tr:last-child td{border-bottom:none}
+    tbody tr:hover td{background:var(--gray-50)}
+    .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+    .badge-green{background:var(--teal-pale);color:var(--teal)}
+    .badge-blue{background:var(--blue-pale);color:var(--blue)}
+    .badge-gray{background:var(--gray-100);color:var(--gray-600)}
+    .badge-red{background:var(--red-pale);color:var(--red)}
+    .alert{padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:16px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--teal-pale);color:var(--teal)}
+    .alert-error{background:var(--red-pale);color:var(--red)}
+    #login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--navy);position:fixed;inset:0;z-index:100}
+    .login-card{background:#fff;border-radius:12px;padding:36px;width:100%;max-width:380px}
+    .login-title{font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px}
+    .login-sub{font-size:13px;color:var(--gray-600);margin-bottom:24px}
+    .plan-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+    .plan-card{border:1px solid var(--gray-200);border-radius:var(--radius);padding:20px;background:#fff;position:relative}
+    .plan-card.featured{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue)}
+    .plan-badge-tag{position:absolute;top:-1px;right:16px;background:var(--blue);color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:0 0 6px 6px}
+    .plan-name{font-size:17px;font-weight:700;color:var(--navy);margin-bottom:2px}
+    .plan-price{font-size:20px;font-weight:700;color:var(--blue);margin-bottom:6px}
+    .plan-desc{font-size:13px;color:var(--gray-600);margin-bottom:12px}
+    .plan-features-list{list-style:none;margin-bottom:14px}
+    .plan-features-list li{font-size:12px;color:var(--gray-800);padding:2px 0 2px 16px;position:relative}
+    .plan-features-list li::before{content:'✓';position:absolute;left:0;color:var(--teal);font-weight:700}
+    .plan-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .svc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+    .svc-card{border:1px solid var(--gray-200);border-radius:var(--radius);padding:16px;background:#fff}
+    .svc-card.solution{border-left:3px solid var(--blue)}
+    .svc-card.pain{border-left:3px solid var(--teal)}
+    .svc-title{font-size:14px;font-weight:600;color:var(--navy);margin-bottom:4px}
+    .svc-desc{font-size:12px;color:var(--gray-600);margin-bottom:12px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .svc-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:20px}
+    .modal-overlay.open{display:flex}
+    .modal{background:#fff;border-radius:12px;padding:28px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto}
+    .modal-lg{max-width:680px}
+    .modal-title{font-size:16px;font-weight:700;color:var(--navy);margin-bottom:20px}
+    .modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+    .logo-upload-area{border:2px dashed var(--gray-200);border-radius:var(--radius);padding:32px;text-align:center;cursor:pointer;transition:.15s}
+    .logo-upload-area:hover{border-color:var(--blue);background:var(--blue-pale)}
+    .logo-preview-wrap{margin-bottom:16px;padding:16px;background:var(--gray-50);border-radius:var(--radius);text-align:center}
+    .logo-preview{max-height:80px;max-width:200px;object-fit:contain}
+    .status-select{padding:4px 8px;border-radius:4px;border:1px solid var(--gray-200);font-size:12px;font-family:inherit;background:#fff}
+    .text-muted{color:var(--gray-600)}.text-sm{font-size:12px}.mt-4{margin-top:16px}
+    .flex{display:flex}.gap-2{gap:8px}.items-center{align-items:center}.justify-between{justify-content:space-between}
+    .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;display:inline-block}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .tabs{display:flex;border-bottom:2px solid var(--gray-200);margin-bottom:20px}
+    .tab{padding:8px 20px;font-size:13px;font-weight:500;color:var(--gray-600);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s}
+    .tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+    .tab-content{display:none}.tab-content.active{display:block}
+    .section-divider{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gray-400);margin:20px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--gray-200)}
+  </style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-card">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px">
+      <div class="logo-icon" id="login-logo-icon">H7</div>
+      <div style="font-size:15px;font-weight:700;color:var(--navy)">HEPTA <span style="color:var(--gray-600);font-weight:400">CLOUD</span></div>
+    </div>
+    <div class="login-title">Panel de administración</div>
+    <div class="login-sub">Ingresá con tu cuenta.</div>
+    <div class="alert alert-error" id="login-error"></div>
+    <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="login-email" placeholder="admin@hepta.com.py"/></div>
+    <div class="form-group"><label class="form-label">Contraseña</label><input class="form-input" type="password" id="login-pass" placeholder="••••••••"/></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()" id="login-btn">Ingresar</button>
+  </div>
+</div>
+
+<div id="app" style="display:none;width:100%">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon" id="sidebar-logo">H7</div>
+      <div class="logo-text">HEPTA <span>CLOUD</span></div>
+    </div>
+    <nav class="sidebar-menu">
+      <div class="menu-item active" onclick="showSection('dashboard',this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dashboard</div>
+      <div class="menu-group">Sitio</div>
+      <div class="menu-item" onclick="showSection('general',this)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>Configuración general</div>
+      <div class="menu-item" onclick="showSection('services',this)"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Servicios y soluciones</div>
+      <div class="menu-item" onclick="showSection('plans',this)"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>Planes</div>
+      <div class="menu-group">Comunicación</div>
+      <div class="menu-item" onclick="showSection('smtp',this)"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>SMTP y plantillas</div>
+      <div class="menu-group">CRM</div>
+      <div class="menu-item" onclick="showSection('payments',this)"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Solicitudes de pago <span id="payments-badge" style="background:#EF4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:auto;display:none">0</span></div>
+      <div class="menu-item" onclick="showSection('leads',this)"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Leads</div>
+      <div class="menu-item" onclick="showSection('pages',this)"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Páginas legales</div>
+      <div class="menu-group">Portal</div>
+      <div class="menu-item" onclick="showSection('instances',this)"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Instancias</div>
+      <div class="menu-item" onclick="showSection('clients',this)"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4"/><path d="M9 11h.01M15 11h.01"/></svg>Clientes</div>
+      <div class="menu-item" onclick="showSection('users',this)"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Usuarios</div>
+      <div class="menu-group">Integración</div>
+      <div class="menu-item" onclick="showSection('credentials',this)"><svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>Credenciales <span id="cred-badge" style="background:#EF4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:auto;display:none">0</span></div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="user-avatar" id="user-avatar">A</div>
+        <div class="user-info"><div class="user-name" id="user-name">Admin</div><div class="user-role" id="user-role">godmode</div></div>
+        <button class="btn-logout" onclick="doLogout()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar"><div class="topbar-title" id="topbar-title">Configuración general</div></div>
+    <div class="content">
+
+      <!-- ═══ DASHBOARD ═══ -->
+      <div class="section active" id="section-dashboard">
+        <div id="cred-alert-banner" style="display:none;background:#FEF3C7;border:1px solid #FCD34D;border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;font-size:13px;color:#92400E"></div>
+        <div id="dash-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
+          <div class="card" style="margin-bottom:0"><div class="card-body" style="text-align:center">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-600);margin-bottom:8px">Leads totales</div>
+            <div style="font-size:36px;font-weight:700;color:var(--navy)" id="stat-leads">—</div>
+          </div></div>
+          <div class="card" style="margin-bottom:0"><div class="card-body" style="text-align:center">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-600);margin-bottom:8px">Clientes activos</div>
+            <div style="font-size:36px;font-weight:700;color:var(--navy)" id="stat-clients">—</div>
+          </div></div>
+          <div class="card" style="margin-bottom:0"><div class="card-body" style="text-align:center">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-600);margin-bottom:8px">Instancias activas</div>
+            <div style="font-size:36px;font-weight:700;color:var(--navy)" id="stat-instances">—</div>
+          </div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;align-items:start">
+          <div class="card" style="margin-bottom:0">
+            <div class="card-header"><div class="card-title">Leads por estado</div></div>
+            <div class="card-body" id="dash-leads-status"><div class="text-muted">Cargando...</div></div>
+          </div>
+          <div class="card" style="margin-bottom:0">
+            <div class="card-header">
+              <div class="card-title">Últimos leads</div>
+              <button class="btn btn-secondary btn-sm" onclick="showSection('leads',document.querySelector('[onclick*=\"leads\"]'))">Ver todos</button>
+            </div>
+            <div class="table-wrap">
+              <table><thead><tr><th>Nombre</th><th>Empresa</th><th>Fuente</th><th>Estado</th><th>Fecha</th></tr></thead>
+              <tbody id="dash-recent-leads"><tr><td colspan="5" class="text-muted" style="text-align:center;padding:16px">Cargando...</td></tr></tbody></table>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <div class="card-header"><div class="card-title">Accesos rápidos</div></div>
+          <div class="card-body" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+            <button class="btn btn-secondary" style="flex-direction:column;gap:4px;padding:16px;height:auto" onclick="showSection('leads',document.querySelector('[onclick*=\'leads\']'))">
+              <svg viewBox="0 0 24 24" width="20" height="20"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+              <span style="font-size:12px">Leads</span>
+            </button>
+            <button class="btn btn-secondary" style="flex-direction:column;gap:4px;padding:16px;height:auto" onclick="showSection('users',document.querySelector('[onclick*=\'users\']'))">
+              <svg viewBox="0 0 24 24" width="20" height="20"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span style="font-size:12px">Usuarios</span>
+            </button>
+            <button class="btn btn-secondary" style="flex-direction:column;gap:4px;padding:16px;height:auto" onclick="showSection('plans',document.querySelector('[onclick*=\'plans\']'))">
+              <svg viewBox="0 0 24 24" width="20" height="20"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+              <span style="font-size:12px">Planes</span>
+            </button>
+            <button class="btn btn-secondary" style="flex-direction:column;gap:4px;padding:16px;height:auto" onclick="showSection('general',document.querySelector('[onclick*=\'general\']'))">
+              <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
+              <span style="font-size:12px">Config</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ GENERAL ═══ -->
+      <div class="section" id="section-general">
+        <div class="alert alert-success" id="general-ok">Configuración guardada.</div>
+        <div class="alert alert-error" id="general-err"></div>
+
+        <!-- Logo -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Logo del sitio</div></div>
+          <div class="card-body">
+            <div class="logo-preview-wrap" id="logo-preview-wrap" style="display:none"><img id="logo-preview-img" class="logo-preview" src="" alt="Logo"/><div class="text-sm text-muted" style="margin-top:8px">Logo actual</div></div>
+            <div class="logo-upload-area" onclick="document.getElementById('logo-file').click()">
+              <svg width="32" height="32" fill="none" stroke="var(--gray-400)" stroke-width="1.5" viewBox="0 0 24 24" style="margin-bottom:10px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <div style="font-weight:600;color:var(--gray-600);margin-bottom:4px">Subir nuevo logo</div>
+              <div class="text-sm text-muted">PNG, JPG o SVG · Recomendado: 300×100px</div>
+            </div>
+            <input type="file" id="logo-file" accept="image/*" style="display:none" onchange="uploadLogo(this)"/>
+            <div class="alert alert-success mt-4" id="logo-ok">Logo actualizado.</div>
+            <div class="alert alert-error mt-4" id="logo-err"></div>
+          </div>
+        </div>
+
+        <!-- Contacto -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Contacto y WhatsApp</div></div>
+          <div class="card-body">
+            <div class="grid-3">
+              <div class="form-group"><label class="form-label">Número WhatsApp</label><input class="form-input" id="cfg-whatsapp_number" placeholder="595981000000"/><div class="form-hint">Sin +, sin espacios.</div></div>
+              <div class="form-group"><label class="form-label">Email de contacto</label><input class="form-input" type="email" id="cfg-contact_email"/></div>
+              <div class="form-group"><label class="form-label">Email notificaciones leads</label><input class="form-input" type="email" id="cfg-notify_leads_email"/><div class="form-hint">Recibe un email por cada nuevo lead.</div></div>
+            </div>
+            <div class="grid-2">
+              <div class="form-group"><label class="form-label">Host proxy DNS (dominio propio)</label><input class="form-input" id="cfg-dns_proxy_host" placeholder="proxy.hepta.com.py"/><div class="form-hint">Los clientes crean un CNAME apuntando a este host.</div></div>
+              <div class="form-group"><label class="form-label">Email certbot SSL</label><input class="form-input" id="cfg-certbot_email" placeholder="admin@hepta.com.py"/></div>
+            </div>
+            <div class="form-group"><label class="form-label">Mensaje WhatsApp predeterminado</label><input class="form-input" id="cfg-whatsapp_message"/></div>
+            <div class="form-group"><label class="form-label">Enlace de mensaje WhatsApp Business</label><input class="form-input" id="cfg-wa_business_link" placeholder="https://wa.me/message/XXXXXXXXXXXX"/><div class="form-hint">Usado por el botón "Consultanos" del Plan Empresa (modal de planes en HC y RetoPA). Si lo dejás vacío, se usa el número de WhatsApp con texto prellenado.</div></div>
+          </div>
+        </div>
+
+        <!-- Links de pago Tpago -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Links de pago Tpago</div></div>
+          <div class="card-body">
+            <div class="form-hint" style="margin-bottom:12px">Estos links se usan en el modal de planes (sitio HC y portal RetoPA). Pegá el link o QR de Tpago de cada plan.</div>
+            <div class="grid-3">
+              <div class="form-group"><label class="form-label">Plan Despegue (starter)</label><input class="form-input" id="cfg-tpago_link_starter" placeholder="https://www.tpago.com.py/links?alias=..."/></div>
+              <div class="form-group"><label class="form-label">Plan Crecimiento (professional)</label><input class="form-input" id="cfg-tpago_link_professional" placeholder="https://www.tpago.com.py/links?alias=..."/></div>
+              <div class="form-group"><label class="form-label">Plan Empresa (enterprise)</label><input class="form-input" id="cfg-tpago_link_enterprise" placeholder="Vacío = mostrar contacto"/><div class="form-hint">Dejá vacío para que el plan derive a consulta por WhatsApp.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hero -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Hero — Textos principales</div></div>
+          <div class="card-body">
+            <div class="form-group"><label class="form-label">Título principal</label><input class="form-input" id="cfg-hero_title"/></div>
+            <div class="form-group"><label class="form-label">Subtítulo</label><textarea class="form-textarea" id="cfg-hero_subtitle" rows="2" style="font-family:inherit"></textarea></div>
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Texto botón primario</label>
+                <input class="form-input" id="cfg-btn_primary_label"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Acción botón primario</label>
+                <input class="form-input" id="cfg-btn_primary_url" placeholder="/#planes"/>
+                <div class="form-hint">Sección: <code>/#planes</code> <code>/#soluciones</code> — URL externa: <code>https://...</code> — Vacío = abre modal contacto</div>
+              </div>
+            </div>
+            <div class="form-group"><label class="form-label">Texto botón WhatsApp</label><input class="form-input" id="cfg-btn_whatsapp_label"/></div>
+          </div>
+        </div>
+
+        <!-- Hero panel image -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Hero — Panel de preview (derecha)</div></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Imagen o GIF del panel (opcional)</label>
+              <input class="form-input" id="cfg-hero_panel_image" placeholder="URL de imagen o GIF, ej: /assets/uploads/demo.gif"/>
+              <div class="form-hint">Si completás este campo, reemplaza la animación automática. Dejá vacío para usar la animación CSS por defecto.</div>
+            </div>
+            <div class="form-group" style="margin-top:12px">
+              <label class="form-label">Subir imagen/GIF</label>
+              <input type="file" id="panel-img-file" accept="image/*,.gif" onchange="uploadPanelImg(this)" style="font-size:13px"/>
+            </div>
+            <div class="alert alert-success" id="panel-img-ok" style="margin-top:8px">Imagen subida.</div>
+            <div class="alert alert-error" id="panel-img-err" style="margin-top:8px"></div>
+          </div>
+        </div>
+
+        <!-- Secciones -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Textos de secciones</div></div>
+          <div class="card-body">
+            <div class="section-divider">Pain points (problemas)</div>
+            <div class="grid-2">
+              <div class="form-group"><label class="form-label">Título</label><input class="form-input" id="cfg-pain_title"/></div>
+              <div class="form-group"><label class="form-label">Subtítulo</label><input class="form-input" id="cfg-pain_subtitle"/></div>
+            </div>
+            <div class="section-divider">Soluciones</div>
+            <div class="grid-2">
+              <div class="form-group"><label class="form-label">Título</label><input class="form-input" id="cfg-sol_title"/></div>
+              <div class="form-group"><label class="form-label">Subtítulo</label><input class="form-input" id="cfg-sol_subtitle"/></div>
+            </div>
+            <div class="section-divider">Planes</div>
+            <div class="grid-2">
+              <div class="form-group"><label class="form-label">Título</label><input class="form-input" id="cfg-plans_title"/></div>
+              <div class="form-group"><label class="form-label">Subtítulo</label><input class="form-input" id="cfg-plans_subtitle"/></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CTA Final -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">CTA final (sección oscura al fondo)</div></div>
+          <div class="card-body">
+            <div class="grid-2">
+              <div class="form-group"><label class="form-label">Título</label><input class="form-input" id="cfg-btn_cta_title"/></div>
+              <div class="form-group"><label class="form-label">Subtítulo</label><input class="form-input" id="cfg-btn_cta_subtitle"/></div>
+            </div>
+            <div class="grid-2">
+              <div class="form-group"><label class="form-label">Botón primario</label><input class="form-input" id="cfg-btn_cta_primary"/></div>
+              <div class="form-group"><label class="form-label">Botón WhatsApp</label><input class="form-input" id="cfg-btn_cta_whatsapp"/></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RetoPA -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Sección RetoPA</div></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+                <input type="checkbox" id="cfg-retopa_show_check"/> Mostrar sección RetoPA en el sitio
+              </label>
+            </div>
+            <div class="grid-2">
+              <div class="form-group"><label class="form-label">Título de sección</label><input class="form-input" id="cfg-retopa_label"/></div>
+              <div class="form-group"><label class="form-label">URL de RetoPA</label><input class="form-input" id="cfg-retopa_url" placeholder="https://retopa.com.py"/></div>
+            </div>
+            <div class="form-group"><label class="form-label">Texto descriptivo</label><input class="form-input" id="cfg-retopa_text"/></div>
+            <div class="grid-2">
+              <div class="form-group"><label class="form-label">Nombre en el pill</label><input class="form-input" id="cfg-retopa_pill_name" placeholder="RetoPA"/></div>
+              <div class="form-group"><label class="form-label">Subtexto en el pill</label><input class="form-input" id="cfg-retopa_pill_sub" placeholder="Directorio empresarial · Paraguay"/></div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Logo de RetoPA (URL)</label>
+              <input class="form-input" id="cfg-retopa_logo_url" placeholder="https://retopa.com.py/logo.png o /assets/uploads/retopa-logo.png"/>
+              <div class="form-hint">Se muestra en el pill de la sección RetoPA. Dejá vacío para usar el ícono de ubicación por defecto.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Subir logo de RetoPA</label>
+              <input type="file" id="retopa-logo-file" accept="image/*" onchange="uploadRetopaLogo(this)" style="font-size:13px"/>
+              <div class="alert alert-success" id="retopa-logo-ok" style="margin-top:8px">Logo subido.</div>
+              <div class="alert alert-error" id="retopa-logo-err" style="margin-top:8px"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Footer</div></div>
+          <div class="card-body">
+            <div class="section-divider">Links del footer</div>
+            <div class="grid-3">
+              <div class="form-group"><label class="form-label">Link 1 — Texto</label><input class="form-input" id="cfg-footer_link1_label" placeholder="Términos"/></div>
+              <div class="form-group"><label class="form-label">Link 1 — URL</label><input class="form-input" id="cfg-footer_link1_url" placeholder="/terminos"/></div>
+              <div></div>
+              <div class="form-group"><label class="form-label">Link 2 — Texto</label><input class="form-input" id="cfg-footer_link2_label" placeholder="Privacidad"/></div>
+              <div class="form-group"><label class="form-label">Link 2 — URL</label><input class="form-input" id="cfg-footer_link2_url" placeholder="/privacidad"/></div>
+              <div></div>
+              <div class="form-group"><label class="form-label">Link 3 — Texto</label><input class="form-input" id="cfg-footer_link3_label" placeholder="Soporte"/></div>
+              <div class="form-group"><label class="form-label">Link 3 — URL</label><input class="form-input" id="cfg-footer_link3_url" placeholder="/soporte"/></div>
+            </div>
+            <div class="section-divider">Grupo empresarial</div>
+            <div class="grid-2">
+              <div class="form-group"><label class="form-label">Nombre del grupo</label><input class="form-input" id="cfg-footer_group_label" placeholder="Hepta Group"/></div>
+              <div class="form-group"><label class="form-label">URL del grupo</label><input class="form-input" id="cfg-footer_group_url" placeholder="https://hepta.com.py"/></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SEO -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">SEO / Meta tags</div></div>
+          <div class="card-body grid-2">
+            <div class="form-group"><label class="form-label">Meta título</label><input class="form-input" id="cfg-meta_title"/></div>
+            <div class="form-group"><label class="form-label">Meta descripción</label><input class="form-input" id="cfg-meta_description"/></div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="saveGeneral()"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Guardar todos los cambios</button>
+      </div>
+
+      <!-- ═══ SERVICES ═══ -->
+      <div class="section" id="section-services">
+        <div class="alert alert-success" id="svc-ok">Guardado.</div>
+        <div class="alert alert-error" id="svc-err"></div>
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab('pain',this)">Pain points (problemas)</div>
+          <div class="tab" onclick="switchTab('solution',this)">Soluciones</div>
+        </div>
+        <div class="tab-content active" id="tab-pain">
+          <div class="svc-grid" id="svc-pain-grid"><div class="text-muted">Cargando...</div></div>
+          <div class="mt-4"><button class="btn btn-secondary" onclick="openSvcModal(null,'pain')">+ Agregar pain point</button></div>
+        </div>
+        <div class="tab-content" id="tab-solution">
+          <div class="svc-grid" id="svc-solution-grid"><div class="text-muted">Cargando...</div></div>
+          <div class="mt-4"><button class="btn btn-secondary" onclick="openSvcModal(null,'solution')">+ Agregar solución</button></div>
+        </div>
+      </div>
+
+      <!-- ═══ PLANS ═══ -->
+      <div class="section" id="section-plans">
+        <div class="alert alert-success" id="plans-ok">Plan guardado.</div>
+        <div class="alert alert-error" id="plans-err"></div>
+        <div class="plan-cards" id="plans-container"><div class="text-muted">Cargando...</div></div>
+        <div class="mt-4"><button class="btn btn-secondary" onclick="openPlanModal(null)">+ Agregar plan</button></div>
+      </div>
+
+      <!-- ═══ SMTP ═══ -->
+      <div class="section" id="section-smtp">
+        <div class="grid-2" style="gap:20px;align-items:start">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Configuración SMTP</div></div>
+            <div class="card-body">
+              <div class="alert alert-success" id="smtp-ok">SMTP guardado.</div>
+              <div class="alert alert-error" id="smtp-err"></div>
+              <div class="grid-2">
+                <div class="form-group"><label class="form-label">Host SMTP</label><input class="form-input" id="cfg-smtp_host"/></div>
+                <div class="form-group"><label class="form-label">Puerto</label><input class="form-input" id="cfg-smtp_port"/></div>
+              </div>
+              <div class="form-group"><label class="form-label">Usuario</label><input class="form-input" id="cfg-smtp_user"/></div>
+              <div class="form-group"><label class="form-label">Contraseña</label><input class="form-input" type="password" id="cfg-smtp_pass" placeholder="••••••••"/></div>
+              <div class="grid-2">
+                <div class="form-group"><label class="form-label">Nombre remitente</label><input class="form-input" id="cfg-smtp_from_name"/></div>
+                <div class="form-group"><label class="form-label">Email remitente</label><input class="form-input" id="cfg-smtp_from_email"/></div>
+              </div>
+              <div class="form-group"><label class="form-label">Conexión segura</label>
+                <select class="form-select" id="cfg-smtp_secure"><option value="true">Sí (SSL 465)</option><option value="false">No (STARTTLS 587)</option></select>
+              </div>
+              <div class="flex gap-2 mt-4">
+                <button class="btn btn-primary" onclick="saveSMTP()">Guardar SMTP</button>
+                <button class="btn btn-secondary" onclick="openSmtpTest()">Enviar prueba</button>
+              </div>
+            </div>
+          </div>
+          <div class="card"><div class="card-header"><div class="card-title">Plantillas de email</div></div><div class="card-body" id="templates-container"><div class="text-muted">Cargando...</div></div></div>
+        </div>
+      </div>
+
+      <!-- ═══ PAYMENTS ═══ -->
+      <div class="section" id="section-payments">
+        <div class="alert alert-success" id="pay-ok"></div>
+        <div class="alert alert-error"   id="pay-err"></div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Solicitudes de pago</div>
+            <select class="form-select" style="width:auto" id="pay-filter" onchange="loadPayments()">
+              <option value="">Todas</option>
+              <option value="pending">Pendientes</option>
+              <option value="provisioned">Provisionadas</option>
+              <option value="cancelled">Canceladas</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>Cliente</th><th>Plan</th><th>Monto</th><th>Estado</th><th>Fecha</th><th>Acciones</th></tr></thead>
+              <tbody id="payments-tbody">
+                <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ LEADS ═══ -->
+      <div class="section" id="section-leads">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Leads del sitio</div>
+            <select class="form-select" style="width:auto" id="leads-filter" onchange="loadLeads()">
+              <option value="">Todos</option><option value="new">Nuevos</option><option value="contacted">Contactados</option><option value="qualified">Calificados</option><option value="lost">Perdidos</option>
+            </select>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>#</th><th>Nombre</th><th>Empresa</th><th>Contacto</th><th>Mensaje</th><th>Estado</th><th>Fecha</th></tr></thead>
+          <tbody id="leads-tbody"><tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">Cargando...</td></tr></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- ═══ PAGES ═══ -->
+      <div class="section" id="section-pages">
+        <div class="alert alert-success" id="pages-ok">Página guardada.</div>
+        <div class="alert alert-error" id="pages-err"></div>
+        <div class="tabs">
+          <div class="tab active" onclick="switchPageTab('terminos',this)">Términos del Servicio</div>
+          <div class="tab" onclick="switchPageTab('privacidad',this)">Política de Privacidad</div>
+        </div>
+        <div class="tab-content active" id="ptab-terminos">
+          <div class="card">
+            <div class="card-body">
+              <div class="form-group"><label class="form-label">Título</label><input class="form-input" id="page-terminos-title"/></div>
+              <div class="form-group">
+                <label class="form-label">Contenido HTML</label>
+                <div class="form-hint" style="margin-bottom:8px">Podés usar etiquetas HTML: &lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt;, &lt;a href=""&gt;</div>
+                <textarea class="form-textarea" id="page-terminos-content" rows="24" style="font-family:monospace;font-size:12px"></textarea>
+              </div>
+              <button class="btn btn-primary" onclick="savePage('terminos')">Guardar términos</button>
+            </div>
+          </div>
+        </div>
+        <div class="tab-content" id="ptab-privacidad">
+          <div class="card">
+            <div class="card-body">
+              <div class="form-group"><label class="form-label">Título</label><input class="form-input" id="page-privacidad-title"/></div>
+              <div class="form-group">
+                <label class="form-label">Contenido HTML</label>
+                <textarea class="form-textarea" id="page-privacidad-content" rows="24" style="font-family:monospace;font-size:12px"></textarea>
+              </div>
+              <button class="btn btn-primary" onclick="savePage('privacidad')">Guardar privacidad</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ INSTANCES ═══ -->
+      <div class="section" id="section-instances">
+        <div class="alert alert-success" id="inst-ok">Instancia provisionada exitosamente.</div>
+        <div class="alert alert-error"   id="inst-err"></div>
+
+        <!-- Status API -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-body" style="display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div id="api-status-dot" style="width:10px;height:10px;border-radius:50%;background:var(--gray-200)"></div>
+              <span style="font-size:13px;color:var(--gray-600)">API Provisioning: <strong id="api-status-text">verificando...</strong></span>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="checkProvisionApi()">Verificar API</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Instancias de clientes</div>
+            <button class="btn btn-primary btn-sm" onclick="openProvisionModal()">
+              <svg viewBox="0 0 24 24" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Nueva instancia
+            </button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Cliente</th><th>Subdominio</th><th>URL</th><th>Plan</th><th>Estado</th><th>Activada</th><th></th></tr></thead>
+              <tbody id="instances-tbody">
+                <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ USERS ═══ -->
+      <div class="section" id="section-users">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Usuarios del portal</div><button class="btn btn-primary btn-sm" onclick="openUserModal(null)">+ Nuevo usuario</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Partner tenant</th><th>Último acceso</th><th>Estado</th><th></th></tr></thead>
+          <tbody id="users-tbody"><tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">Cargando...</td></tr></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- ═══ CLIENTES ═══ -->
+      <div class="section" id="section-clients">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Clientes (entidades fiscales)</div>
+            <button class="btn btn-primary btn-sm" onclick="openClientModal()">+ Nuevo cliente</button>
+          </div>
+          <div class="card-body" style="padding-bottom:0">
+            <div style="font-size:13px;color:var(--gray-600)">
+              A quién se le factura. <strong>Una ficha por documento</strong>: si el mismo dueño factura
+              con dos RUC distintos, son dos clientes. Los usuarios del portal se vinculan acá —
+              un login puede administrar más de una entidad.
+            </div>
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Razón social</th><th>Documento</th><th>Contacto</th><th>Usuarios</th><th>ERP</th><th></th></tr></thead>
+            <tbody id="clients-tbody"><tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px">Cargando...</td></tr></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- ═══ CREDENCIALES ═══ -->
+      <div class="section" id="section-credentials">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Credenciales de integración</div>
+            <button class="btn btn-primary btn-sm" onclick="openCredModal()">+ Cargar clave</button>
+          </div>
+          <div class="card-body" style="padding-bottom:0">
+            <div style="font-size:13px;color:var(--gray-600)">
+              Claves de API de los sistemas externos. Se guardan cifradas: una vez cargadas no se pueden
+              volver a ver, solo reemplazar. Vencimiento por defecto a los 90 días, con aviso 15 días antes.
+            </div>
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Servicio</th><th>Entorno</th><th>Usuario</th><th>Clave</th><th>Vence</th><th>Última prueba</th><th>Estado</th><th></th></tr></thead>
+            <tbody id="creds-tbody"><tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px">Cargando...</td></tr></tbody>
+          </table></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- MODAL CONFIRMAR PAGO -->
+<div class="modal-overlay" id="pay-confirm-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">Confirmar pago y provisionar</div>
+    <input type="hidden" id="pay-confirm-id"/>
+    <div id="pay-confirm-info" style="background:var(--blue-pale);border-radius:var(--radius);padding:14px;margin-bottom:16px;font-size:13px"></div>
+    <div class="form-group">
+      <label class="form-label">Subdominio para la instancia *</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input class="form-input" id="pay-subdomain" placeholder="micliente" style="flex:1"/>
+        <span style="font-size:13px;color:var(--gray-600);white-space:nowrap">.erp.hepta.com.py</span>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Label (nombre amigable)</label>
+      <input class="form-input" id="pay-label" placeholder="Sistema de gestión de MiCliente"/>
+    </div>
+    <div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:var(--radius);padding:12px;font-size:12px;color:#92400E;margin-bottom:16px">
+      ⚠️ Esto provisionará la instancia automáticamente. Verificá que el pago esté confirmado en Tpago antes de continuar.
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('pay-confirm-modal').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmPayment()">Confirmar y provisionar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SERVICIO -->
+<div class="modal-overlay" id="svc-modal">
+  <div class="modal">
+    <div class="modal-title" id="svc-modal-title">Servicio</div>
+    <input type="hidden" id="svc-id"/><input type="hidden" id="svc-type"/>
+    <div class="form-group"><label class="form-label">Título *</label><input class="form-input" id="svc-title"/></div>
+    <div class="form-group"><label class="form-label">Descripción</label><textarea class="form-textarea" id="svc-desc" rows="3" style="font-family:inherit"></textarea></div>
+    <div class="form-group">
+      <label class="form-label">Ícono</label>
+      <div id="icon-picker" style="display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-bottom:8px"></div>
+      <input type="hidden" id="svc-icon"/>
+      <div class="form-hint">Hacé clic para seleccionar el ícono.</div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Badge</label><input class="form-input" id="svc-badge" placeholder="Más solicitado"/></div>
+      <div class="form-group"><label class="form-label">Orden</label><input class="form-input" type="number" id="svc-order"/></div>
+    </div>
+    <div class="form-group" id="svc-featured-wrap"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="svc-featured"/> Destacar esta solución</label></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeSvcModal()">Cancelar</button><button class="btn btn-primary" onclick="saveSvc()">Guardar</button></div>
+  </div>
+</div>
+
+<!-- MODAL PROVISIONING -->
+<div class="modal-overlay" id="provision-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">Nueva instancia — Provisionar</div>
+    <div class="alert alert-error" id="prov-err"></div>
+
+    <div class="form-group">
+      <label class="form-label">Cliente *</label>
+      <select class="form-select" id="prov-user-id">
+        <option value="">Seleccioná un cliente...</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Subdominio *</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input class="form-input" id="prov-tenant" placeholder="micliente" style="flex:1" oninput="updateProvisionPreview()"/>
+        <span style="font-size:13px;color:var(--gray-600);white-space:nowrap">.erp.hepta.com.py</span>
+      </div>
+      <div class="form-hint">Solo letras, números y guiones. Ej: <code>panaderia-pedro</code></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">URL resultante</label>
+      <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--gray-600)" id="prov-url-preview">https://<em>subdominio</em>.erp.hepta.com.py</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Plan</label>
+      <select class="form-select" id="prov-plan">
+        <option value="starter">Starter</option>
+        <option value="professional">Professional</option>
+        <option value="enterprise">Enterprise</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Label (nombre amigable)</label>
+      <input class="form-input" id="prov-label" placeholder="Ej: Sistema de gestión de Pedro"/>
+    </div>
+
+    <!-- Paso 1: Instancia -->
+    <div id="prov-step1">
+      <div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:var(--radius);padding:12px;font-size:12px;color:#92400E;margin-bottom:16px">
+        ⚠️ Este proceso puede tardar <strong>3-8 minutos</strong>. No cerrés esta ventana mientras se procesa.
+      </div>
+    </div>
+
+    <!-- Paso 2: Ficha RetoPA -->
+    <div id="prov-step2" style="display:none">
+      <div style="background:var(--blue-pale);border:1px solid #BFDBFE;border-radius:var(--radius);padding:14px;font-size:13px;color:var(--navy);margin-bottom:16px">
+        <strong>¡Instancia lista!</strong> Completá los datos para crear la ficha del cliente en <strong>RetoPA</strong>.
+        <div style="font-size:12px;color:var(--gray-600);margin-top:4px">Aparecerá automáticamente en el directorio empresarial.</div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Nombre comercial *</label><input class="form-input" id="prov-business-name" placeholder="Ej: Panadería San Pedro"/></div>
+        <div class="form-group"><label class="form-label">Razón social</label><input class="form-input" id="prov-trade-name" placeholder="Ej: San Pedro S.A."/></div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">WhatsApp / Teléfono *</label><input class="form-input" id="prov-phone" placeholder="0981000000"/></div>
+        <div class="form-group"><label class="form-label">Ciudad</label><input class="form-input" id="prov-city" placeholder="Asunción"/></div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">RUC (opcional)</label><input class="form-input" id="prov-ruc" placeholder="80012345-6"/></div>
+        <div class="form-group"><label class="form-label">Categoría</label>
+          <select class="form-select" id="prov-category-id"><option value="">Sin categoría</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Descripción breve (opcional)</label>
+        <textarea class="form-textarea" id="prov-description" rows="2" style="font-family:inherit" placeholder="Qué hace el negocio..."></textarea>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="prov-retopa-listing" checked/>
+          <span>Crear ficha en RetoPA automáticamente</span>
+        </label>
+      </div>
+    </div>
+
+    <div id="prov-progress" style="display:none;text-align:center;padding:20px 0">
+      <div class="spinner" style="width:32px;height:32px;border-width:3px;margin:0 auto 12px;border-color:rgba(18,84,164,.2);border-top-color:var(--blue)"></div>
+      <div style="font-size:13px;color:var(--gray-600)" id="prov-progress-text">Iniciando provisioning...</div>
+    </div>
+
+    <div class="modal-footer" id="prov-modal-footer">
+      <button class="btn btn-secondary" onclick="closeProvisionModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="runProvisioning()" id="prov-btn">
+        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Provisionar instancia
+      </button>
+    </div>
+    <div class="modal-footer" id="prov-step2-footer" style="display:none">
+      <button class="btn btn-secondary" onclick="skipRetopaListing()">Omitir RetoPA</button>
+      <button class="btn btn-primary" onclick="submitRetopaListing()" id="prov-retopa-btn">
+        Crear ficha en RetoPA →
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR INSTANCIA -->
+<div class="modal-overlay" id="inst-edit-modal">
+  <div class="modal">
+    <div class="modal-title">Editar instancia</div>
+    <input type="hidden" id="inst-edit-id"/>
+    <div class="form-group"><label class="form-label">Label</label><input class="form-input" id="inst-edit-label"/></div>
+    <div class="form-group"><label class="form-label">Propietario</label>
+      <select class="form-select" id="inst-edit-user-id"><option value="">Cargando...</option></select>
+    </div>
+    <div class="form-group"><label class="form-label">Estado</label>
+      <select class="form-select" id="inst-edit-status">
+        <option value="active">Activo</option>
+        <option value="suspended">Suspendido</option>
+        <option value="cancelled">Cancelado</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Dominio propio</label>
+      <div style="display:flex;gap:8px">
+        <input class="form-input" id="inst-edit-domain" placeholder="miempresa.com.py" style="flex:1"/>
+        <button class="btn btn-secondary btn-sm" onclick="activateCustomDomain()" id="inst-domain-btn" style="white-space:nowrap">Activar dominio</button>
+      </div>
+      <div class="form-hint" id="inst-edit-domain-status"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Notas internas</label><textarea class="form-textarea" id="inst-edit-notes" rows="3"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeInstEditModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveInstEdit()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PLAN -->
+<div class="modal-overlay" id="plan-modal">
+  <div class="modal">
+    <div class="modal-title" id="plan-modal-title">Plan</div>
+    <input type="hidden" id="plan-id"/>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Nombre</label><input class="form-input" id="plan-name"/></div>
+      <div class="form-group"><label class="form-label">Slug</label><input class="form-input" id="plan-slug"/></div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Precio (Gs.)</label><input class="form-input" type="number" id="plan-price"/></div>
+      <div class="form-group"><label class="form-label">Etiqueta precio</label><input class="form-input" id="plan-price-label" placeholder="₲ 950.000/mes"/></div>
+    </div>
+    <div class="form-group"><label class="form-label">Descripción</label><input class="form-input" id="plan-desc"/></div>
+    <div class="form-group"><label class="form-label">Características (una por línea)</label><textarea class="form-textarea" id="plan-features" rows="5"></textarea></div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Badge</label><input class="form-input" id="plan-badge" placeholder="Más popular"/></div>
+      <div class="form-group"><label class="form-label">Orden</label><input class="form-input" type="number" id="plan-order"/></div>
+    </div>
+    <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="plan-featured"/> Destacar este plan</label></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closePlanModal()">Cancelar</button><button class="btn btn-primary" onclick="savePlan()">Guardar plan</button></div>
+  </div>
+</div>
+
+<!-- MODAL TEMPLATE -->
+<div class="modal-overlay" id="template-modal">
+  <div class="modal modal-lg">
+    <div class="modal-title" id="tpl-modal-title">Editar plantilla</div>
+    <input type="hidden" id="tpl-id"/>
+    <input type="hidden" id="tpl-slug"/>
+    <div class="form-group"><label class="form-label">Asunto del email</label><input class="form-input" id="tpl-subject"/></div>
+    <div id="tpl-friendly-editor" style="display:none">
+      <div class="section-divider">Encabezado</div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Título principal</label><input class="form-input" id="tpl-email_titulo"/></div>
+        <div class="form-group"><label class="form-label">Subtítulo</label><input class="form-input" id="tpl-email_subtitulo"/></div>
+      </div>
+      <div class="section-divider">Cuerpo</div>
+      <div class="form-group"><label class="form-label">Texto de bienvenida (después de "Hola nombre,")</label><input class="form-input" id="tpl-email_cuerpo"/></div>
+      <div class="section-divider">Primeros pasos</div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Paso 1 — Título</label><input class="form-input" id="tpl-email_paso1_titulo"/></div>
+        <div class="form-group"><label class="form-label">Paso 1 — Descripción</label><input class="form-input" id="tpl-email_paso1_desc"/></div>
+        <div class="form-group"><label class="form-label">Paso 2 — Título</label><input class="form-input" id="tpl-email_paso2_titulo"/></div>
+        <div class="form-group"><label class="form-label">Paso 2 — Descripción</label><input class="form-input" id="tpl-email_paso2_desc"/></div>
+        <div class="form-group"><label class="form-label">Paso 3 — Título</label><input class="form-input" id="tpl-email_paso3_titulo"/></div>
+        <div class="form-group"><label class="form-label">Paso 3 — Descripción</label><input class="form-input" id="tpl-email_paso3_desc"/></div>
+      </div>
+      <div class="section-divider">Versión y portal</div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Texto de versión</label><input class="form-input" id="tpl-email_version" placeholder="Hepta Cloud v19"/></div>
+        <div class="form-group"><label class="form-label">URL del portal</label><input class="form-input" id="tpl-email_portal_url" placeholder="https://cloud.hepta.com.py/portal"/></div>
+      </div>
+      <div class="section-divider">Cierre</div>
+      <div class="form-group"><label class="form-label">Texto de cierre</label><textarea class="form-textarea" id="tpl-email_cierre" rows="2" style="font-family:inherit"></textarea></div>
+      <div class="form-hint">El diseño y estructura del email no cambian — solo los textos.</div>
+    </div>
+    <div id="tpl-raw-editor">
+      <div class="form-group"><label class="form-label">Cuerpo HTML</label><textarea class="form-textarea" id="tpl-body" rows="10"></textarea></div>
+      <div class="form-hint" id="tpl-vars" style="margin-bottom:8px"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeTemplateModal()">Cancelar</button><button class="btn btn-primary" onclick="saveTemplate()">Guardar</button></div>
+  </div>
+</div>
+
+<!-- MODAL SMTP TEST -->
+<div class="modal-overlay" id="smtp-test-modal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">Probar SMTP</div>
+    <div class="form-group"><label class="form-label">Enviar a:</label><input class="form-input" type="email" id="smtp-test-email"/></div>
+    <div class="alert alert-success" id="smtp-test-ok">Email enviado correctamente.</div>
+    <div class="alert alert-error" id="smtp-test-err"></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeSmtpTest()">Cancelar</button><button class="btn btn-primary" onclick="sendSmtpTest()">Enviar prueba</button></div>
+  </div>
+</div>
+
+<!-- MODAL USUARIO -->
+<div class="modal-overlay" id="user-modal">
+  <div class="modal">
+    <div class="modal-title" id="user-modal-title">Usuario</div>
+    <input type="hidden" id="user-id"/>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Nombre completo</label><input class="form-input" id="user-name-input"/></div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="user-email"/></div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Contraseña <span class="text-muted">(vacío = no cambiar)</span></label><input class="form-input" type="password" id="user-password"/></div>
+      <div class="form-group"><label class="form-label">Rol</label><select class="form-select" id="user-role-select"><option value="client">Client</option><option value="admin">Admin</option><option value="godmode">Godmode</option></select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Partner del tenant maestro</label><input class="form-input" type="number" id="user-odoo-id"/><div class="form-hint">res.partner del Odoo de tenants. El del ERP vive en billing_customers.</div></div>
+    <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="user-active" checked/> Usuario activo</label></div>
+    <div class="alert alert-error" id="user-err"></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeUserModal()">Cancelar</button><button class="btn btn-primary" onclick="saveUser()">Guardar</button></div>
+  </div>
+</div>
+
+<!-- MODAL CLIENTE -->
+<div class="modal-overlay" id="client-modal">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-title" id="client-modal-title">Nuevo cliente</div>
+    <input type="hidden" id="client-id"/>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Tipo de persona</label>
+        <select class="form-select" id="client-tipo-persona">
+          <option value="juridica">Jurídica (empresa)</option>
+          <option value="fisica">Física</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">Tipo de documento *</label>
+        <select class="form-select" id="client-tipo-doc" onchange="clientToggleDV()">
+          <option value="ruc">RUC</option>
+          <option value="ci">CI (sin RUC)</option>
+        </select></div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Número *</label>
+        <input class="form-input" id="client-numero" oninput="clientSugerirDV()" placeholder="80012345"/>
+        <div class="form-hint">Sin el DV y sin puntos.</div></div>
+      <div class="form-group" id="client-dv-group"><label class="form-label">DV</label>
+        <input class="form-input" id="client-dv" maxlength="2" placeholder="—"/>
+        <div class="form-hint" id="client-dv-hint">Se calcula solo si lo dejás vacío.</div></div>
+    </div>
+    <div class="form-group"><label class="form-label">Razón social *</label>
+      <input class="form-input" id="client-razon"/>
+      <div class="form-hint">Lo que va impreso en la factura.</div></div>
+    <div class="form-group"><label class="form-label">Nombre comercial</label>
+      <input class="form-input" id="client-comercial"/>
+      <div class="form-hint">El que ve el cliente en el portal. Puede ser igual a la razón social.</div></div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="client-email"/></div>
+      <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" id="client-telefono"/></div>
+    </div>
+    <div class="form-group"><label class="form-label">Dirección</label><input class="form-input" id="client-direccion"/></div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Ciudad</label><input class="form-input" id="client-ciudad"/></div>
+      <div class="form-group"><label class="form-label">Departamento</label><input class="form-input" id="client-departamento"/></div>
+    </div>
+    <div class="form-group" id="client-user-group"><label class="form-label">Vincular a un usuario del portal</label>
+      <select class="form-select" id="client-user"><option value="">— Ninguno por ahora —</option></select></div>
+    <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="client-forzar-dv"/> Forzar el DV aunque no coincida con el cálculo</label></div>
+    <div class="alert alert-error" id="client-err"></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeClientModal()">Cancelar</button><button class="btn btn-primary" onclick="saveClient()">Guardar</button></div>
+  </div>
+</div>
+
+<!-- MODAL CREDENCIAL -->
+<div class="modal-overlay" id="cred-modal">
+  <div class="modal">
+    <div class="modal-title" id="cred-modal-title">Cargar credencial</div>
+    <div id="cred-rotacion-aviso" style="display:none;background:#FEF3C7;border:1px solid #FCD34D;border-radius:var(--radius);padding:12px;font-size:12px;color:#92400E;margin-bottom:16px"></div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Servicio</label>
+        <select class="form-select" id="cred-servicio">
+          <option value="odoo_erp">Odoo ERP (Enterprise)</option>
+          <option value="odoo_tenant">Odoo tenants (CE)</option>
+          <option value="wisphub">WispHub</option>
+          <option value="otro">Otro</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">Entorno</label>
+        <select class="form-select" id="cred-entorno">
+          <option value="prod">Producción</option>
+          <option value="test">Test</option>
+        </select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Etiqueta</label><input class="form-input" id="cred-etiqueta" placeholder="ERP producción — usuario apihepta"/></div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">URL</label><input class="form-input" id="cred-url" placeholder="http://10.10.20.234:8069"/></div>
+      <div class="form-group"><label class="form-label">Base de datos</label><input class="form-input" id="cred-db" placeholder="heptagroup"/></div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Usuario</label><input class="form-input" id="cred-usuario" placeholder="apihepta"/></div>
+      <div class="form-group"><label class="form-label">Vence el</label><input class="form-input" type="date" id="cred-expira"/><div class="form-hint">Vacío = 90 días desde hoy.</div></div>
+    </div>
+    <div class="form-group"><label class="form-label">Clave / API key *</label><input class="form-input" type="password" id="cred-secreto" autocomplete="new-password"/><div class="form-hint">Con 2FA activo, en Odoo tiene que ser una API key, no la contraseña. No se va a poder ver de nuevo.</div></div>
+    <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="cred-notas" placeholder="Generada por Esteban, permisos de facturación"/></div>
+    <div class="alert alert-error" id="cred-err"></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeCredModal()">Cancelar</button><button class="btn btn-primary" onclick="saveCred()">Guardar</button></div>
+  </div>
+</div>
+
+<script>
+const API='/api';
+let TOKEN=localStorage.getItem('hc_admin_token');
+let currentUser=null;
+
+function authHeaders(){return{'Content-Type':'application/json','Authorization':`Bearer ${TOKEN}`};}
+async function api(method,path,body){
+  const opts={method,headers:authHeaders()};
+  if(body) opts.body=JSON.stringify(body);
+  const res=await fetch(API+path,opts);
+  const data=await res.json();
+  if(res.status===401){doLogout();throw new Error('Sesión expirada');}
+  return data;
+}
+function showAlert(id,type,msg,duration=3000){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.className=`alert alert-${type} show`;
+  if(msg) el.textContent=msg;
+  if(duration) setTimeout(()=>{if(el) el.className=`alert alert-${type}`;},duration);
+}
+
+// ── AUTH ───────────────────────────────────────────────────
+async function doLogin(){
+  const email=document.getElementById('login-email').value;
+  const pass=document.getElementById('login-pass').value;
+  const btn=document.getElementById('login-btn');
+  if(!email||!pass) return;
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>';
+  try{
+    const res=await fetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
+    const data=await res.json();
+    if(data.success){TOKEN=data.data.token;currentUser=data.data.user;localStorage.setItem('hc_admin_token',TOKEN);showApp();}
+    else showAlert('login-error','error',data.error||'Credenciales inválidas',0);
+  }catch(e){showAlert('login-error','error','Error de conexión',0);}
+  finally{btn.disabled=false;btn.textContent='Ingresar';}
+}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.getElementById('login-screen').style.display!=='none')doLogin();});
+function doLogout(){localStorage.removeItem('hc_admin_token');TOKEN=null;location.reload();}
+
+async function showApp(){
+  if(!TOKEN) return;
+  if(!currentUser){const me=await api('GET','/auth/me');if(!me.success){doLogout();return;}currentUser=me.data;}
+  if(!['admin','godmode'].includes(currentUser.role)){showAlert('login-error','error','Sin permisos',0);return;}
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('user-name').textContent=currentUser.full_name||currentUser.email;
+  document.getElementById('user-role').textContent=currentUser.role;
+  document.getElementById('user-avatar').textContent=(currentUser.full_name||currentUser.email)[0].toUpperCase();
+  loadDashboard();
+  cargarAlertasCredenciales();
+  // cargar logo en sidebar
+  try{
+    const cfg=await api('GET','/admin/config');
+    if(cfg.success&&cfg.data.logo_url){
+      const html=`<img src="${cfg.data.logo_url}" alt="Logo"/>`;
+      document.getElementById('sidebar-logo').innerHTML=html;
+      document.getElementById('login-logo-icon').innerHTML=html;
+    }
+  }catch(e){}
+}
+
+// ── NAV ────────────────────────────────────────────────────
+const sectionTitles={dashboard:'Dashboard',payments:'Solicitudes de pago',general:'Configuración general',services:'Servicios y soluciones',plans:'Planes',smtp:'SMTP y plantillas',leads:'Leads',instances:'Instancias',pages:'Páginas legales',users:'Usuarios del portal',clients:'Clientes (entidades fiscales)',credentials:'Credenciales de integración'};
+const sectionLoaders={dashboard:loadDashboard,payments:loadPayments,general:loadGeneral,services:loadServices,plans:loadPlans,smtp:loadSMTP,leads:loadLeads,instances:loadInstances,pages:loadPages,users:loadUsers,clients:loadClients,credentials:loadCredentials};
+function showSection(name,el){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.menu-item').forEach(m=>m.classList.remove('active'));
+  document.getElementById(`section-${name}`).classList.add('active');
+  el.classList.add('active');
+  document.getElementById('topbar-title').textContent=sectionTitles[name];
+  if(sectionLoaders[name]) sectionLoaders[name]();
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────
+async function loadDashboard() {
+  try {
+    const data = await api('GET', '/admin/dashboard-stats');
+    if (!data.success) return;
+    const d = data.data;
+
+    document.getElementById('stat-leads').textContent     = d.total_leads;
+    document.getElementById('stat-clients').textContent   = d.total_clients;
+    document.getElementById('stat-instances').textContent = d.active_instances;
+
+    const statusLabel = {new:'Nuevo', contacted:'Contactado', qualified:'Calificado', lost:'Perdido'};
+    const statusColor = {new:'badge-blue', contacted:'badge-green', qualified:'badge-green', lost:'badge-gray'};
+    document.getElementById('dash-leads-status').innerHTML = d.leads_by_status.length
+      ? d.leads_by_status.map(s => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--gray-200)">
+          <span class="badge ${statusColor[s.status]||'badge-gray'}">${statusLabel[s.status]||s.status}</span>
+          <span style="font-size:18px;font-weight:700;color:var(--navy)">${s.count}</span>
+        </div>`).join('')
+      : '<div class="text-muted">Sin leads aún.</div>';
+
+    document.getElementById('dash-recent-leads').innerHTML = d.recent_leads.length
+      ? d.recent_leads.map(l => `<tr>
+          <td><strong>${l.full_name}</strong></td>
+          <td>${l.company_name||'—'}</td>
+          <td><span class="badge badge-gray">${l.source}</span></td>
+          <td><span class="badge ${statusColor[l.status]||'badge-gray'}">${statusLabel[l.status]||l.status}</span></td>
+          <td class="text-muted text-sm">${new Date(l.created_at).toLocaleDateString('es-PY')}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:16px">Sin leads aún.</td></tr>';
+  } catch(e) { console.error('[dashboard]', e.message); }
+}
+
+// ── GENERAL ────────────────────────────────────────────────
+const cfgKeys=[
+  'hero_title','hero_subtitle','meta_title','meta_description',
+  'whatsapp_number','whatsapp_message','contact_email','notify_leads_email',
+  'btn_primary_label','btn_whatsapp_label',
+  'btn_cta_title','btn_cta_subtitle','btn_cta_primary','btn_cta_whatsapp',
+  'pain_title','pain_subtitle','sol_title','sol_subtitle','plans_title','plans_subtitle',
+  'retopa_label','retopa_text','retopa_pill_name','retopa_pill_sub','retopa_url','retopa_logo_url',
+  'footer_link1_label','footer_link1_url','footer_link2_label','footer_link2_url',
+  'footer_link3_label','footer_link3_url','footer_group_label','footer_group_url',
+  'hero_panel_image','btn_primary_url','dns_proxy_host','certbot_email','tpago_link_starter','tpago_link_professional','tpago_link_enterprise','wa_business_link'
+];
+
+async function loadGeneral(){
+  const data=await api('GET','/admin/config');
+  if(!data.success) return;
+  cfgKeys.forEach(k=>{const el=document.getElementById(`cfg-${k}`);if(el) el.value=data.data[k]||'';});
+  // checkbox retopa
+  const retopa=document.getElementById('cfg-retopa_show_check');
+  if(retopa) retopa.checked=data.data.retopa_show!=='false';
+  // logo
+  if(data.data.logo_url){
+    document.getElementById('logo-preview-img').src=data.data.logo_url;
+    document.getElementById('logo-preview-wrap').style.display='block';
+    const html=`<img src="${data.data.logo_url}" alt="Logo"/>`;
+    document.getElementById('sidebar-logo').innerHTML=html;
+    document.getElementById('login-logo-icon').innerHTML=html;
+  }
+}
+
+async function saveGeneral(){
+  const updates={};
+  cfgKeys.forEach(k=>{const el=document.getElementById(`cfg-${k}`);if(el) updates[k]=el.value;});
+  const retopa=document.getElementById('cfg-retopa_show_check');
+  if(retopa) updates.retopa_show=retopa.checked?'true':'false';
+  const data=await api('PUT','/admin/config',updates);
+  if(data.success) showAlert('general-ok','success');
+  else showAlert('general-err','error',data.error);
+}
+
+async function uploadRetopaLogo(input){
+  const file=input.files[0]; if(!file) return;
+  const res=await fetch(`${API}/admin/upload/asset`,{method:'POST',headers:{'Content-Type':file.type,'Authorization':`Bearer ${TOKEN}`},body:file});
+  const data=await res.json();
+  if(data.success){
+    document.getElementById('cfg-retopa_logo_url').value=data.data.url;
+    showAlert('retopa-logo-ok','success');
+  } else showAlert('retopa-logo-err','error',data.error);
+}
+
+async function uploadPanelImg(input){
+  const file=input.files[0]; if(!file) return;
+  const res=await fetch(`${API}/admin/upload/logo`,{method:'POST',headers:{'Content-Type':file.type,'Authorization':`Bearer ${TOKEN}`},body:file});
+  const data=await res.json();
+  if(data.success){
+    document.getElementById('cfg-hero_panel_image').value=data.data.url;
+    showAlert('panel-img-ok','success');
+  } else showAlert('panel-img-err','error',data.error);
+}
+
+async function uploadLogo(input){
+  const file=input.files[0]; if(!file) return;
+  const res=await fetch(`${API}/admin/upload/logo`,{method:'POST',headers:{'Content-Type':file.type,'Authorization':`Bearer ${TOKEN}`},body:file});
+  const data=await res.json();
+  if(data.success){
+    const url=data.data.url+'?t='+Date.now();
+    document.getElementById('logo-preview-img').src=url;
+    document.getElementById('logo-preview-wrap').style.display='block';
+    const html=`<img src="${url}" alt="Logo"/>`;
+    document.getElementById('sidebar-logo').innerHTML=html;
+    showAlert('logo-ok','success');
+  } else showAlert('logo-err','error',data.error);
+}
+
+// ── SERVICES ───────────────────────────────────────────────
+async function loadServices(){
+  const data=await api('GET','/admin/services');
+  if(!data.success) return;
+  renderSvcGrid('svc-pain-grid',data.data.filter(s=>s.type==='pain'),'pain');
+  renderSvcGrid('svc-solution-grid',data.data.filter(s=>s.type==='solution'),'solution');
+}
+function renderSvcGrid(id,items,type){
+  const c=document.getElementById(id);
+  if(!items.length){c.innerHTML=`<div class="text-muted">Sin ${type==='pain'?'pain points':'soluciones'}.</div>`;return;}
+  c.innerHTML=items.map(s=>`
+    <div class="svc-card ${s.type}">
+      <div class="svc-title">${s.title}</div>
+      <div class="svc-desc">${s.description||'—'}</div>
+      <div class="svc-actions">
+        <button class="btn btn-secondary btn-sm" onclick='openSvcModal(${JSON.stringify(s).replace(/'/g,"&#39;")}, "${s.type}")'>Editar</button>
+        ${s.is_featured?'<span class="badge badge-blue">Destacado</span>':''}
+        <span class="badge ${s.is_active?'badge-green':'badge-gray'}">${s.is_active?'Activo':'Inactivo'}</span>
+        ${currentUser&&currentUser.role==='godmode'?`<button class="btn btn-danger btn-sm" onclick="deleteSvc(${s.id})">×</button>`:''}
+      </div>
+    </div>`).join('');
+}
+function switchTab(type,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(`tab-${type}`).classList.add('active');
+}
+function openSvcModal(svc,type){
+  const t=svc?.type||type;
+  document.getElementById('svc-modal-title').textContent=svc?'Editar servicio':(t==='pain'?'Nuevo pain point':'Nueva solución');
+  document.getElementById('svc-id').value=svc?.id||'';
+  document.getElementById('svc-type').value=t;
+  document.getElementById('svc-title').value=svc?.title||'';
+  document.getElementById('svc-desc').value=svc?.description||'';
+  document.getElementById('svc-icon').value=svc?.icon_svg||'';
+  document.getElementById('svc-badge').value=svc?.badge_text||'';
+  document.getElementById('svc-order').value=svc?.sort_order||'';
+  document.getElementById('svc-featured').checked=svc?.is_featured||false;
+  document.getElementById('svc-featured-wrap').style.display=t==='solution'?'block':'none';
+  document.getElementById('svc-modal').classList.add('open');
+}
+function closeSvcModal(){document.getElementById('svc-modal').classList.remove('open');}
+async function saveSvc(){
+  const id=document.getElementById('svc-id').value;
+  const body={type:document.getElementById('svc-type').value,title:document.getElementById('svc-title').value,description:document.getElementById('svc-desc').value,icon_svg:document.getElementById('svc-icon').value,badge_text:document.getElementById('svc-badge').value,sort_order:parseInt(document.getElementById('svc-order').value)||0,is_featured:document.getElementById('svc-featured').checked};
+  const data=id?await api('PUT',`/admin/services/${id}`,body):await api('POST','/admin/services',body);
+  if(data.success){closeSvcModal();loadServices();showAlert('svc-ok','success','Servicio guardado.');}
+  else showAlert('svc-err','error',data.error);
+}
+async function deleteSvc(id){if(!confirm('¿Eliminar?'))return;await api('DELETE',`/admin/services/${id}`);loadServices();}
+
+// ── PLANS ──────────────────────────────────────────────────
+async function loadPlans(){
+  const data=await api('GET','/admin/plans');
+  if(!data.success) return;
+  const c=document.getElementById('plans-container');
+  if(!data.data.length){c.innerHTML='<div class="text-muted">Sin planes.</div>';return;}
+  c.innerHTML=data.data.map(p=>{
+    const f=Array.isArray(p.features)?p.features:JSON.parse(p.features||'[]');
+    return `<div class="plan-card ${p.is_featured?'featured':''}">
+      ${p.badge_text?`<div class="plan-badge-tag">${p.badge_text}</div>`:''}
+      <div class="plan-name">${p.name}</div><div class="plan-price">${p.price_label||'—'}</div>
+      <div class="plan-desc">${p.description||''}</div>
+      <ul class="plan-features-list">${f.map(i=>`<li>${i}</li>`).join('')}</ul>
+      <div class="plan-actions">
+        <button class="btn btn-secondary btn-sm" onclick='openPlanModal(${JSON.stringify(p).replace(/'/g,"&#39;")})'>Editar</button>
+        <span class="badge ${p.is_active?'badge-green':'badge-gray'}">${p.is_active?'Activo':'Inactivo'}</span>
+        ${currentUser&&currentUser.role==='godmode'?`<button class="btn btn-danger btn-sm" onclick="deletePlan(${p.id})">×</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+function openPlanModal(p){
+  document.getElementById('plan-modal-title').textContent=p?'Editar plan':'Nuevo plan';
+  document.getElementById('plan-id').value=p?.id||'';
+  document.getElementById('plan-name').value=p?.name||'';
+  document.getElementById('plan-slug').value=p?.slug||'';
+  document.getElementById('plan-slug').disabled=!!p;
+  document.getElementById('plan-price').value=p?.price||'';
+  document.getElementById('plan-price-label').value=p?.price_label||'';
+  document.getElementById('plan-desc').value=p?.description||'';
+  document.getElementById('plan-badge').value=p?.badge_text||'';
+  document.getElementById('plan-order').value=p?.sort_order||'';
+  document.getElementById('plan-featured').checked=p?.is_featured||false;
+  const f=Array.isArray(p?.features)?p.features:JSON.parse(p?.features||'[]');
+  document.getElementById('plan-features').value=f.join('\n');
+  document.getElementById('plan-modal').classList.add('open');
+}
+function closePlanModal(){document.getElementById('plan-modal').classList.remove('open');}
+async function savePlan(){
+  const id=document.getElementById('plan-id').value;
+  const f=document.getElementById('plan-features').value.split('\n').map(x=>x.trim()).filter(Boolean);
+  const body={name:document.getElementById('plan-name').value,slug:document.getElementById('plan-slug').value,price:parseInt(document.getElementById('plan-price').value)||0,price_label:document.getElementById('plan-price-label').value,description:document.getElementById('plan-desc').value,badge_text:document.getElementById('plan-badge').value,sort_order:parseInt(document.getElementById('plan-order').value)||0,is_featured:document.getElementById('plan-featured').checked,features:f};
+  const data=id?await api('PUT',`/admin/plans/${id}`,body):await api('POST','/admin/plans',body);
+  if(data.success){closePlanModal();loadPlans();showAlert('plans-ok','success');}
+  else showAlert('plans-err','error',data.error);
+}
+async function deletePlan(id){if(!confirm('¿Eliminar?'))return;await api('DELETE',`/admin/plans/${id}`);loadPlans();}
+
+// ── SMTP ───────────────────────────────────────────────────
+async function loadSMTP(){
+  const data=await api('GET','/admin/config');
+  if(!data.success) return;
+  ['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_from_name','smtp_from_email','smtp_secure'].forEach(k=>{
+    const el=document.getElementById(`cfg-${k}`);if(el) el.value=data.data[k]||'';
+  });
+  loadTemplates();
+}
+async function saveSMTP(){
+  const keys=['smtp_host','smtp_port','smtp_user','smtp_pass','smtp_from_name','smtp_from_email','smtp_secure'];
+  const updates={};keys.forEach(k=>{updates[k]=document.getElementById(`cfg-${k}`)?.value||'';});
+  const data=await api('PUT','/admin/config',updates);
+  if(data.success) showAlert('smtp-ok','success');
+  else showAlert('smtp-err','error',data.error);
+}
+function openSmtpTest(){document.getElementById('smtp-test-modal').classList.add('open');}
+function closeSmtpTest(){document.getElementById('smtp-test-modal').classList.remove('open');}
+async function sendSmtpTest(){
+  const to=document.getElementById('smtp-test-email').value; if(!to) return;
+  const data=await api('POST','/admin/config/smtp-test',{to});
+  if(data.success) showAlert('smtp-test-ok','success');
+  else showAlert('smtp-test-err','error',data.error);
+}
+async function loadTemplates(){
+  const data=await api('GET','/admin/email-templates'); if(!data.success) return;
+  document.getElementById('templates-container').innerHTML=data.data.map(t=>`
+    <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--gray-200)">
+      <div class="flex justify-between items-center" style="margin-bottom:6px">
+        <div style="font-weight:600;color:var(--navy)">${t.name}</div>
+        <button class="btn btn-secondary btn-sm" onclick='openTemplateModal(${JSON.stringify(t).replace(/'/g,"&#39;")})'>Editar</button>
+      </div>
+      <div class="text-sm text-muted">Slug: <code>${t.slug}</code></div>
+      <div class="text-sm text-muted">Asunto: ${t.subject}</div>
+    </div>`).join('');
+}
+async function openTemplateModal(t){
+  document.getElementById('tpl-id').value=t.id;
+  document.getElementById('tpl-slug').value=t.slug||'';
+  document.getElementById('tpl-subject').value=t.subject;
+  document.getElementById('tpl-body').value=t.body_html;
+  const v=Array.isArray(t.variables)?t.variables:JSON.parse(t.variables||'[]');
+  document.getElementById('tpl-vars').textContent='Variables: '+v.join(', ');
+  const isFriendly=t.slug==='welcome_client';
+  document.getElementById('tpl-friendly-editor').style.display=isFriendly?'block':'none';
+  document.getElementById('tpl-raw-editor').style.display=isFriendly?'none':'block';
+  document.getElementById('tpl-modal-title').textContent=isFriendly?'Email de bienvenida':'Editar plantilla';
+  if(isFriendly){
+    const cfg=await api('GET','/admin/config');
+    if(cfg.success){
+      const d=cfg.data;
+      ['titulo','subtitulo','cuerpo','paso1_titulo','paso1_desc','paso2_titulo','paso2_desc','paso3_titulo','paso3_desc','version','portal_url','cierre'].forEach(k=>{
+        const el=document.getElementById('tpl-email_'+k);
+        if(el) el.value=d['email_wc_'+k]||'';
+      });
+    }
+  }
+  document.getElementById('template-modal').classList.add('open');
+}
+function closeTemplateModal(){document.getElementById('template-modal').classList.remove('open');}
+async function saveTemplate(){
+  const id=document.getElementById('tpl-id').value;
+  const slug=document.getElementById('tpl-slug').value;
+  if(slug==='welcome_client'){
+    const updates={};
+    ['titulo','subtitulo','cuerpo','paso1_titulo','paso1_desc','paso2_titulo','paso2_desc','paso3_titulo','paso3_desc','version','portal_url','cierre'].forEach(k=>{
+      const el=document.getElementById('tpl-email_'+k);
+      if(el) updates['email_wc_'+k]=el.value;
+    });
+    const r1=await api('PUT','/admin/config',updates);
+    const r2=await api('PUT',`/admin/email-templates/${id}`,{subject:document.getElementById('tpl-subject').value});
+    if(r1.success&&r2.success){closeTemplateModal();loadTemplates();}
+  } else {
+    const data=await api('PUT',`/admin/email-templates/${id}`,{subject:document.getElementById('tpl-subject').value,body_html:document.getElementById('tpl-body').value});
+    if(data.success){closeTemplateModal();loadTemplates();}
+  }
+}
+
+// ── LEADS ──────────────────────────────────────────────────
+async function loadLeads(){
+  const status=document.getElementById('leads-filter').value;
+  const data=await api('GET',status?`/admin/leads?status=${status}`:'/admin/leads');
+  if(!data.success) return;
+  const tbody=document.getElementById('leads-tbody');
+  if(!data.data.length){tbody.innerHTML='<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">Sin leads.</td></tr>';return;}
+  tbody.innerHTML=data.data.map(l=>`
+    <tr>
+      <td>${l.id}</td>
+      <td><strong>${l.full_name}</strong></td>
+      <td>${l.company_name||'—'}</td>
+      <td>${l.email?`<div>${l.email}</div>`:''}${l.phone?`<div class="text-muted">${l.phone}</div>`:''}</td>
+      <td class="text-muted text-sm" style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l.message||'—'}</td>
+      <td>
+        <select class="status-select" onchange="updateLeadStatus(${l.id},this.value)">
+          <option value="new" ${l.status==='new'?'selected':''}>Nuevo</option>
+          <option value="contacted" ${l.status==='contacted'?'selected':''}>Contactado</option>
+          <option value="qualified" ${l.status==='qualified'?'selected':''}>Calificado</option>
+          <option value="lost" ${l.status==='lost'?'selected':''}>Perdido</option>
+        </select>
+      </td>
+      <td class="text-muted text-sm">${new Date(l.created_at).toLocaleDateString('es-PY')}</td>
+    </tr>`).join('');
+}
+async function updateLeadStatus(id,status){await api('PUT',`/admin/leads/${id}`,{status});}
+
+// ── USERS ──────────────────────────────────────────────────
+async function loadUsers(){
+  const data=await api('GET','/admin/users'); if(!data.success) return;
+  const tbody=document.getElementById('users-tbody');
+  if(!data.data.length){tbody.innerHTML='<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">Sin usuarios.</td></tr>';return;}
+  tbody.innerHTML=data.data.map(u=>`
+    <tr>
+      <td><strong>${u.full_name}</strong></td>
+      <td>${u.email}</td>
+      <td><span class="badge badge-blue">${u.role}</span></td>
+      <td>${u.odoo_partner_id||'<span class="text-muted">—</span>'}</td>
+      <td class="text-muted text-sm">${u.last_login_at?new Date(u.last_login_at).toLocaleDateString('es-PY'):'Nunca'}</td>
+      <td><span class="badge ${u.is_active?'badge-green':'badge-gray'}">${u.is_active?'Activo':'Inactivo'}</span></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-secondary btn-sm" onclick='openUserModal(${JSON.stringify(u).replace(/'/g,"&#39;")})'>Editar</button>
+        <button class="btn btn-secondary btn-sm" onclick="deleteUser(${u.id},'${(u.email||'').replace(/'/g,"&#39;")}')">Eliminar</button>
+      </td>
+    </tr>`).join('');
+}
+function openUserModal(u){
+  document.getElementById('user-modal-title').textContent=u?'Editar usuario':'Nuevo usuario';
+  document.getElementById('user-id').value=u?.id||'';
+  document.getElementById('user-name-input').value=u?.full_name||'';
+  document.getElementById('user-email').value=u?.email||'';
+  document.getElementById('user-password').value='';
+  document.getElementById('user-role-select').value=u?.role||'client';
+  document.getElementById('user-odoo-id').value=u?.odoo_partner_id||'';
+  document.getElementById('user-active').checked=u?u.is_active:true;
+  document.getElementById('user-email').disabled=!!u;
+  document.getElementById('user-err').className='alert alert-error';
+  document.getElementById('user-modal').classList.add('open');
+}
+function closeUserModal(){document.getElementById('user-modal').classList.remove('open');}
+async function saveUser(){
+  const id=document.getElementById('user-id').value;
+  const body={full_name:document.getElementById('user-name-input').value,email:document.getElementById('user-email').value,role:document.getElementById('user-role-select').value,odoo_partner_id:parseInt(document.getElementById('user-odoo-id').value)||null,is_active:document.getElementById('user-active').checked};
+  const pass=document.getElementById('user-password').value; if(pass) body.password=pass;
+  const data=id?await api('PUT',`/admin/users/${id}`,body):await api('POST','/admin/users',body);
+  if(data.success){closeUserModal();loadUsers();}
+  else{const err=document.getElementById('user-err');err.textContent=data.error;err.className='alert alert-error show';}
+}
+
+// ── CLIENTES (entidades fiscales) ──────────────────────────
+let CLIENTES=[];
+
+function dvParaguayo(numero){
+  const d=String(numero||'').replace(/\D/g,'');
+  if(!d) return '';
+  let total=0,k=2;
+  for(let i=d.length-1;i>=0;i--){ total+=parseInt(d[i],10)*k; k=k>=11?2:k+1; }
+  const resto=total%11;
+  return resto>1?11-resto:0;
+}
+function clientToggleDV(){
+  const esRuc=document.getElementById('client-tipo-doc').value==='ruc';
+  document.getElementById('client-dv-group').style.display=esRuc?'':'none';
+  if(!esRuc) document.getElementById('client-dv').value='';
+}
+function clientSugerirDV(){
+  if(document.getElementById('client-tipo-doc').value!=='ruc') return;
+  const dv=dvParaguayo(document.getElementById('client-numero').value);
+  document.getElementById('client-dv-hint').textContent=dv===''?'Se calcula solo si lo dejás vacío.':`DV calculado: ${dv}`;
+}
+
+function clientERP(c){
+  if(c.erp_partner_id) return `<span class="badge badge-green">Odoo #${c.erp_partner_id}</span>`;
+  if(c.erp_sync_state==='revision') return `<span class="badge badge-red" title="${(c.erp_last_error||'').replace(/"/g,'&quot;')}">En revisión</span>`;
+  if(c.erp_sync_state==='error') return `<span class="badge badge-red" title="${(c.erp_last_error||'').replace(/"/g,'&quot;')}">Error</span>`;
+  return '<span class="badge badge-gray">Sin enlazar</span>';
+}
+
+async function loadClients(){
+  const data=await api('GET','/admin/clients'); if(!data.success) return;
+  CLIENTES=data.data;
+  const tbody=document.getElementById('clients-tbody');
+  if(!CLIENTES.length){tbody.innerHTML='<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px">Sin clientes cargados. Se crean cuando alguien contrata, o a mano con “Nuevo cliente”.</td></tr>';return;}
+  tbody.innerHTML=CLIENTES.map(c=>`
+    <tr>
+      <td><strong>${c.razon_social}</strong>${c.nombre_comercial&&c.nombre_comercial!==c.razon_social?`<div class="text-muted text-sm">${c.nombre_comercial}</div>`:''}</td>
+      <td class="text-sm">${c.tipo_doc.toUpperCase()} ${c.numero_doc}${c.dv?'-'+c.dv:''}</td>
+      <td class="text-sm">${c.email||'<span class="text-muted">—</span>'}${c.telefono?`<div class="text-muted text-sm">${c.telefono}</div>`:''}</td>
+      <td class="text-sm">${(c.usuarios||[]).length?c.usuarios.map(u=>u.email).join('<br>'):'<span class="text-muted">—</span>'}</td>
+      <td>${clientERP(c)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-secondary btn-sm" onclick="openClientModal('${c.id}')">Editar</button>
+        ${c.erp_partner_id?'':`<button class="btn btn-secondary btn-sm" onclick="vincularERP('${c.id}',this)">Enlazar al ERP</button>`}
+      </td>
+    </tr>`).join('');
+}
+
+async function openClientModal(id){
+  const c=id?CLIENTES.find(x=>x.id===id):null;
+  document.getElementById('client-modal-title').textContent=c?'Editar cliente':'Nuevo cliente';
+  document.getElementById('client-id').value=c?.id||'';
+  document.getElementById('client-tipo-persona').value=c?.tipo_persona||'juridica';
+  document.getElementById('client-tipo-doc').value=c?.tipo_doc||'ruc';
+  document.getElementById('client-numero').value=c?.numero_doc||'';
+  document.getElementById('client-dv').value=c?.dv||'';
+  document.getElementById('client-razon').value=c?.razon_social||'';
+  document.getElementById('client-comercial').value=c?.nombre_comercial||'';
+  document.getElementById('client-email').value=c?.email||'';
+  document.getElementById('client-telefono').value=c?.telefono||'';
+  document.getElementById('client-direccion').value=c?.direccion||'';
+  document.getElementById('client-ciudad').value=c?.ciudad||'';
+  document.getElementById('client-departamento').value=c?.departamento||'';
+  document.getElementById('client-forzar-dv').checked=false;
+  document.getElementById('client-err').className='alert alert-error';
+  // El documento no se edita una vez enlazado al ERP.
+  const bloquear=!!c?.erp_partner_id;
+  document.getElementById('client-numero').disabled=bloquear;
+  document.getElementById('client-dv').disabled=bloquear;
+  document.getElementById('client-tipo-doc').disabled=bloquear;
+  // Selector de usuario, solo en el alta
+  const grupo=document.getElementById('client-user-group');
+  grupo.style.display=c?'none':'';
+  if(!c){
+    const us=await api('GET','/admin/users');
+    const sel=document.getElementById('client-user');
+    sel.innerHTML='<option value="">— Ninguno por ahora —</option>'+
+      (us.success?us.data.filter(u=>u.role==='client').map(u=>`<option value="${u.id}">${u.full_name} (${u.email})</option>`).join(''):'');
+  }
+  clientToggleDV(); clientSugerirDV();
+  document.getElementById('client-modal').classList.add('open');
+}
+function closeClientModal(){document.getElementById('client-modal').classList.remove('open');}
+
+async function saveClient(){
+  const id=document.getElementById('client-id').value;
+  const body={
+    tipo_persona:document.getElementById('client-tipo-persona').value,
+    tipo_doc:document.getElementById('client-tipo-doc').value,
+    numero_doc:document.getElementById('client-numero').value.trim(),
+    dv:document.getElementById('client-dv').value.trim(),
+    razon_social:document.getElementById('client-razon').value.trim(),
+    nombre_comercial:document.getElementById('client-comercial').value.trim()||null,
+    email:document.getElementById('client-email').value.trim()||null,
+    telefono:document.getElementById('client-telefono').value.trim()||null,
+    direccion:document.getElementById('client-direccion').value.trim()||null,
+    ciudad:document.getElementById('client-ciudad').value.trim()||null,
+    departamento:document.getElementById('client-departamento').value.trim()||null,
+    forzar_dv:document.getElementById('client-forzar-dv').checked,
+    user_id:id?undefined:(document.getElementById('client-user').value||undefined),
+  };
+  const err=document.getElementById('client-err');
+  const data=id?await api('PUT',`/admin/clients/${id}`,body):await api('POST','/admin/clients',body);
+  if(!data.success){err.textContent=data.error;err.className='alert alert-error show';return;}
+  closeClientModal(); loadClients();
+}
+
+async function vincularERP(id,boton){
+  const original=boton?boton.textContent:null;
+  if(boton){boton.disabled=true;boton.innerHTML='<span class="spinner"></span>';}
+  try{
+    const data=await api('POST',`/admin/clients/${id}/erp`);
+    await loadClients();
+    if(!data.success) alert('No se pudo enlazar:\n\n'+(data.error||''));
+  }finally{ if(boton){boton.disabled=false;boton.textContent=original;} }
+}
+
+async function deleteUser(id,email){
+  if(!confirm(`¿Borrar al usuario ${email}?\n\nSolo se puede si no tiene instancias, pagos ni entidad fiscal.`)) return;
+  const data=await api('DELETE',`/admin/users/${id}`);
+  if(data.success){loadUsers();return;}
+  if(data.code==='TIENE_DEPENDENCIAS'&&confirm(`${data.error}\n\n¿Lo desactivo?`)){
+    await api('PUT',`/admin/users/${id}`,{is_active:false});
+    loadUsers();
+  }else if(data.code!=='TIENE_DEPENDENCIAS'){
+    alert(data.error||'No se pudo borrar');
+  }
+}
+
+// ── CREDENCIALES ───────────────────────────────────────────
+const CRED_SERVICIOS={odoo_erp:'Odoo ERP',odoo_tenant:'Odoo tenants',wisphub:'WispHub',otro:'Otro'};
+let CREDS=[];
+
+function credEstado(c){
+  if(!c.activo) return '<span class="badge badge-gray">Inactiva</span>';
+  if(c.vencida) return '<span class="badge badge-red">Vencida</span>';
+  if(c.por_vencer) return `<span class="badge badge-red">Vence en ${c.dias_para_vencer}d</span>`;
+  return '<span class="badge badge-green">Activa</span>';
+}
+function credPrueba(c){
+  if(!c.ultima_prueba_el) return '<span class="text-muted">Sin probar</span>';
+  const cuando=new Date(c.ultima_prueba_el).toLocaleDateString('es-PY');
+  return c.ultima_prueba_ok
+    ? `<span class="badge badge-green">OK</span> <span class="text-muted text-sm">${cuando}</span>`
+    : `<span class="badge badge-red" title="${(c.ultimo_error||'').replace(/"/g,'&quot;')}">Falló</span> <span class="text-muted text-sm">${cuando}</span>`;
+}
+
+async function loadCredentials(){
+  const data=await api('GET','/admin/credentials'); if(!data.success) return;
+  CREDS=data.data;
+  const tbody=document.getElementById('creds-tbody');
+  if(!CREDS.length){tbody.innerHTML='<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px">Sin credenciales cargadas. Mientras tanto se usan las del archivo .env.</td></tr>';return;}
+  tbody.innerHTML=CREDS.map(c=>`
+    <tr${c.activo?'':' style="opacity:.55"'}>
+      <td><strong>${CRED_SERVICIOS[c.servicio]||c.servicio}</strong>${c.etiqueta?`<div class="text-muted text-sm">${c.etiqueta}</div>`:''}</td>
+      <td><span class="badge ${c.entorno==='prod'?'badge-blue':'badge-gray'}">${c.entorno}</span></td>
+      <td class="text-sm">${c.usuario||'<span class="text-muted">—</span>'}${c.db_name?`<div class="text-muted text-sm">${c.db_name}</div>`:''}</td>
+      <td class="text-muted text-sm">••••${c.secreto_ultimos4||''}</td>
+      <td class="text-sm">${c.expira_el?new Date(c.expira_el).toLocaleDateString('es-PY'):'<span class="text-muted">Sin fecha</span>'}</td>
+      <td class="text-sm">${credPrueba(c)}</td>
+      <td>${credEstado(c)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-secondary btn-sm" onclick="probarCred(${c.id},this)">Probar</button>
+        ${c.activo?`<button class="btn btn-secondary btn-sm" onclick="openCredModal('${c.servicio}','${c.entorno}')">Rotar</button>`:''}
+      </td>
+    </tr>`).join('');
+}
+
+function openCredModal(servicio,entorno){
+  const previa=servicio?CREDS.find(c=>c.activo&&c.servicio===servicio&&c.entorno===entorno):null;
+  document.getElementById('cred-modal-title').textContent=previa?'Rotar credencial':'Cargar credencial';
+  document.getElementById('cred-servicio').value=servicio||'odoo_erp';
+  document.getElementById('cred-entorno').value=entorno||'prod';
+  document.getElementById('cred-etiqueta').value=previa?.etiqueta||'';
+  document.getElementById('cred-url').value=previa?.base_url||'';
+  document.getElementById('cred-db').value=previa?.db_name||'';
+  document.getElementById('cred-usuario').value=previa?.usuario||'';
+  document.getElementById('cred-expira').value='';
+  document.getElementById('cred-secreto').value='';
+  document.getElementById('cred-notas').value='';
+  const aviso=document.getElementById('cred-rotacion-aviso');
+  if(previa){
+    aviso.textContent=`Al guardar, la clave actual (••••${previa.secreto_ultimos4||''}) queda inactiva y pasa a usarse la nueva. La anterior no se borra: queda como historial.`;
+    aviso.style.display='block';
+  }else aviso.style.display='none';
+  document.getElementById('cred-err').className='alert alert-error';
+  document.getElementById('cred-modal').classList.add('open');
+}
+function closeCredModal(){document.getElementById('cred-modal').classList.remove('open');}
+
+async function saveCred(){
+  const body={
+    servicio:document.getElementById('cred-servicio').value,
+    entorno:document.getElementById('cred-entorno').value,
+    etiqueta:document.getElementById('cred-etiqueta').value||null,
+    base_url:document.getElementById('cred-url').value||null,
+    db_name:document.getElementById('cred-db').value||null,
+    usuario:document.getElementById('cred-usuario').value||null,
+    secreto:document.getElementById('cred-secreto').value,
+    expira_el:document.getElementById('cred-expira').value||null,
+    notas:document.getElementById('cred-notas').value||null,
+  };
+  const err=document.getElementById('cred-err');
+  if(!body.secreto){err.textContent='La clave es obligatoria.';err.className='alert alert-error show';return;}
+  const data=await api('POST','/admin/credentials',body);
+  if(!data.success){err.textContent=data.error||'No se pudo guardar';err.className='alert alert-error show';return;}
+  closeCredModal();
+  await loadCredentials();
+  cargarAlertasCredenciales();
+  // Se prueba sola apenas se carga: no tiene sentido descubrir mañana que no anda.
+  probarCred(data.data.id);
+}
+
+async function probarCred(id,boton){
+  const original=boton?boton.textContent:null;
+  if(boton){boton.disabled=true;boton.innerHTML='<span class="spinner"></span>';}
+  try{
+    const data=await api('POST',`/admin/credentials/${id}/probar`);
+    await loadCredentials();
+    if(!data.success) alert('La prueba falló:\n\n'+(data.error||''));
+  }finally{
+    if(boton){boton.disabled=false;boton.textContent=original;}
+  }
+}
+
+async function cargarAlertasCredenciales(){
+  try{
+    const data=await api('GET','/admin/credentials/alertas');
+    if(!data.success) return;
+    const banner=document.getElementById('cred-alert-banner');
+    const badge=document.getElementById('cred-badge');
+    if(!data.data.length){banner.style.display='none';badge.style.display='none';return;}
+    banner.innerHTML='<strong>Credenciales por vencer:</strong> '+data.data.map(c=>{
+      const nombre=`${CRED_SERVICIOS[c.servicio]||c.servicio} (${c.entorno})`;
+      return c.vencida?`${nombre} — vencida`:`${nombre} — vence en ${c.dias_para_vencer} día(s)`;
+    }).join(' · ')+' &nbsp; <a href="#" onclick="showSection(\'credentials\',document.querySelector(\'[onclick*=credentials]\'));return false" style="color:#92400E;font-weight:600">Ver credenciales</a>';
+    banner.style.display='block';
+    badge.textContent=data.data.length;badge.style.display='inline-block';
+  }catch(e){}
+}
+
+// ── ICON PICKER ────────────────────────────────────────────
+const ICONS = [
+  {name:'Chat/WhatsApp',     d:'M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z'},
+  {name:'Gráfico barras',    d:'M18 20V10M12 20V4M6 20v-6M2 20h20'},
+  {name:'Caja/Inventario',   d:'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z'},
+  {name:'Tarjeta/Factura',   d:'M2 5h20v14H2zM2 10h20'},
+  {name:'Alerta/Info',       d:'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 8v4M12 16h.01'},
+  {name:'Escudo/Seguridad',  d:'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'},
+  {name:'Usuarios/CRM',      d:'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75'},
+  {name:'Carrito/Tienda',    d:'M9 21a1 1 0 100-2 1 1 0 000 2zM20 21a1 1 0 100-2 1 1 0 000 2zM1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6'},
+  {name:'Monitor/PoS',       d:'M2 3h20v14H2zM8 21h8M12 17v4'},
+  {name:'Dinero/Precio',     d:'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6'},
+  {name:'Nube',              d:'M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z'},
+  {name:'Engranaje',         d:'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z'},
+  {name:'Email',             d:'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zM22 6l-10 7L2 6'},
+  {name:'Teléfono',          d:'M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.63A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.18 6.18l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z'},
+  {name:'Ubicación',         d:'M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0zM12 10a1 1 0 110-2 1 1 0 010 2z'},
+  {name:'Calendario',        d:'M3 4h18v18H3zM16 2v4M8 2v4M3 10h18'},
+  {name:'Estrella',          d:'M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z'},
+  {name:'Check',             d:'M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3'},
+  {name:'Rayo/Energía',      d:'M13 2L3 14h9l-1 8 10-12h-9l1-8z'},
+  {name:'Trending/Crecimiento',d:'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6'},
+];
+
+function renderIconPicker(selectedPath) {
+  const container = document.getElementById('icon-picker');
+  if (!container) return;
+  container.innerHTML = ICONS.map(icon => `
+    <div title="${icon.name}" onclick="selectIcon('${icon.d.replace(/'/g,"\\'")}')"
+      style="padding:8px;border-radius:6px;border:2px solid ${selectedPath===icon.d?'var(--blue)':'var(--gray-200)'};cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;background:${selectedPath===icon.d?'var(--blue-pale)':'#fff'}"
+      onmouseover="this.style.borderColor='var(--blue)'" onmouseout="if('${icon.d}'!==document.getElementById('svc-icon').value)this.style.borderColor='var(--gray-200)'">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${selectedPath===icon.d?'var(--blue)':'var(--gray-600)'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="${icon.d}"/>
+      </svg>
+    </div>
+  `).join('');
+}
+
+function selectIcon(d) {
+  document.getElementById('svc-icon').value = d;
+  renderIconPicker(d);
+}
+
+// ── PAYMENTS ───────────────────────────────────────────────
+async function loadPayments() {
+  const status = document.getElementById('pay-filter')?.value || '';
+  const data = await api('GET', status ? `/admin/payment-requests?status=${status}` : '/admin/payment-requests');
+  if (!data.success) return;
+
+  // Actualizar badge de pendientes
+  const pending = data.data.filter(p => p.status === 'pending').length;
+  const badge = document.getElementById('payments-badge');
+  if (badge) { badge.textContent = pending; badge.style.display = pending ? 'inline' : 'none'; }
+
+  const tbody = document.getElementById('payments-tbody');
+  if (!data.data.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">Sin solicitudes.</td></tr>';
+    return;
+  }
+
+  const statusLabel = { pending:'Pendiente', provisioned:'Provisionado', cancelled:'Cancelado' };
+  const statusColor = { pending:'badge-blue', provisioned:'badge-green', cancelled:'badge-gray' };
+  const planLabel   = { starter:'Despegue', professional:'Crecimiento', enterprise:'Empresa' };
+
+  tbody.innerHTML = data.data.map(p => `
+    <tr>
+      <td>${p.id}</td>
+      <td><strong>${p.full_name||'—'}</strong><div class="text-sm text-muted">${p.email||''}</div>
+          ${p.notes?`<div class="text-sm text-muted">${p.notes}</div>`:''}</td>
+      <td><span class="badge badge-blue">${planLabel[p.plan]||p.plan}</span></td>
+      <td style="font-weight:600">₲ ${Number(p.amount).toLocaleString('es-PY')}</td>
+      <td><span class="badge ${statusColor[p.status]||'badge-gray'}">${statusLabel[p.status]||p.status}</span></td>
+      <td class="text-sm text-muted">${new Date(p.created_at).toLocaleDateString('es-PY')}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        ${p.status==='pending'?`
+          <button class="btn btn-primary btn-sm" onclick="openPayConfirm(${p.id},'${p.full_name?.replace(/'/g,'')}','${p.plan}',${p.amount})">✓ Confirmar</button>
+          <button class="btn btn-secondary btn-sm" onclick="cancelPayment(${p.id})">Cancelar</button>
+        `:p.instance_url?`<a href="${p.instance_url}" target="_blank" class="btn btn-secondary btn-sm">Ver instancia</a>`:'—'}
+      </td>
+    </tr>`).join('');
+}
+
+function openPayConfirm(id, name, plan, amount) {
+  document.getElementById('pay-confirm-id').value = id;
+  document.getElementById('pay-subdomain').value = '';
+  document.getElementById('pay-label').value = '';
+  const planLabel = { starter:'Plan Despegue', professional:'Plan Crecimiento', enterprise:'Plan Empresa' };
+  document.getElementById('pay-confirm-info').innerHTML = `
+    <strong>${name}</strong> — ${planLabel[plan]||plan}<br/>
+    Monto: <strong>₲ ${Number(amount).toLocaleString('es-PY')}/mes</strong>`;
+  document.getElementById('pay-confirm-modal').classList.add('open');
+}
+
+async function confirmPayment() {
+  const id        = document.getElementById('pay-confirm-id').value;
+  const subdomain = document.getElementById('pay-subdomain').value.trim().toLowerCase();
+  const label     = document.getElementById('pay-label').value.trim();
+  if (!subdomain) { alert('Ingresá el subdominio'); return; }
+
+  const data = await api('POST', `/admin/payment-requests/${id}/confirm`, { subdomain, label });
+  if (data.success) {
+    document.getElementById('pay-confirm-modal').classList.remove('open');
+    showAlert('pay-ok', 'success', `✓ ${data.message}`);
+    loadPayments();
+  } else {
+    showAlert('pay-err', 'error', data.error);
+  }
+}
+
+async function cancelPayment(id) {
+  if (!confirm('¿Cancelar esta solicitud?')) return;
+  const data = await api('POST', `/admin/payment-requests/${id}/cancel`);
+  if (data.success) loadPayments();
+}
+
+// ── INSTANCES ──────────────────────────────────────────────
+async function loadInstances(){
+  checkProvisionApi();
+  const data=await api('GET','/admin/instances');
+  if(!data.success) return;
+  const tbody=document.getElementById('instances-tbody');
+  if(!data.data.length){
+    tbody.innerHTML='<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">Sin instancias. Creá una con "Nueva instancia".</td></tr>';
+    return;
+  }
+  const statusMap={active:'badge-green',suspended:'badge-red',provisioning:'badge-blue',cancelled:'badge-gray'};
+  const statusLabel={active:'Activo',suspended:'Suspendido',provisioning:'Provisionando',cancelled:'Cancelado'};
+  tbody.innerHTML=data.data.filter(i=>i.status!=='cancelled').map(i=>`
+    <tr>
+      <td><strong>${i.full_name||'—'}</strong><div class="text-sm text-muted">${i.email||''}</div></td>
+      <td><code style="font-size:12px">${i.db_name||'—'}</code></td>
+      <td>${i.instance_url?`<a href="${i.instance_url}" target="_blank" style="color:var(--blue);font-size:12px">${i.instance_url}</a>`:'—'}</td>
+      <td><span class="badge badge-blue">${i.plan}</span></td>
+      <td><span class="badge ${statusMap[i.status]||'badge-gray'}">${statusLabel[i.status]||i.status}</span></td>
+      <td class="text-sm text-muted">${i.activated_at?new Date(i.activated_at).toLocaleDateString('es-PY'):'—'}</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick='openInstEditModal(${JSON.stringify(i).replace(/'/g,"&#39;")})'>Editar</button>
+        ${i.status==='active'?`<button class="btn btn-sm" style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D" onclick="suspendInstance(${i.id})">Suspender</button>`:''}        ${i.status==='suspended'?`<button class="btn btn-sm" style="background:var(--teal-pale);color:var(--teal);border:1px solid var(--teal)" onclick="reactivateInstance(${i.id})">Reactivar</button>`:''}
+        <button class="btn btn-sm" style="background:var(--red-pale);color:var(--red);border:1px solid #FCA5A5;margin-left:4px" onclick="deleteInstance(${i.id},'${(i.label||i.db_name||'').replace(/'/g,'')}')">Eliminar</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function checkProvisionApi(){
+  try{
+    const data=await api('GET','/admin/provision/health');
+    const dot=document.getElementById('api-status-dot');
+    const txt=document.getElementById('api-status-text');
+    if(!dot||!txt) return;
+    if(data.success&&data.status==='ok'){
+      dot.style.background='var(--teal)';
+      txt.textContent=`Conectada (script: ${data.script==='ok'?'✓':'✗ faltante'})`;
+    } else {
+      dot.style.background='var(--red)';
+      txt.textContent=`Sin conexión — ${data.error||data.status}`;
+    }
+  }catch(e){
+    const dot=document.getElementById('api-status-dot');
+    const txt=document.getElementById('api-status-text');
+    if(dot) dot.style.background='var(--red)';
+    if(txt) txt.textContent='Sin conexión';
+  }
+}
+
+// ── RETOPA CATEGORIES ─────────────────────────────────────────
+let _retopaCategories = [];
+async function loadRetopaCategories(){
+  if(_retopaCategories.length) return;
+  try{
+    const data=await api('GET','/admin/provision/retopa/categories');
+    if(data.success){
+      _retopaCategories=data.data;
+      const sel=document.getElementById('prov-category-id');
+      if(sel){
+        data.data.forEach(c=>{
+          sel.innerHTML+=`<option value="${c.id}">${c.parent_name?c.parent_name+' → ':''}${c.name}</option>`;
+        });
+      }
+    }
+  }catch(e){}
+}
+
+let _provisionedInstanceId = null;
+
+function goToStep2(instanceId, userData){
+  _provisionedInstanceId = instanceId;
+  document.getElementById('prov-step1').style.display='none';
+  document.getElementById('prov-step2').style.display='block';
+  document.getElementById('prov-modal-footer').style.display='none';
+  document.getElementById('prov-step2-footer').style.display='flex';
+  document.getElementById('prov-progress').style.display='none';
+  // Pre-completar con datos del usuario seleccionado
+  if(userData){
+    document.getElementById('prov-business-name').value=userData.full_name||'';
+    document.getElementById('prov-phone').value=userData.phone||'';
+  }
+  loadRetopaCategories();
+}
+
+function skipRetopaListing(){
+  closeProvisionModal();
+  loadInstances();
+}
+
+async function submitRetopaListing(){
+  const btn=document.getElementById('prov-retopa-btn');
+  btn.disabled=true; btn.textContent='Creando ficha...';
+  const listing=document.getElementById('prov-retopa-listing').checked;
+  if(listing && _provisionedInstanceId){
+    await api('POST',`/admin/provision/retopa/create-listing/${_provisionedInstanceId}`,{
+      business_name: document.getElementById('prov-business-name').value,
+      trade_name:    document.getElementById('prov-trade-name').value,
+      phone:         document.getElementById('prov-phone').value,
+      city:          document.getElementById('prov-city').value,
+      ruc:           document.getElementById('prov-ruc').value,
+      category_id:   document.getElementById('prov-category-id').value||null,
+      description:   document.getElementById('prov-description').value,
+    }).catch(e=>console.error(e));
+  }
+  btn.disabled=false;
+  closeProvisionModal();
+  showAlert('inst-ok','success','Instancia provisionada y ficha en RetoPA creada.');
+  loadInstances();
+}
+
+async function openProvisionModal(){
+  // Cargar usuarios clientes
+  const data=await api('GET','/admin/users');
+  const sel=document.getElementById('prov-user-id');
+  sel.innerHTML='<option value="">Seleccioná un cliente...</option>';
+  if(data.success){
+    data.data.forEach(u=>{
+      sel.innerHTML+=`<option value="${u.id}">${u.full_name} (${u.email}) [${u.role}]</option>`;
+    });
+  }
+  document.getElementById('prov-tenant').value='';
+  document.getElementById('prov-label').value='';
+  document.getElementById('prov-plan').value='starter';
+  document.getElementById('prov-url-preview').innerHTML='https://<em>subdominio</em>.erp.hepta.com.py';
+  document.getElementById('prov-err').className='alert alert-error';
+  document.getElementById('prov-progress').style.display='none';
+  document.getElementById('prov-modal-footer').style.display='flex';
+  document.getElementById('provision-modal').classList.add('open');
+}
+
+function closeProvisionModal(){document.getElementById('provision-modal').classList.remove('open');}
+
+function updateProvisionPreview(){
+  const t=document.getElementById('prov-tenant').value.trim().toLowerCase();
+  const el=document.getElementById('prov-url-preview');
+  if(t) el.textContent=`https://${t}.erp.hepta.com.py`;
+  else el.innerHTML='https://<em>subdominio</em>.erp.hepta.com.py';
+}
+
+async function runProvisioning(){
+  const userId=document.getElementById('prov-user-id').value;
+  const tenant=document.getElementById('prov-tenant').value.trim().toLowerCase();
+  const plan=document.getElementById('prov-plan').value;
+  const label=document.getElementById('prov-label').value.trim();
+
+  if(!userId||!tenant){
+    const err=document.getElementById('prov-err');
+    err.textContent='Cliente y subdominio son requeridos.';
+    err.className='alert alert-error show';
+    return;
+  }
+
+  // Mostrar progreso
+  document.getElementById('prov-modal-footer').style.display='none';
+  document.getElementById('prov-progress').style.display='block';
+  document.getElementById('prov-err').className='alert alert-error';
+
+  const msgs=[
+    'Creando base de datos...',
+    'Inicializando Odoo CE v19...',
+    'Configurando módulos base...',
+    'Configurando dominio...',
+    'Casi listo...',
+  ];
+  let mi=0;
+  const ticker=setInterval(()=>{
+    document.getElementById('prov-progress-text').textContent=msgs[Math.min(mi++,msgs.length-1)];
+  }, 60000);
+
+  try{
+    const data=await api('POST','/admin/provision',{user_id:parseInt(userId),tenant,plan,label});
+    clearInterval(ticker);
+
+    if(data.success){
+      // Ir al paso 2 — ficha en RetoPA
+      const selUser = document.getElementById('prov-user-id');
+      const userData = selUser ? {
+        full_name: selUser.options[selUser.selectedIndex]?.text?.split(' (')[0],
+        phone: null
+      } : null;
+      goToStep2(data.data.instance.id, userData);
+    } else {
+      document.getElementById('prov-progress').style.display='none';
+      document.getElementById('prov-modal-footer').style.display='flex';
+      const err=document.getElementById('prov-err');
+      err.textContent=data.error||'Error en el provisioning.';
+      err.className='alert alert-error show';
+    }
+  }catch(e){
+    clearInterval(ticker);
+    document.getElementById('prov-progress').style.display='none';
+    document.getElementById('prov-modal-footer').style.display='flex';
+    const err=document.getElementById('prov-err');
+    err.textContent=e.message||'Error de conexión.';
+    err.className='alert alert-error show';
+  }
+}
+
+async function deleteInstance(id,label){
+  if(!confirm(`¿Eliminar "${label}" de Hepta Cloud?\n\nNOTA: Solo se elimina el registro. La DB en Odoo CE NO se borra.`)) return;
+  const data=await api('DELETE',`/admin/instances/${id}`);
+  if(data.success){showAlert('inst-ok','success',data.message);loadInstances();}
+  else showAlert('inst-err','error',data.error);
+}
+
+async function suspendInstance(id){
+  if(!confirm('¿Suspender esta instancia? El cliente no podrá acceder a su sistema.')) return;
+  const data=await api('POST',`/admin/provision/suspend/${id}`);
+  if(data.success){showAlert('inst-ok','success','Instancia suspendida.');loadInstances();}
+  else showAlert('inst-err','error',data.error);
+}
+
+async function reactivateInstance(id){
+  if(!confirm('¿Reactivar esta instancia?')) return;
+  const data=await api('POST',`/admin/provision/reactivate/${id}`);
+  if(data.success){showAlert('inst-ok','success','Instancia reactivada.');loadInstances();}
+  else showAlert('inst-err','error',data.error);
+}
+
+async function openInstEditModal(inst){
+  document.getElementById('inst-edit-id').value=inst.id;
+  document.getElementById('inst-edit-label').value=inst.label||'';
+  document.getElementById('inst-edit-status').value=inst.status||'active';
+  document.getElementById('inst-edit-notes').value=inst.notes||'';
+  document.getElementById('inst-edit-domain').value=inst.custom_domain||'';
+  const statusHints={none:'Sin dominio propio',pending_dns:'Pendiente verificación DNS',pending_purchase:'Solicitud de compra pendiente',active:'Dominio activo'};
+  document.getElementById('inst-edit-domain-status').textContent=statusHints[inst.custom_domain_status]||'';
+  // Cargar usuarios
+  const users=await api('GET','/admin/users');
+  const sel=document.getElementById('inst-edit-user-id');
+  sel.innerHTML='<option value="">Sin asignar</option>';
+  if(users.success) users.data.forEach(u=>{
+    sel.innerHTML+=`<option value="${u.id}" ${u.id==inst.user_id?'selected':''}>${u.full_name} (${u.email}) [${u.role}]</option>`;
+  });
+  document.getElementById('inst-edit-modal').classList.add('open');
+}
+function closeInstEditModal(){document.getElementById('inst-edit-modal').classList.remove('open');}
+async function saveInstEdit(){
+  const id=document.getElementById('inst-edit-id').value;
+  const userId=document.getElementById('inst-edit-user-id').value;
+  const data=await api('PUT',`/admin/instances/${id}`,{
+    label:   document.getElementById('inst-edit-label').value,
+    status:  document.getElementById('inst-edit-status').value,
+    notes:   document.getElementById('inst-edit-notes').value,
+    user_id: userId?parseInt(userId):null,
+  });
+  if(data.success){closeInstEditModal();loadInstances();}
+}
+
+async function activateCustomDomain(){
+  const id=document.getElementById('inst-edit-id').value;
+  const domain=document.getElementById('inst-edit-domain').value.trim().toLowerCase()
+    .replace(/^https?:\/\//,'').replace(/^www\./,'');
+  if(!domain){alert('Ingresá el dominio');return;}
+  if(!confirm(`¿Activar dominio "${domain}"?\n\nEsto:\n• Crea el vhost en Nginx\n• Genera SSL con certbot\n• Suspende el subdominio *.erp.hepta.com.py\n\nVerificá que el DNS ya apunte a 200.108.133.244`)) return;
+  const btn=document.getElementById('inst-domain-btn');
+  btn.disabled=true; btn.textContent='Activando...';
+  const data=await api('POST',`/admin/provision/custom-domain/${id}`,{domain});
+  if(data.success){
+    alert(`✓ ${data.data.message}`);
+    closeInstEditModal(); loadInstances();
+  } else {
+    alert('Error: '+data.error);
+  }
+  btn.disabled=false; btn.textContent='Activar dominio';
+}
+
+// ── PAGES ──────────────────────────────────────────────────
+let _currentPageTab = 'terminos';
+
+async function loadPages() {
+  await Promise.all([loadPageContent('terminos'), loadPageContent('privacidad')]);
+}
+
+async function loadPageContent(slug) {
+  try {
+    const data = await api('GET', `/admin/pages/${slug}`);
+    if (!data.success) return;
+    const titleEl = document.getElementById(`page-${slug}-title`);
+    const contentEl = document.getElementById(`page-${slug}-content`);
+    if (titleEl) titleEl.value = data.data.title || '';
+    if (contentEl) contentEl.value = data.data.content || '';
+  } catch(e) {}
+}
+
+async function savePage(slug) {
+  const title = document.getElementById(`page-${slug}-title`)?.value;
+  const content = document.getElementById(`page-${slug}-content`)?.value;
+  const data = await api('PUT', `/admin/pages/${slug}`, { title, content, is_active: true });
+  if (data.success) showAlert('pages-ok', 'success', 'Página guardada.');
+  else showAlert('pages-err', 'error', data.error);
+}
+
+function switchPageTab(slug, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(`ptab-${slug}`).classList.add('active');
+  _currentPageTab = slug;
+}
+
+// ── PATCH openSvcModal para usar icon picker ───────────────
+const _origOpenSvcModal = openSvcModal;
+// Override openSvcModal para renderizar el picker
+function openSvcModal(svc, type) {
+  const t = svc?.type || type;
+  document.getElementById('svc-modal-title').textContent = svc ? 'Editar servicio' : (t==='pain'?'Nuevo pain point':'Nueva solución');
+  document.getElementById('svc-id').value = svc?.id || '';
+  document.getElementById('svc-type').value = t;
+  document.getElementById('svc-title').value = svc?.title || '';
+  document.getElementById('svc-desc').value = svc?.description || '';
+  document.getElementById('svc-icon').value = svc?.icon_svg || '';
+  document.getElementById('svc-badge').value = svc?.badge_text || '';
+  document.getElementById('svc-order').value = svc?.sort_order || '';
+  document.getElementById('svc-featured').checked = svc?.is_featured || false;
+  document.getElementById('svc-featured-wrap').style.display = t==='solution' ? 'block' : 'none';
+  renderIconPicker(svc?.icon_svg || '');
+  document.getElementById('svc-modal').classList.add('open');
+}
+
+if(TOKEN) showApp();
+</script>
+<!-- HEPTA-CORREO-UI:inicio -->
+<script>
+/* ═══ HEPTA Cloud — Servicio de Correo (admin) ═══════════════════════════
+   Bloque autocontenido: se monta solo en el menú y en .content.
+   Usa api(), showAlert(), sectionLoaders y sectionTitles ya definidos arriba.
+   Para quitarlo, borrá este <script> entero. */
+(function () {
+  if (window.__heptaMailAdmin) return;
+  window.__heptaMailAdmin = true;
+
+  const ICON = '<svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
+  /* Un backend sin la ruta devuelve el index.html y el parseo de JSON explota
+     con un mensaje incomprensible. Lo traducimos a la causa real. */
+  function err2msg(e) {
+    const m = String((e && e.message) || e);
+    if (/not valid JSON|Unexpected token|JSON\.parse|Unexpected end of/i.test(m)) {
+      return 'El backend respondió HTML en vez de JSON: esa ruta todavía no existe en el servidor. Aplicá el patch de backend y hacé el rebuild (docker compose up -d --build backend).';
+    }
+    if (/Failed to fetch|NetworkError/i.test(m)) return 'No se pudo contactar al backend.';
+    return m;
+  }
+
+  const fmt = (mb) => (mb >= 1024 ? (mb / 1024).toFixed(mb % 1024 ? 1 : 0) + ' GB' : mb + ' MB');
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  /* ── estilos propios ────────────────────────────────────────────────── */
+  const style = document.createElement('style');
+  style.textContent = `
+    .mail-bar{height:8px;border-radius:4px;background:var(--gray-200);overflow:hidden;min-width:90px}
+    .mail-bar>i{display:block;height:100%;background:var(--blue);transition:width .3s}
+    .mail-bar.warn>i{background:#D97706}.mail-bar.full>i{background:var(--red)}
+    .mail-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-all}
+    #mail-dns-table td{vertical-align:top}
+    #mail-dns-table td:nth-child(2){white-space:nowrap}
+  `;
+  document.head.appendChild(style);
+
+  /* ── item de menú, debajo de SMTP ───────────────────────────────────── */
+  const menu = document.querySelector('.sidebar-menu');
+  if (menu) {
+    const item = document.createElement('div');
+    item.className = 'menu-item';
+    item.setAttribute('onclick', "showSection('mail',this)");
+    item.innerHTML = ICON + 'Correo';
+    const smtp = menu.querySelector('[onclick*="smtp"]');
+    if (smtp) smtp.insertAdjacentElement('afterend', item);
+    else menu.appendChild(item);
+  }
+
+  /* ── sección ────────────────────────────────────────────────────────── */
+  const content = document.querySelector('.main .content') || document.querySelector('.content');
+  if (content) {
+    const sec = document.createElement('div');
+    sec.className = 'section';
+    sec.id = 'section-mail';
+    sec.innerHTML = `
+      <div class="alert alert-success" id="mail-ok"></div>
+      <div class="alert alert-error"   id="mail-err"></div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-body" style="display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div id="mail-dot" style="width:10px;height:10px;border-radius:50%;background:var(--gray-200)"></div>
+            <span style="font-size:13px;color:var(--gray-600)">Servidor de correo: <strong id="mail-dot-text">verificando...</strong></span>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="mailCheckHealth()">Verificar</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Dominios de correo</div>
+          <button class="btn btn-primary btn-sm" onclick="mailOpenProvision()">
+            <svg viewBox="0 0 24 24" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nuevo dominio
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Dominio</th><th>Cliente</th><th>Cuota</th><th>Casillas</th><th>Estado</th><th></th></tr></thead>
+            <tbody id="mail-tbody">
+              <tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+    content.appendChild(sec);
+  }
+
+  /* ── modales ────────────────────────────────────────────────────────── */
+  const modals = document.createElement('div');
+  modals.innerHTML = `
+  <div class="modal-overlay" id="mail-prov-modal" onclick="if(event.target===this)mailCloseProvision()">
+    <div class="modal" style="max-width:520px">
+      <div class="modal-title">Provisionar dominio de correo</div>
+      <div class="form-group"><label class="form-label">Dominio</label>
+        <input class="form-input" id="mail-p-domain" placeholder="empresa.com.py" autocomplete="off"/>
+        <div class="form-hint">Sin www ni https.</div></div>
+      <div class="form-group"><label class="form-label">Email del cliente (dueño) — opcional</label>
+        <input class="form-input" id="mail-p-owner" placeholder="contacto@empresa.com.py" autocomplete="off"/>
+        <div class="form-hint">Tiene que coincidir con su usuario del portal: el acceso se resuelve por email. Si lo dejás vacío, el dominio queda bajo custodia de godmode y se lo delegás después.</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div class="form-group"><label class="form-label">Cuota total (MB)</label>
+          <input class="form-input" type="number" id="mail-p-quota" value="10240"/></div>
+        <div class="form-group"><label class="form-label">Por casilla (MB)</label>
+          <input class="form-input" type="number" id="mail-p-def" value="1024"/></div>
+        <div class="form-group"><label class="form-label">Máx. casillas</label>
+          <input class="form-input" type="number" id="mail-p-max" value="20"/></div>
+      </div>
+      <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="mail-p-dns" checked/> Publicar los registros DNS en Cloudflare</label>
+        <div class="form-hint">Solo funciona si la zona está en la cuenta de Cloudflare de HEPTA.</div></div>
+      <div class="alert alert-error" id="mail-p-err"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="mailCloseProvision()">Cancelar</button>
+        <button class="btn btn-primary" onclick="mailSubmitProvision()" id="mail-p-btn">Provisionar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="mail-dns-modal" onclick="if(event.target===this)mailCloseDns()">
+    <div class="modal" style="max-width:760px">
+      <div class="modal-title">Registros DNS — <span id="mail-dns-domain"></span></div>
+      <div class="alert alert-success" id="mail-dns-ok"></div>
+      <div class="alert alert-error"   id="mail-dns-err"></div>
+      <div class="table-wrap" style="max-height:52vh;overflow:auto">
+        <table id="mail-dns-table">
+          <thead><tr><th>Tipo</th><th>Nombre</th><th>Valor</th><th></th></tr></thead>
+          <tbody id="mail-dns-tbody"></tbody>
+        </table>
+      </div>
+      <div class="form-hint" style="margin-top:10px">En Cloudflare todos estos registros van con el proxy desactivado (nube gris).</div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="mailCopyDns()">Copiar todo</button>
+        <button class="btn btn-primary" onclick="mailPublishDns()" id="mail-dns-btn">Publicar en Cloudflare</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="mail-deleg-modal" onclick="if(event.target===this)mailCloseDeleg()">
+    <div class="modal" style="max-width:520px">
+      <div class="modal-title">Gestión del dominio — <span id="mail-deleg-domain"></span></div>
+      <div class="form-hint" style="margin-bottom:16px">
+        Quien figure acá es quien ve y administra las casillas desde el portal de HEPTA Cloud.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Gestiona actualmente</label>
+        <div class="mail-mono" id="mail-deleg-actual" style="padding:9px 0">—</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Delegar a</label>
+        <select class="form-input" id="mail-deleg-select" onchange="mailDelegCheck()">
+          <option value="">Cargando...</option>
+        </select>
+        <div class="form-hint" id="mail-deleg-aviso"></div>
+      </div>
+      <div class="alert alert-error" id="mail-deleg-err"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="mailCloseDeleg()">Cancelar</button>
+        <button class="btn btn-primary" onclick="mailSaveDeleg()" id="mail-deleg-btn">Delegar gestión</button>
+      </div>
+
+      <div style="border-top:1px solid var(--gray-200);margin:20px 0 16px"></div>
+      <div class="card-title" style="margin-bottom:4px">Webmail con marca propia</div>
+      <div class="form-hint" style="margin-bottom:12px">
+        Opcional. Si el cliente tiene su propio host de webmail, el portal se lo muestra a él en vez del genérico.
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <div class="form-group" style="margin:0;flex:1">
+          <label class="form-label">Host</label>
+          <input class="form-input" id="mail-webmail-host" placeholder="mail.cliente.com.py"/>
+        </div>
+        <button class="btn btn-secondary" onclick="mailSaveWebmail()" id="mail-webmail-btn">Guardar</button>
+      </div>
+      <div id="mail-webmail-pasos" style="margin-top:12px"></div>
+
+      <div id="mail-brand-box" style="margin-top:16px;display:none">
+        <div class="form-label">Marca del webmail</div>
+        <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div id="mail-brand-preview" style="display:flex;align-items:center;justify-content:center;height:64px;border:1px dashed var(--gray-200);border-radius:var(--radius);margin-bottom:8px;background:var(--gray-50)"></div>
+            <input type="file" id="mail-brand-file" accept="image/png,image/jpeg,image/webp" style="font-size:12px"/>
+            <div class="form-hint">PNG, JPG o WebP · hasta 512 KB · ideal fondo transparente</div>
+          </div>
+          <div style="width:150px">
+            <label class="form-label">Color de fondo</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="color" id="mail-brand-color-pick" value="#0D1F5C" style="width:38px;height:34px;padding:2px;border:1px solid var(--gray-200);border-radius:var(--radius);cursor:pointer"
+                     onchange="document.getElementById('mail-brand-color').value=this.value"/>
+              <input class="form-input" id="mail-brand-color" placeholder="#0D1F5C" style="flex:1"/>
+            </div>
+            <div class="form-hint">Vacío = sin cambio</div>
+          </div>
+          <div style="width:200px">
+            <label class="form-label">Título del webmail</label>
+            <input class="form-input" id="mail-brand-title" maxlength="60" placeholder="Webmail Adelanta"/>
+            <div class="form-hint">Reemplaza "mailcow UI" en la pestaña y el login</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="mailSaveBranding()" id="mail-brand-btn">Guardar marca</button>
+          <button class="btn btn-secondary" onclick="mailQuitarLogo()">Quitar logo</button>
+        </div>
+      </div>
+
+      <div class="alert alert-success" id="mail-webmail-ok"></div>
+      <div class="alert alert-error" id="mail-webmail-err"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="mail-box-modal" onclick="if(event.target===this)mailCloseBoxes()">
+    <div class="modal" style="max-width:720px">
+      <div class="modal-title">Casillas — <span id="mail-box-domain"></span></div>
+      <div class="alert alert-success" id="mail-box-ok"></div>
+      <div class="alert alert-error"   id="mail-box-err"></div>
+      <div id="mail-box-quota" style="margin-bottom:16px"></div>
+      <div class="table-wrap" style="max-height:42vh;overflow:auto">
+        <table>
+          <thead><tr><th>Casilla</th><th>Cuota</th><th>Uso</th><th></th></tr></thead>
+          <tbody id="mail-box-tbody"></tbody>
+        </table>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-top:16px;flex-wrap:wrap">
+        <div class="form-group" style="margin:0;flex:1;min-width:150px">
+          <label class="form-label">Nueva casilla</label>
+          <input class="form-input" id="mail-box-lp" placeholder="info"/></div>
+        <div class="form-group" style="margin:0;width:120px">
+          <label class="form-label">Cuota (MB)</label>
+          <input class="form-input" type="number" id="mail-box-quota-in" placeholder="1024"/></div>
+        <button class="btn btn-primary" onclick="mailCreateBox()" id="mail-box-btn">Crear</button>
+      </div>
+
+      <div style="border-top:1px solid var(--gray-200);margin:20px 0 16px"></div>
+      <div class="card-title" style="margin-bottom:4px">Alias y reenvíos</div>
+      <div class="form-hint" style="margin-bottom:12px">
+        Un alias no ocupa cuota: reparte lo que llega a una dirección entre una o varias casillas reales.
+      </div>
+      <div class="table-wrap" style="max-height:26vh;overflow:auto">
+        <table>
+          <thead><tr><th>Alias</th><th>Reparte a</th><th></th></tr></thead>
+          <tbody id="mail-alias-tbody"></tbody>
+        </table>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-top:12px;flex-wrap:wrap">
+        <div class="form-group" style="margin:0;width:160px">
+          <label class="form-label">Alias</label>
+          <input class="form-input" id="mail-alias-lp" placeholder="ventas"/>
+          <div class="form-hint">@ para catch-all</div>
+        </div>
+        <div class="form-group" style="margin:0;flex:1;min-width:200px">
+          <label class="form-label">Destinos (uno o varios)</label>
+          <input class="form-input" id="mail-alias-goto" placeholder="carlos@dominio, felipe@dominio"/>
+        </div>
+        <button class="btn btn-primary" onclick="mailCreateAlias()" id="mail-alias-btn">Crear alias</button>
+      </div>
+
+      <div class="modal-footer"><button class="btn btn-secondary" onclick="mailCloseBoxes()">Cerrar</button></div>
+    </div>
+  </div>`;
+  document.body.appendChild(modals);
+
+  /* ── estado ─────────────────────────────────────────────────────────── */
+  let dnsPlan = null;
+  let boxDomain = null;
+  let dominios = [];
+
+  /* ── carga de la sección ────────────────────────────────────────────── */
+  async function loadMail() {
+    mailCheckHealth();
+    const tb = document.getElementById('mail-tbody');
+    try {
+      const r = await api('GET', '/admin/mail/domains');
+      if (!r.success) throw new Error(r.error);
+      dominios = r.data;
+      if (!r.data.length) {
+        tb.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px">Todavía no hay dominios de correo. Creá el primero con “Nuevo dominio”.</td></tr>';
+        return;
+      }
+      tb.innerHTML = r.data.map((d) => `
+        <tr>
+          <td>
+            <strong>${esc(d.domain)}</strong>
+            ${d.webmail_host ? `<div class="text-muted" style="font-size:11px">webmail: ${esc(d.webmail_host)}</div>` : ''}
+          </td>
+          <td class="text-muted">
+            ${d.owner_email
+              ? esc(d.owner_email) + (d.owner_tiene_usuario === false ? '<div style="font-size:11px;color:var(--red)">⚠ sin usuario en el portal</div>' : '')
+              : '<span class="badge badge-gray">sin dueño</span><div style="font-size:11px">solo godmode</div>'}
+          </td>
+          <td>${fmt(d.quota_mb)}</td>
+          <td>máx. ${d.max_mailboxes}</td>
+          <td><span class="badge ${d.status === 'active' ? 'badge-green' : 'badge-red'}">${d.status === 'active' ? 'Activo' : 'Suspendido'}</span></td>
+          <td style="white-space:nowrap;text-align:right">
+            <button class="btn btn-secondary btn-sm" onclick="mailShowBoxes('${esc(d.domain)}')">Casillas</button>
+            <button class="btn btn-secondary btn-sm" onclick="mailShowDns('${esc(d.domain)}')">DNS</button>
+            <button class="btn btn-secondary btn-sm" onclick="mailDelegar('${esc(d.domain)}')">Gestión</button>
+            <button class="btn btn-secondary btn-sm" onclick="mailToggle('${esc(d.domain)}','${d.status}')">${d.status === 'active' ? 'Suspender' : 'Activar'}</button>
+          </td>
+        </tr>`).join('');
+    } catch (e) {
+      tb.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--red)">${esc(e.message)}</td></tr>`;
+    }
+  }
+
+  window.mailCheckHealth = async function () {
+    const dot = document.getElementById('mail-dot');
+    const txt = document.getElementById('mail-dot-text');
+    if (!dot) return;
+    dot.style.background = 'var(--gray-200)';
+    txt.textContent = 'verificando...';
+    try {
+      const r = await api('GET', '/admin/mail/health');
+      const ok = r.success;
+      dot.style.background = ok ? 'var(--teal)' : 'var(--red)';
+      txt.textContent = ok ? 'conectado' : (r.error || 'sin conexión');
+    } catch (e) {
+      dot.style.background = 'var(--red)';
+      txt.textContent = 'sin conexión';
+    }
+  };
+
+  /* ── alta de dominio ────────────────────────────────────────────────── */
+  window.mailOpenProvision = function () {
+    ['mail-p-domain', 'mail-p-owner'].forEach((id) => (document.getElementById(id).value = ''));
+    document.getElementById('mail-p-err').className = 'alert alert-error';
+    document.getElementById('mail-prov-modal').classList.add('open');
+  };
+  window.mailCloseProvision = function () {
+    document.getElementById('mail-prov-modal').classList.remove('open');
+  };
+
+  window.mailSubmitProvision = async function () {
+    const btn = document.getElementById('mail-p-btn');
+    const body = {
+      domain: document.getElementById('mail-p-domain').value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, ''),
+      owner_email: document.getElementById('mail-p-owner').value.trim().toLowerCase(),
+      quota_mb: Number(document.getElementById('mail-p-quota').value) || 10240,
+      def_quota_mb: Number(document.getElementById('mail-p-def').value) || 1024,
+      max_mailboxes: Number(document.getElementById('mail-p-max').value) || 20,
+      publish_dns: document.getElementById('mail-p-dns').checked,
+    };
+    if (!body.domain || !body.domain.includes('.')) return showAlert('mail-p-err', 'error', 'Dominio inválido', 0);
+    if (body.owner_email && !body.owner_email.includes('@')) return showAlert('mail-p-err', 'error', 'Email del cliente inválido', 0);
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      const r = await api('POST', '/admin/mail/domains', body);
+      if (!r.success) return showAlert('mail-p-err', 'error', r.error, 0);
+      mailCloseProvision();
+      showAlert('mail-ok', 'success', `${r.data.domain}: ${r.data.created ? 'dominio creado' : 'cuotas re-sincronizadas'}.`, 5000);
+      if (r.data.cloudflare && r.data.cloudflare.error) {
+        showAlert('mail-err', 'error', 'DNS no publicado: ' + r.data.cloudflare.error, 8000);
+      }
+      loadMail();
+      dnsPlan = r.data.dns;
+      renderDns(r.data.domain, r.data.dns);
+      document.getElementById('mail-dns-modal').classList.add('open');
+    } catch (e) {
+      showAlert('mail-p-err', 'error', err2msg(e), 0);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Provisionar';
+    }
+  };
+
+  /* ── DNS ────────────────────────────────────────────────────────────── */
+  function renderDns(domain, plan) {
+    dnsPlan = plan;
+    document.getElementById('mail-dns-domain').textContent = domain;
+    document.getElementById('mail-dns-tbody').innerHTML = plan.records.map((r) => `
+      <tr>
+        <td><strong>${r.type}</strong>${r.required ? '' : '<div class="text-muted" style="font-size:11px">opcional</div>'}</td>
+        <td class="mail-mono">${esc(r.name)}</td>
+        <td class="mail-mono">${r.type === 'MX' ? r.priority + ' ' : ''}${esc(r.value)}</td>
+        <td style="text-align:right"><button class="btn btn-secondary btn-sm" onclick="mailCopy(this,'${encodeURIComponent((r.type === 'MX' ? r.priority + ' ' : '') + r.value)}')">Copiar</button></td>
+      </tr>`).join('');
+  }
+
+  window.mailShowDns = async function (domain) {
+    document.getElementById('mail-dns-ok').className = 'alert alert-success';
+    document.getElementById('mail-dns-err').className = 'alert alert-error';
+    document.getElementById('mail-dns-tbody').innerHTML = '<tr><td colspan="4" class="text-muted" style="padding:20px;text-align:center">Cargando...</td></tr>';
+    document.getElementById('mail-dns-domain').textContent = domain;
+    document.getElementById('mail-dns-modal').classList.add('open');
+    try {
+      const r = await api('GET', `/admin/mail/domains/${encodeURIComponent(domain)}/dns`);
+      if (!r.success) throw new Error(r.error);
+      renderDns(domain, r.data);
+    } catch (e) {
+      showAlert('mail-dns-err', 'error', err2msg(e), 0);
+    }
+  };
+  window.mailCloseDns = function () {
+    document.getElementById('mail-dns-modal').classList.remove('open');
+  };
+
+  window.mailCopy = function (btn, encoded) {
+    const txt = decodeURIComponent(encoded);
+    const done = () => { const o = btn.textContent; btn.textContent = '✓'; setTimeout(() => (btn.textContent = o), 1200); };
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(done).catch(done);
+    else { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done(); }
+  };
+
+  window.mailCopyDns = function () {
+    if (!dnsPlan) return;
+    const txt = dnsPlan.records.map((r) => `${r.type}\t${r.name}\t${r.type === 'MX' ? r.priority + ' ' : ''}${r.value}`).join('\n');
+    const ta = document.createElement('textarea');
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); showAlert('mail-dns-ok', 'success', 'Registros copiados al portapapeles.'); } catch (e) {}
+    ta.remove();
+  };
+
+  window.mailPublishDns = async function () {
+    const domain = document.getElementById('mail-dns-domain').textContent;
+    const btn = document.getElementById('mail-dns-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      const r = await api('POST', `/admin/mail/domains/${encodeURIComponent(domain)}/dns/publish`, {});
+      if (!r.success) throw new Error(r.error);
+      const fail = r.data.results.filter((x) => x.action === 'failed');
+      if (fail.length) showAlert('mail-dns-err', 'error', fail.map((f) => `${f.name}: ${f.error}`).join(' · '), 0);
+      else showAlert('mail-dns-ok', 'success', `${r.data.results.length} registros publicados en Cloudflare.`, 6000);
+    } catch (e) {
+      showAlert('mail-dns-err', 'error', err2msg(e), 0);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Publicar en Cloudflare';
+    }
+  };
+
+  /* ── suspender / activar ────────────────────────────────────────────── */
+  window.mailToggle = async function (domain, status) {
+    const action = status === 'active' ? 'suspend' : 'activate';
+    try {
+      const r = await api('POST', `/admin/mail/domains/${encodeURIComponent(domain)}/${action}`, {});
+      if (!r.success) throw new Error(r.error);
+      showAlert('mail-ok', 'success', `${domain}: ${action === 'suspend' ? 'suspendido' : 'activado'}.`);
+      loadMail();
+    } catch (e) {
+      showAlert('mail-err', 'error', err2msg(e), 0);
+    }
+  };
+
+  /* ── delegación de la gestión ───────────────────────────────────────── */
+  let delegOpciones = [];
+
+  window.mailDelegar = async function (domain) {
+    document.getElementById('mail-deleg-domain').textContent = domain;
+    document.getElementById('mail-deleg-err').className = 'alert alert-error';
+    document.getElementById('mail-deleg-aviso').textContent = '';
+    document.getElementById('mail-deleg-actual').textContent = '—';
+    document.getElementById('mail-deleg-select').innerHTML = '<option value="">Cargando...</option>';
+
+    const fila = dominios.find((x) => x.domain === domain) || {};
+    document.getElementById('mail-webmail-host').value = fila.webmail_host || '';
+    document.getElementById('mail-webmail-pasos').innerHTML = '';
+    pintarBranding(fila);
+    document.getElementById('mail-webmail-ok').className = 'alert alert-success';
+    document.getElementById('mail-webmail-err').className = 'alert alert-error';
+
+    document.getElementById('mail-deleg-modal').classList.add('open');
+
+    try {
+      const r = await api('GET', `/admin/mail/domains/${encodeURIComponent(domain)}/delegation`);
+      if (!r.success) throw new Error(r.error);
+      delegOpciones = r.data.opciones || [];
+      document.getElementById('mail-deleg-actual').textContent = r.data.owner_email || '(nadie)';
+
+      const grupo = (titulo, lista) => lista.length
+        ? `<optgroup label="${titulo}">${lista.map((o) => `
+            <option value="${esc(o.email)}" ${o.email === r.data.owner_email ? 'selected' : ''}>
+              ${esc(o.email)}${o.nombre ? ' — ' + esc(o.nombre) : ''}${o.tiene_usuario ? '' : '  (sin usuario)'}
+            </option>`).join('')}</optgroup>`
+        : '';
+
+      document.getElementById('mail-deleg-select').innerHTML =
+        `<option value="" ${r.data.owner_email ? '' : 'selected'}>— sin dueño (solo godmode) —</option>` +
+        grupo('Casillas de este dominio', delegOpciones.filter((o) => o.origen === 'casilla del dominio')) +
+        grupo('Usuarios del portal', delegOpciones.filter((o) => o.origen === 'usuario del portal'));
+      mailDelegCheck();
+    } catch (e) {
+      showAlert('mail-deleg-err', 'error', err2msg(e), 0);
+    }
+  };
+
+  window.mailDelegCheck = function () {
+    const email = document.getElementById('mail-deleg-select').value;
+    const aviso = document.getElementById('mail-deleg-aviso');
+    if (!email) {
+      aviso.style.color = 'var(--gray-600)';
+      aviso.textContent = 'El dominio no va a aparecer en ningún portal de cliente: lo gestionás solo vos desde acá.';
+      return;
+    }
+    const o = delegOpciones.find((x) => x.email === email);
+    if (!o) { aviso.textContent = ''; aviso.style.color = ''; return; }
+    if (!o.tiene_usuario) {
+      aviso.style.color = 'var(--red)';
+      aviso.textContent = 'Esta dirección no tiene usuario en el portal: crealo en Usuarios o no va a poder entrar a gestionar.';
+    } else if (o.activo === false) {
+      aviso.style.color = 'var(--red)';
+      aviso.textContent = 'El usuario existe pero está desactivado.';
+    } else {
+      aviso.style.color = 'var(--teal)';
+      aviso.textContent = 'Tiene usuario activo en el portal: va a poder gestionar sus casillas.';
+    }
+  };
+
+  window.mailCloseDeleg = function () {
+    document.getElementById('mail-deleg-modal').classList.remove('open');
+  };
+
+  window.mailSaveDeleg = async function () {
+    const domain = document.getElementById('mail-deleg-domain').textContent;
+    const email = document.getElementById('mail-deleg-select').value;
+    const btn = document.getElementById('mail-deleg-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      const r = await api('POST', `/admin/mail/domains/${encodeURIComponent(domain)}/owner`, { owner_email: email || null });
+      if (!r.success) throw new Error(r.error);
+      const quien = (x) => x || 'sin dueño';
+      mailCloseDeleg();
+      showAlert('mail-ok', 'success',
+        r.data.sin_cambios ? `${domain}: ya estaba así (${quien(email)}).`
+          : `${domain}: la gestión pasó de ${quien(r.data.anterior)} a ${quien(email)}.`, 6000);
+      if (!r.data.sin_cambios && r.data.tiene_usuario === false) {
+        showAlert('mail-err', 'error', `${email} todavía no tiene usuario en el portal — creálo en Usuarios.`, 0);
+      }
+      loadMail();
+    } catch (e) {
+      showAlert('mail-deleg-err', 'error', err2msg(e), 0);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Delegar gestión';
+    }
+  };
+
+  /* La marca solo tiene sentido si hay un host de webmail propio. */
+  function pintarBranding(fila) {
+    const box = document.getElementById('mail-brand-box');
+    box.style.display = fila.webmail_host ? 'block' : 'none';
+    document.getElementById('mail-brand-file').value = '';
+    document.getElementById('mail-brand-color').value = fila.webmail_color || '';
+    if (fila.webmail_color) document.getElementById('mail-brand-color-pick').value = fila.webmail_color;
+    document.getElementById('mail-brand-title').value = fila.webmail_title || '';
+
+    const prev = document.getElementById('mail-brand-preview');
+    prev.style.background = fila.webmail_color || 'var(--gray-50)';
+    prev.innerHTML = fila.webmail_logo_url
+      ? `<img src="/api/public/mail-branding/${encodeURIComponent(fila.webmail_host)}/logo?t=${Date.now()}" style="max-height:52px;max-width:90%"/>`
+      : '<span class="text-muted" style="font-size:12px">sin logo cargado</span>';
+  }
+
+  async function refrescarBranding(domain) {
+    await loadMail();
+    pintarBranding(dominios.find((x) => x.domain === domain) || {});
+  }
+
+  window.mailSaveBranding = async function () {
+    const domain = document.getElementById('mail-deleg-domain').textContent;
+    const archivo = document.getElementById('mail-brand-file').files[0];
+    const color = document.getElementById('mail-brand-color').value.trim();
+    const titulo = document.getElementById('mail-brand-title').value.trim();
+    const btn = document.getElementById('mail-brand-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      if (archivo) {
+        const fd = new FormData();
+        fd.append('logo', archivo);
+        // Sin api(): el helper fuerza Content-Type JSON y rompería el multipart.
+        const res = await fetch(`${API}/admin/mail/domains/${encodeURIComponent(domain)}/logo`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${TOKEN}` },
+          body: fd,
+        });
+        const j = await res.json();
+        if (!j.success) throw new Error(j.error);
+      }
+      const r = await api('POST', `/admin/mail/domains/${encodeURIComponent(domain)}/branding`, {
+        color: color || null,
+        titulo: titulo || null,
+      });
+      if (!r.success) throw new Error(r.error);
+      showAlert('mail-webmail-ok', 'success', 'Marca actualizada. El webmail cachea 5 minutos: Ctrl+Shift+R para verlo.', 6000);
+      await refrescarBranding(domain);
+    } catch (e) {
+      showAlert('mail-webmail-err', 'error', err2msg(e), 0);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Guardar marca';
+    }
+  };
+
+  window.mailQuitarLogo = async function () {
+    const domain = document.getElementById('mail-deleg-domain').textContent;
+    if (!window.confirm(`¿Quitar el logo de ${domain}? Vuelve al webmail sin marca.`)) return;
+    try {
+      const r = await api('POST', `/admin/mail/domains/${encodeURIComponent(domain)}/branding`, { quitar_logo: true });
+      if (!r.success) throw new Error(r.error);
+      showAlert('mail-webmail-ok', 'success', 'Logo quitado.');
+      await refrescarBranding(domain);
+    } catch (e) {
+      showAlert('mail-webmail-err', 'error', err2msg(e), 0);
+    }
+  };
+
+  window.mailSaveWebmail = async function () {
+    const domain = document.getElementById('mail-deleg-domain').textContent;
+    const host = document.getElementById('mail-webmail-host').value.trim().toLowerCase();
+    const btn = document.getElementById('mail-webmail-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      const r = await api('POST', `/admin/mail/domains/${encodeURIComponent(domain)}/webmail`, { webmail_host: host || null });
+      if (!r.success) throw new Error(r.error);
+      const d = r.data;
+      showAlert('mail-webmail-ok', 'success',
+        d.webmail_host ? `Guardado: el portal le va a mostrar ${d.webmail_host}` : 'Vuelve al webmail genérico de HEPTA.', 5000);
+
+      // Lo que falta hacer afuera: DNS y vhost. Se lo mostramos, no lo escondemos.
+      document.getElementById('mail-webmail-pasos').innerHTML = d.webmail_host ? `
+        <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px;font-size:12px">
+          <strong>Falta hacer esto afuera:</strong>
+          <div style="margin-top:8px">1 · En el DNS de ${esc(d.domain)}:</div>
+          <div class="mail-mono" style="margin:4px 0 8px">CNAME &nbsp; ${esc(d.cname.nombre)} &nbsp; → &nbsp; ${esc(d.cname.valor)} &nbsp; (proxy ${esc(d.cname.proxy)})</div>
+          <div>2 · En la VM del Nginx perimetral:</div>
+          <div class="mail-mono" style="margin-top:4px">${esc(d.comando)}</div>
+        </div>` : '';
+      await refrescarBranding(domain);
+    } catch (e) {
+      showAlert('mail-webmail-err', 'error', err2msg(e), 0);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Guardar';
+    }
+  };
+
+  /* ── casillas ───────────────────────────────────────────────────────── */
+  window.mailShowBoxes = async function (domain) {
+    boxDomain = domain;
+    document.getElementById('mail-box-domain').textContent = domain;
+    document.getElementById('mail-box-ok').className = 'alert alert-success';
+    document.getElementById('mail-box-err').className = 'alert alert-error';
+    document.getElementById('mail-box-modal').classList.add('open');
+    await refreshBoxes();
+    await refreshAliases();
+  };
+
+  async function refreshAliases() {
+    const tb = document.getElementById('mail-alias-tbody');
+    tb.innerHTML = '<tr><td colspan="3" class="text-muted" style="padding:14px;text-align:center">Cargando...</td></tr>';
+    try {
+      const r = await api('GET', `/admin/mail/domains/${encodeURIComponent(boxDomain)}/aliases`);
+      if (!r.success) throw new Error(r.error);
+      tb.innerHTML = r.data.length ? r.data.map((a) => `
+        <tr>
+          <td><strong>${esc(a.address)}</strong>${a.address.startsWith('@') ? '<div class="text-muted" style="font-size:11px">catch-all</div>' : ''}</td>
+          <td class="text-muted" style="font-size:12px">${esc(String(a.goto || '').split(',').join(' · '))}</td>
+          <td style="text-align:right"><button class="btn btn-secondary btn-sm" onclick="mailDeleteAlias('${a.id}','${esc(a.address)}')">Borrar</button></td>
+        </tr>`).join('') : '<tr><td colspan="3" class="text-muted" style="padding:14px;text-align:center">Sin alias.</td></tr>';
+    } catch (e) {
+      tb.innerHTML = `<tr><td colspan="3" style="padding:14px;text-align:center;color:var(--red)">${esc(e.message)}</td></tr>`;
+    }
+  }
+
+  window.mailCreateAlias = async function () {
+    const lp = document.getElementById('mail-alias-lp').value.trim().toLowerCase();
+    const goto = document.getElementById('mail-alias-goto').value.trim();
+    if (!lp || !goto) return showAlert('mail-box-err', 'error', 'Completá el alias y al menos un destino', 0);
+    const btn = document.getElementById('mail-alias-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      const r = await api('POST', `/admin/mail/domains/${encodeURIComponent(boxDomain)}/aliases`, { local_part: lp, goto });
+      if (!r.success) throw new Error(r.error);
+      document.getElementById('mail-alias-lp').value = '';
+      document.getElementById('mail-alias-goto').value = '';
+      showAlert('mail-box-ok', 'success', `${r.data.address} → ${r.data.goto.join(', ')}`, 6000);
+      refreshAliases();
+    } catch (e) {
+      showAlert('mail-box-err', 'error', err2msg(e), 0);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Crear alias';
+    }
+  };
+
+  window.mailDeleteAlias = async function (id, address) {
+    if (!window.confirm(`¿Borrar el alias ${address}?`)) return;
+    try {
+      const r = await api('DELETE', `/admin/mail/domains/${encodeURIComponent(boxDomain)}/aliases/${encodeURIComponent(id)}`);
+      if (!r.success) throw new Error(r.error);
+      showAlert('mail-box-ok', 'success', `Alias ${address} eliminado.`);
+      refreshAliases();
+    } catch (e) {
+      showAlert('mail-box-err', 'error', err2msg(e), 0);
+    }
+  };
+  window.mailCloseBoxes = function () {
+    document.getElementById('mail-box-modal').classList.remove('open');
+  };
+
+  async function refreshBoxes() {
+    const tb = document.getElementById('mail-box-tbody');
+    tb.innerHTML = '<tr><td colspan="4" class="text-muted" style="padding:20px;text-align:center">Cargando...</td></tr>';
+    try {
+      const r = await api('GET', `/admin/mail/domains/${encodeURIComponent(boxDomain)}/mailboxes`);
+      if (!r.success) throw new Error(r.error);
+      const d = r.data;
+      const pct = d.quota_mb ? Math.round((d.quota_assigned_mb / d.quota_mb) * 100) : 0;
+      document.getElementById('mail-box-quota').innerHTML = `
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--gray-600);margin-bottom:6px">
+          <span>${fmt(d.quota_assigned_mb)} asignados de ${fmt(d.quota_mb)}</span>
+          <span>${fmt(d.quota_available_mb)} libres · ${d.mailboxes.length}/${d.max_mailboxes} casillas</span>
+        </div>
+        <div class="mail-bar ${pct > 90 ? 'full' : pct > 75 ? 'warn' : ''}"><i style="width:${Math.min(100, pct)}%"></i></div>`;
+      document.getElementById('mail-box-quota-in').placeholder = String(d.def_quota_mb || 1024);
+
+      tb.innerHTML = d.mailboxes.length ? d.mailboxes.map((m) => `
+        <tr>
+          <td><strong>${esc(m.address)}</strong>${m.name && m.name !== m.address.split('@')[0] ? `<div class="text-muted" style="font-size:11px">${esc(m.name)}</div>` : ''}</td>
+          <td>${fmt(m.quota_mb)}</td>
+          <td style="min-width:120px">
+            <div class="mail-bar ${m.used_pct > 90 ? 'full' : m.used_pct > 75 ? 'warn' : ''}"><i style="width:${m.used_pct}%"></i></div>
+            <div class="text-muted" style="font-size:11px;margin-top:3px">${fmt(m.used_mb)} · ${m.used_pct}%</div>
+          </td>
+          <td style="text-align:right;white-space:nowrap">
+            <button class="btn btn-secondary btn-sm" onclick="mailResetPass('${esc(m.address)}')">Nueva clave</button>
+            <button class="btn btn-secondary btn-sm" onclick="mailDeleteBox('${esc(m.address)}')">Borrar</button>
+          </td>
+        </tr>`).join('') : '<tr><td colspan="4" class="text-muted" style="padding:20px;text-align:center">Sin casillas todavía.</td></tr>';
+    } catch (e) {
+      tb.innerHTML = `<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--red)">${esc(e.message)}</td></tr>`;
+    }
+  }
+
+  window.mailCreateBox = async function () {
+    const lp = document.getElementById('mail-box-lp').value.trim().toLowerCase();
+    const q = Number(document.getElementById('mail-box-quota-in').value) || undefined;
+    if (!lp) return;
+    const btn = document.getElementById('mail-box-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      const r = await api('POST', `/admin/mail/domains/${encodeURIComponent(boxDomain)}/mailboxes`, { local_part: lp, quota_mb: q });
+      if (!r.success) throw new Error(r.error);
+      document.getElementById('mail-box-lp').value = '';
+      document.getElementById('mail-box-quota-in').value = '';
+      showAlert('mail-box-ok', 'success', `${r.data.address} — contraseña inicial: ${r.data.password} (anotala, no se vuelve a mostrar)`, 0);
+      refreshBoxes();
+    } catch (e) {
+      showAlert('mail-box-err', 'error', err2msg(e), 0);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Crear';
+    }
+  };
+
+  window.mailResetPass = async function (address) {
+    try {
+      const r = await api('POST', `/admin/mail/domains/${encodeURIComponent(boxDomain)}/mailboxes/${encodeURIComponent(address)}/reset-password`, {});
+      if (!r.success) throw new Error(r.error);
+      showAlert('mail-box-ok', 'success', `${address} — nueva contraseña: ${r.data.password} (se pedirá cambiarla al ingresar)`, 0);
+    } catch (e) {
+      showAlert('mail-box-err', 'error', err2msg(e), 0);
+    }
+  };
+
+  window.mailDeleteBox = async function (address) {
+    if (!window.confirm(`¿Borrar ${address}? Se pierden todos los mensajes de esa casilla.`)) return;
+    try {
+      const r = await api('DELETE', `/admin/mail/domains/${encodeURIComponent(boxDomain)}/mailboxes/${encodeURIComponent(address)}`);
+      if (!r.success) throw new Error(r.error);
+      showAlert('mail-box-ok', 'success', `${address} eliminada.`);
+      refreshBoxes();
+    } catch (e) {
+      showAlert('mail-box-err', 'error', err2msg(e), 0);
+    }
+  };
+
+  /* ── registro en la navegación ──────────────────────────────────────── */
+  try { sectionTitles.mail = 'Correo'; } catch (e) {}
+  try { sectionLoaders.mail = loadMail; } catch (e) {}
+  window.loadMail = loadMail;
+})();
+
+</script>
+<!-- HEPTA-CORREO-UI:fin -->
+</body>
+</html>

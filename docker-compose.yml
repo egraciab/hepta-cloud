@@ -1,0 +1,23 @@
+services:
+  backend:
+    build: ./backend
+    container_name: heptacloud_backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "mail.hepta.com.py:192.168.10.213"
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./frontend:/app/frontend
+    networks:
+      - heptacloud_net
+
+networks:
+  heptacloud_net:
+    driver: bridge

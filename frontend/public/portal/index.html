@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Portal — Hepta Cloud</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--navy:#0D1F5C;--blue:#1254A4;--blue-light:#1A6FD4;--blue-pale:#E6F1FB;--teal:#1D9E75;--teal-pale:#E1F5EE;--red:#DC2626;--red-pale:#FEF2F2;--gray-50:#F9FAFB;--gray-100:#F3F4F6;--gray-200:#E5E7EB;--gray-400:#9CA3AF;--gray-600:#6B7280;--gray-800:#1F2937;--white:#FFFFFF;--radius:8px}
+    body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;color:var(--gray-800);background:var(--gray-100);min-height:100vh}
+
+    /* LOGIN */
+    #login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--navy);position:fixed;inset:0;z-index:100}
+    .login-card{background:#fff;border-radius:12px;padding:36px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+    .login-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px}
+    .login-logo-icon{width:36px;height:36px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;overflow:hidden}
+    .login-logo-icon img{width:100%;height:100%;object-fit:contain}
+
+    /* NAV */
+    .portal-nav{background:var(--navy);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+    .portal-nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+    .portal-nav-logo-icon{width:28px;height:28px;background:var(--blue);border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;overflow:hidden}
+    .portal-nav-logo-icon img{width:100%;height:100%;object-fit:contain}
+    .portal-nav-brand{color:#fff;font-size:14px;font-weight:700;letter-spacing:.5px}
+    .portal-nav-brand span{color:rgba(255,255,255,.5);font-weight:400}
+    .portal-nav-right{display:flex;align-items:center;gap:16px}
+    .portal-nav-user{color:rgba(255,255,255,.7);font-size:13px}
+    .portal-nav-user strong{color:#fff}
+    .btn-nav-logout{background:rgba(255,255,255,.1);border:none;color:rgba(255,255,255,.7);padding:6px 14px;border-radius:var(--radius);font-size:12px;cursor:pointer;font-family:inherit;transition:.15s}
+    .btn-nav-logout:hover{background:rgba(255,255,255,.2);color:#fff}
+
+    /* LAYOUT */
+    .portal-layout{display:flex;min-height:calc(100vh - 56px)}
+    .portal-sidebar{width:200px;background:#fff;border-right:1px solid var(--gray-200);padding:16px 0;flex-shrink:0;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto}
+    .sidebar-item{display:flex;align-items:center;gap:10px;padding:9px 16px;color:var(--gray-600);cursor:pointer;transition:.15s;border-left:3px solid transparent;font-size:13px;text-decoration:none}
+    .sidebar-item:hover{background:var(--gray-50);color:var(--gray-800)}
+    .sidebar-item.active{background:var(--blue-pale);color:var(--blue);border-left-color:var(--blue);font-weight:500}
+    .sidebar-item svg{width:16px;height:16px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:2}
+    .portal-content{flex:1;padding:24px;max-width:900px}
+
+    /* CARDS */
+    .card{background:#fff;border-radius:var(--radius);border:1px solid var(--gray-200);overflow:hidden;margin-bottom:20px}
+    .card-header{padding:16px 20px;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between}
+    .card-title{font-size:14px;font-weight:600;color:var(--navy)}
+    .card-body{padding:20px}
+    .section{display:none}.section.active{display:block}
+
+    /* DASHBOARD KPIS */
+    .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}
+    .kpi{background:#fff;border-radius:var(--radius);border:1px solid var(--gray-200);padding:18px 20px}
+    .kpi-label{font-size:12px;color:var(--gray-600);margin-bottom:6px}
+    .kpi-val{font-size:24px;font-weight:700;color:var(--navy);margin-bottom:2px}
+    .kpi-sub{font-size:12px;color:var(--gray-400)}
+
+    /* INSTANCE */
+    .instance-card{background:#fff;border-radius:var(--radius);border:1px solid var(--gray-200);padding:24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+    .instance-info h3{font-size:16px;font-weight:700;color:var(--navy);margin-bottom:4px}
+    .instance-info p{font-size:13px;color:var(--gray-600)}
+    .instance-url{display:inline-flex;align-items:center;gap:6px;background:var(--blue);color:#fff;padding:10px 20px;border-radius:var(--radius);font-size:13px;font-weight:600;text-decoration:none;transition:.15s;margin-top:12px}
+    .instance-url:hover{background:var(--blue-light)}
+    .instance-url svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2}
+
+    /* BADGE STATUS */
+    .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600}
+    .badge-active{background:var(--teal-pale);color:var(--teal)}
+    .badge-suspended{background:var(--red-pale);color:var(--red)}
+    .badge-provisioning{background:#FEF3C7;color:#92400E}
+    .badge-info{background:var(--blue-pale);color:var(--blue)}
+
+    /* TABLES */
+    .table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse}
+    thead th{padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.5px;background:var(--gray-50);border-bottom:1px solid var(--gray-200)}
+    tbody td{padding:12px 14px;border-bottom:1px solid var(--gray-100);font-size:13px}
+    tbody tr:last-child td{border-bottom:none}
+
+    /* FORMS */
+    .form-group{margin-bottom:16px}
+    .form-label{display:block;font-size:12px;font-weight:600;color:var(--gray-600);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+    .form-input,.form-textarea{width:100%;padding:9px 12px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:13px;font-family:inherit;outline:none;transition:border-color .15s}
+    .form-input:focus,.form-textarea:focus{border-color:var(--blue)}
+    .form-textarea{resize:vertical;min-height:100px}
+
+    /* BUTTONS */
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;border:none;transition:.15s}
+    .btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{background:var(--blue-light)}
+    .btn-secondary{background:var(--gray-100);color:var(--gray-800);border:1px solid var(--gray-200)}.btn-secondary:hover{background:var(--gray-200)}
+    .btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2}
+
+    /* ALERTS */
+    .alert{padding:10px 14px;border-radius:var(--radius);font-size:13px;margin-bottom:16px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--teal-pale);color:var(--teal)}
+    .alert-error{background:var(--red-pale);color:var(--red)}
+    .alert-info{background:var(--blue-pale);color:var(--blue)}
+
+    /* EMPTY STATE */
+    .empty-state{text-align:center;padding:48px 24px;color:var(--gray-600)}
+    .empty-state svg{width:48px;height:48px;stroke:var(--gray-400);fill:none;stroke-width:1.5;margin-bottom:12px}
+    .empty-state h3{font-size:15px;font-weight:600;color:var(--gray-800);margin-bottom:6px}
+    .empty-state p{font-size:13px;line-height:1.6}
+
+    /* TICKET FORM */
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:20px}
+    .modal-overlay.open{display:flex}
+    .modal{background:#fff;border-radius:12px;padding:28px;width:100%;max-width:480px}
+    .modal-title{font-size:16px;font-weight:700;color:var(--navy);margin-bottom:20px}
+    .modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+
+    .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;display:inline-block}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .text-muted{color:var(--gray-600)}.text-sm{font-size:12px}.mt-4{margin-top:16px}
+    .flex{display:flex}.gap-2{gap:8px}.items-center{align-items:center}.justify-between{justify-content:space-between}
+
+    @media(max-width:700px){
+      .portal-sidebar{display:none}
+      .kpi-row{grid-template-columns:1fr}
+      .instance-card{flex-direction:column;align-items:flex-start}
+    }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon" id="login-logo">H7</div>
+      <div style="font-size:15px;font-weight:700;color:var(--navy)">HEPTA <span style="color:var(--gray-600);font-weight:400">CLOUD</span></div>
+    </div>
+    <div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:4px">Portal de clientes</div>
+    <div style="font-size:13px;color:var(--gray-600);margin-bottom:24px">Ingresá con tu cuenta para acceder a tu sistema.</div>
+    <div class="alert alert-error" id="login-error"></div>
+    <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="login-email" placeholder="tu@empresa.com"/></div>
+    <div class="form-group"><label class="form-label">Contraseña</label><input class="form-input" type="password" id="login-pass" placeholder="••••••••"/></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()" id="login-btn">Ingresar</button>
+    <div style="margin-top:16px;text-align:center;font-size:12px;color:var(--gray-600)">
+      ¿Necesitás acceso? <a href="/" style="color:var(--blue)">Contactanos</a>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="portal-app" style="display:none">
+  <!-- NAV -->
+  <nav class="portal-nav">
+    <a href="/" class="portal-nav-logo">
+      <div class="portal-nav-logo-icon" id="nav-logo">H7</div>
+      <div class="portal-nav-brand">HEPTA <span>CLOUD</span></div>
+    </a>
+    <div class="portal-nav-right">
+      <div class="portal-nav-user">Hola, <strong id="nav-username">—</strong></div>
+      <button class="btn-nav-logout" onclick="doLogout()">Salir</button>
+    </div>
+  </nav>
+
+  <div class="portal-layout">
+    <!-- SIDEBAR -->
+    <aside class="portal-sidebar">
+      <a class="sidebar-item active" onclick="showSection('dashboard',this)" href="#">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a class="sidebar-item" onclick="showSection('instance',this)" href="#">
+        <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        Mi sistema
+      </a>
+      <a class="sidebar-item" onclick="showSection('invoices',this)" href="#">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Facturas
+      </a>
+      <a class="sidebar-item" onclick="showSection('tickets',this)" href="#">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Soporte
+      </a>
+      <a class="sidebar-item" onclick="showSection('account',this)" href="#">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Mi cuenta
+      </a>
+    </aside>
+
+    <!-- CONTENT -->
+    <div class="portal-content">
+
+      <!-- DASHBOARD -->
+      <div class="section active" id="section-dashboard">
+        <h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:20px">Dashboard</h2>
+        <div id="dash-content">
+          <div class="kpi-row">
+            <div class="kpi"><div class="kpi-label">Estado del sistema</div><div class="kpi-val" id="kpi-status">—</div><div class="kpi-sub" id="kpi-plan">—</div></div>
+            <div class="kpi"><div class="kpi-label">Facturas pendientes</div><div class="kpi-val" id="kpi-invoices">—</div><div class="kpi-sub">Sin pagar</div></div>
+            <div class="kpi"><div class="kpi-label">Tickets abiertos</div><div class="kpi-val" id="kpi-tickets">—</div><div class="kpi-sub">En proceso</div></div>
+          </div>
+          <div id="dash-instance-preview"></div>
+        </div>
+      </div>
+
+      <!-- INSTANCE -->
+      <div class="section" id="section-instance">
+        <h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:20px">Mi sistema</h2>
+        <div id="instance-content">
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <h3>Cargando...</h3>
+          </div>
+        </div>
+      </div>
+
+      <!-- INVOICES -->
+      <div class="section" id="section-invoices">
+        <h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:20px">Facturas</h2>
+        <div id="invoices-content">
+          <div class="empty-state"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><h3>Cargando...</h3></div>
+        </div>
+      </div>
+
+      <!-- TICKETS -->
+      <div class="section" id="section-tickets">
+        <div class="flex justify-between items-center" style="margin-bottom:20px">
+          <h2 style="font-size:20px;font-weight:700;color:var(--navy)">Soporte</h2>
+          <button class="btn btn-primary" onclick="openTicketModal()">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nuevo ticket
+          </button>
+        </div>
+        <div id="tickets-content">
+          <div class="empty-state"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><h3>Cargando...</h3></div>
+        </div>
+      </div>
+
+      <!-- ACCOUNT -->
+      <div class="section" id="section-account">
+        <h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:20px">Mi cuenta</h2>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Cambiar contraseña</div></div>
+          <div class="card-body" style="max-width:400px">
+            <div class="alert alert-success" id="pwd-ok">Contraseña actualizada.</div>
+            <div class="alert alert-error" id="pwd-err"></div>
+            <div class="form-group"><label class="form-label">Contraseña actual</label><input class="form-input" type="password" id="pwd-current"/></div>
+            <div class="form-group"><label class="form-label">Nueva contraseña</label><input class="form-input" type="password" id="pwd-new"/></div>
+            <div class="form-group"><label class="form-label">Confirmar nueva</label><input class="form-input" type="password" id="pwd-confirm"/></div>
+            <button class="btn btn-primary" onclick="changePassword()">Actualizar contraseña</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TICKET -->
+<div class="modal-overlay" id="ticket-modal" onclick="closeTicketModalOutside(event)">
+  <div class="modal">
+    <div class="modal-title">Nuevo ticket de soporte</div>
+    <div class="alert alert-success" id="ticket-ok">Ticket creado. Te responderemos pronto.</div>
+    <div class="alert alert-error" id="ticket-err"></div>
+    <div class="form-group"><label class="form-label">Título *</label><input class="form-input" id="ticket-name" placeholder="Describí el problema brevemente"/></div>
+    <div class="form-group"><label class="form-label">Detalle</label><textarea class="form-textarea" id="ticket-desc" placeholder="Contanos más detalles para ayudarte mejor..."></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeTicketModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="submitTicket()" id="ticket-btn">Enviar ticket</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api';
+let TOKEN = localStorage.getItem('hc_portal_token');
+let currentUser = null;
+let portalData = {};
+
+function authHeaders(){ return {'Content-Type':'application/json','Authorization':`Bearer ${TOKEN}`}; }
+
+async function apiCall(method, path, body){
+  const opts={method,headers:authHeaders()};
+  if(body) opts.body=JSON.stringify(body);
+  const res=await fetch(API+path,opts);
+  const data=await res.json();
+  if(res.status===401){doLogout();throw new Error('Sesión expirada');}
+  return data;
+}
+
+function showAlert(id,type,msg,duration=3000){
+  const el=document.getElementById(id);
+  el.className=`alert alert-${type} show`;
+  if(msg) el.textContent=msg;
+  if(duration) setTimeout(()=>el.className=`alert alert-${type}`,duration);
+}
+
+// ── AUTH ───────────────────────────────────────────────────
+async function doLogin(){
+  const email=document.getElementById('login-email').value;
+  const pass=document.getElementById('login-pass').value;
+  const btn=document.getElementById('login-btn');
+  if(!email||!pass) return;
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>';
+  try{
+    const data=await(await fetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})})).json();
+    if(data.success){
+      TOKEN=data.data.token;
+      currentUser=data.data.user;
+      localStorage.setItem('hc_portal_token',TOKEN);
+      showPortal();
+    } else {
+      showAlert('login-error','error',data.error||'Credenciales inválidas',0);
+    }
+  }catch(e){showAlert('login-error','error','Error de conexión',0);}
+  finally{btn.disabled=false;btn.textContent='Ingresar';}
+}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.getElementById('login-screen').style.display!=='none')doLogin();});
+function doLogout(){localStorage.removeItem('hc_portal_token');TOKEN=null;location.reload();}
+
+async function showPortal(){
+  if(!TOKEN) return;
+  if(!currentUser){
+    const me=await apiCall('GET','/auth/me');
+    if(!me.success){doLogout();return;}
+    currentUser=me.data;
+  }
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('portal-app').style.display='block';
+  document.getElementById('nav-username').textContent=currentUser.full_name?.split(' ')[0]||currentUser.email;
+
+  // Logo
+  try{
+    const cfg=await fetch('/api/site-config').then(r=>r.json());
+    if(cfg.success&&cfg.data.logo_url){
+      const html=`<img src="${cfg.data.logo_url}" alt="Logo"/>`;
+      document.getElementById('nav-logo').innerHTML=html;
+      document.getElementById('login-logo').innerHTML=html;
+    }
+  }catch(e){}
+
+  loadDashboard();
+}
+
+// ── NAV ────────────────────────────────────────────────────
+const sectionLoaders={invoices:loadInvoices,tickets:loadTickets,instance:loadInstance};
+function showSection(name,el){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(s=>s.classList.remove('active'));
+  document.getElementById(`section-${name}`).classList.add('active');
+  el.classList.add('active');
+  if(sectionLoaders[name]) sectionLoaders[name]();
+}
+
+// ── DASHBOARD ──────────────────────────────────────────────
+async function loadDashboard(){
+  try{
+    const data=await apiCall('GET','/portal/dashboard');
+    if(!data.success) return;
+    portalData=data.data;
+
+    const inst=data.data.instance;
+    const statusMap={active:'Activo',suspended:'Suspendido',provisioning:'Aprovisionando',cancelled:'Cancelado'};
+    document.getElementById('kpi-status').textContent=inst?statusMap[inst.status]||'—':'—';
+    document.getElementById('kpi-plan').textContent=inst?`Plan ${inst.plan}`:'Sin instancia';
+
+    const inv=data.data.invoices_summary;
+    document.getElementById('kpi-invoices').textContent=inv?inv.pending:'—';
+    document.getElementById('kpi-tickets').textContent='—';
+
+    // Preview instancias — puede ser más de una
+    // Mostrar todas las instancias en el dashboard
+    const allInst = data.data.all_instances || (inst ? [inst] : []);
+    if(allInst.length){
+      document.getElementById('dash-instance-preview').innerHTML = allInst.map(i => `
+        <div class="instance-card" style="margin-bottom:12px">
+          <div class="instance-info" style="flex:1">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+              <h3 style="font-size:15px">${i.label||'Mi sistema'}</h3>
+              <span class="badge ${i.status==='active'?'badge-active':i.status==='suspended'?'badge-suspended':'badge-provisioning'}">${statusMap[i.status]||i.status}</span>
+            </div>
+            <p class="text-muted text-sm">${i.instance_url||''} · Plan ${i.plan}</p>
+            ${i.instance_url&&i.status==='active'?`
+              <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+                <a href="${i.instance_url}" target="_blank" class="instance-url" style="margin-top:0">
+                  <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  Acceder a ${i.label||'mi sistema'}
+                </a>
+                ${!i.custom_domain||i.custom_domain_status==='none'?`<button onclick="openDomainModal(${i.id})" style="display:inline-flex;align-items:center;gap:6px;background:var(--gray-100);color:var(--gray-800);border:1px solid var(--gray-200);padding:10px 16px;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>Dominio propio</button>`:''}
+                ${i.custom_domain_status==='pending_dns'||i.custom_domain_status==='pending_purchase'?`<span style="font-size:12px;color:var(--gray-600);padding:10px 0">⏳ ${i.custom_domain||'Dominio'} — en proceso</span>`:''}
+                ${i.custom_domain_status==='active'?`<span style="font-size:12px;color:var(--teal);padding:10px 0">✓ ${i.custom_domain} activo</span>`:''}
+              </div>`:
+            i.status==='suspended'?'<div style="color:var(--red);font-size:12px;margin-top:6px">⚠️ Instancia suspendida</div>':''}
+          </div>
+        </div>`).join('');
+    } else {
+      document.getElementById('dash-instance-preview').innerHTML=`
+        <div class="alert alert-info show">Tu instancia está siendo configurada. Te notificaremos cuando esté lista.</div>`;
+    }
+  }catch(e){console.error(e);}
+}
+
+// ── INSTANCE ───────────────────────────────────────────────
+async function loadInstance(){
+  try{
+    const data=await apiCall('GET','/portal/instance');
+    if(!data.success) return;
+    const c=document.getElementById('instance-content');
+    if(!data.data.length){
+      c.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><h3>Sin instancia asignada</h3><p>Contactanos para comenzar la configuración de tu sistema.</p></div>`;
+      return;
+    }
+    const statusMap={active:'Activo',suspended:'Suspendido',provisioning:'Aprovisionando',cancelled:'Cancelado'};
+    const statusClass={active:'badge-active',suspended:'badge-suspended',provisioning:'badge-provisioning',cancelled:'badge-suspended'};
+
+    // Múltiples instancias
+    c.innerHTML=data.data.map(inst=>`
+      <div class="instance-card" style="margin-bottom:16px">
+        <div class="instance-info" style="flex:1">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <h3>${inst.label||'Mi sistema'}</h3>
+            <span class="badge ${statusClass[inst.status]||'badge-suspended'}">${statusMap[inst.status]||inst.status}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+            <div><div class="text-muted text-sm">Plan</div><div style="font-weight:600">${inst.plan}</div></div>
+            <div><div class="text-muted text-sm">Versión</div><div style="font-weight:600">${inst.odoo_version||'—'}</div></div>
+            <div><div class="text-muted text-sm">Activo desde</div><div style="font-weight:600">${inst.activated_at?new Date(inst.activated_at).toLocaleDateString('es-PY'):'—'}</div></div>
+            <div><div class="text-muted text-sm">Subdominio</div><div style="font-weight:600;font-size:12px">${inst.db_name?inst.db_name.split('.')[0]:'—'}</div></div>
+          </div>
+          ${inst.instance_url&&inst.status==='active'?`
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <a href="${inst.instance_url}" target="_blank" class="instance-url" style="margin-top:0">
+              <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Acceder a ${inst.label||'mi sistema'}
+            </a>`:
+          inst.status==='suspended'?`<div style="color:var(--red);font-size:13px;margin-top:8px">⚠️ Esta instancia está suspendida. Contactá a soporte.</div>`:''}
+        </div>
+      </div>`).join('');
+  }catch(e){console.error(e);}
+}
+
+// ── INVOICES ───────────────────────────────────────────────
+async function loadInvoices(){
+  const c=document.getElementById('invoices-content');
+  if(!currentUser.odoo_partner_id){
+    c.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><h3>Sin facturas disponibles</h3><p>Las facturas aparecerán aquí una vez que tu cuenta esté vinculada al sistema.</p></div>`;
+    return;
+  }
+  try{
+    const data=await apiCall('GET','/portal/invoices');
+    if(!data.success){c.innerHTML=`<div class="alert alert-error show">${data.error}</div>`;return;}
+    if(!data.data.length){
+      c.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><h3>Sin facturas aún</h3><p>Tus facturas aparecerán aquí.</p></div>`;
+      return;
+    }
+    const payState={paid:'Pagada',not_paid:'Pendiente',in_payment:'En proceso',partial:'Parcial'};
+    c.innerHTML=`<div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>Número</th><th>Fecha</th><th>Vencimiento</th><th>Monto</th><th>Estado</th></tr></thead>
+      <tbody>${data.data.map(inv=>`<tr>
+        <td><strong>${inv.name||'—'}</strong></td>
+        <td>${inv.invoice_date?new Date(inv.invoice_date).toLocaleDateString('es-PY'):'—'}</td>
+        <td>${inv.invoice_date_due?new Date(inv.invoice_date_due).toLocaleDateString('es-PY'):'—'}</td>
+        <td style="font-weight:600">₲ ${Number(inv.amount_total).toLocaleString('es-PY')}</td>
+        <td><span class="badge ${inv.payment_state==='paid'?'badge-active':'badge-info'}">${payState[inv.payment_state]||inv.payment_state}</span></td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+  }catch(e){c.innerHTML=`<div class="alert alert-error show">Error al cargar facturas.</div>`;}
+}
+
+// ── TICKETS ────────────────────────────────────────────────
+async function loadTickets(){
+  const c=document.getElementById('tickets-content');
+  if(!currentUser.odoo_partner_id){
+    c.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><h3>Podés crear un ticket</h3><p>Usá el botón "Nuevo ticket" para contactar a soporte.</p></div>`;
+    return;
+  }
+  try{
+    const data=await apiCall('GET','/portal/tickets');
+    if(!data.success){c.innerHTML=`<div class="alert alert-error show">${data.error}</div>`;return;}
+    document.getElementById('kpi-tickets').textContent=data.data.filter(t=>!['done','cancelled'].includes(t.stage_id?.[1]?.toLowerCase())).length;
+    if(!data.data.length){
+      c.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><h3>Sin tickets</h3><p>¿Todo va bien? Si necesitás ayuda, creá un ticket.</p></div>`;
+      return;
+    }
+    c.innerHTML=`<div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>Ticket</th><th>Estado</th><th>Prioridad</th><th>Fecha</th></tr></thead>
+      <tbody>${data.data.map(t=>`<tr>
+        <td><strong>${t.name}</strong>${t.description?`<div class="text-muted text-sm" style="margin-top:2px">${t.description.substring(0,60)}...</div>`:''}</td>
+        <td>${t.stage_id?`<span class="badge badge-info">${t.stage_id[1]}</span>`:'—'}</td>
+        <td>${t.priority==='1'?'⭐':t.priority==='2'?'⭐⭐':t.priority==='3'?'⭐⭐⭐':'Normal'}</td>
+        <td class="text-muted text-sm">${new Date(t.create_date).toLocaleDateString('es-PY')}</td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+  }catch(e){c.innerHTML=`<div class="alert alert-error show">Error al cargar tickets.</div>`;}
+}
+
+function openTicketModal(){document.getElementById('ticket-modal').classList.add('open');}
+function closeTicketModal(){document.getElementById('ticket-modal').classList.remove('open');document.getElementById('ticket-ok').className='alert alert-success';document.getElementById('ticket-err').className='alert alert-error';}
+function closeTicketModalOutside(e){if(e.target===document.getElementById('ticket-modal'))closeTicketModal();}
+
+async function submitTicket(){
+  const name=document.getElementById('ticket-name').value.trim();
+  if(!name) return;
+  const btn=document.getElementById('ticket-btn');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>';
+  try{
+    const data=await apiCall('POST','/portal/tickets',{name,description:document.getElementById('ticket-desc').value.trim()});
+    if(data.success){
+      showAlert('ticket-ok','success','Ticket creado. Te responderemos pronto.',0);
+      document.getElementById('ticket-name').value='';
+      document.getElementById('ticket-desc').value='';
+      setTimeout(closeTicketModal,2000);
+      loadTickets();
+    } else showAlert('ticket-err','error',data.error);
+  }catch(e){showAlert('ticket-err','error','Error al crear ticket.');}
+  finally{btn.disabled=false;btn.textContent='Enviar ticket';}
+}
+
+// ── ACCOUNT ────────────────────────────────────────────────
+async function changePassword(){
+  const current=document.getElementById('pwd-current').value;
+  const newPwd=document.getElementById('pwd-new').value;
+  const confirm=document.getElementById('pwd-confirm').value;
+  if(newPwd!==confirm){showAlert('pwd-err','error','Las contraseñas no coinciden.',0);return;}
+  if(newPwd.length<8){showAlert('pwd-err','error','La contraseña debe tener al menos 8 caracteres.',0);return;}
+  const data=await apiCall('POST','/auth/change-password',{current_password:current,new_password:newPwd});
+  if(data.success){showAlert('pwd-ok','success');document.getElementById('pwd-current').value='';document.getElementById('pwd-new').value='';document.getElementById('pwd-confirm').value='';}
+  else showAlert('pwd-err','error',data.error,0);
+}
+
+if(TOKEN) showPortal();
+</script>
+
+<!-- MODAL DOMINIO PROPIO -->
+<div class="modal-overlay" id="domain-modal" onclick="if(event.target===this)closeDomainModal()">
+  <div class="modal" style="max-width:520px">
+    <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:6px">Dominio propio</div>
+    <div style="font-size:13px;color:var(--gray-600);margin-bottom:20px">Asociá tu dominio a este sistema</div>
+    <input type="hidden" id="domain-instance-id"/>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+      <div id="type-own-card" onclick="selectDomainType('own')"
+        style="border:2px solid var(--blue);border-radius:var(--radius);padding:16px;cursor:pointer;background:var(--blue-pale)">
+        <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:4px">Ya tengo un dominio</div>
+        <div style="font-size:12px;color:var(--gray-600)">Configurar mi dominio existente</div>
+      </div>
+      <div id="type-buy-card" onclick="selectDomainType('buy')"
+        style="border:2px solid var(--gray-200);border-radius:var(--radius);padding:16px;cursor:pointer">
+        <div style="font-size:13px;font-weight:600;color:var(--navy);margin-bottom:4px">Quiero un dominio nuevo</div>
+        <div style="font-size:12px;color:var(--gray-600)">Hepta lo gestiona por vos</div>
+      </div>
+    </div>
+    <div id="flow-own">
+      <div class="form-group"><label class="form-label">Tu dominio</label>
+        <input class="form-input" id="domain-own-input" placeholder="miempresa.com.py"/>
+        <div class="form-hint">Sin www ni https.</div>
+      </div>
+      <div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:var(--radius);padding:14px;font-size:12px;color:#92400E;margin-bottom:16px">
+        <strong>Antes de continuar</strong> — agregá este registro DNS en tu proveedor de dominio:<br/>
+        <div id="dns-instructions" style="margin-top:8px;font-family:monospace;background:rgba(0,0,0,.05);padding:8px;border-radius:4px">
+          Tipo: CNAME &nbsp;·&nbsp; Nombre: erp &nbsp;·&nbsp; Valor: <strong id="dns-proxy-host">proxy.hepta.com.py</strong> &nbsp;·&nbsp; TTL: 3600
+        </div>
+        <div style="margin-top:6px">Tu sistema quedará disponible en <strong>erp.tudominio.com.py</strong>. Una vez configurado el DNS, enviá la solicitud y nuestro equipo verificará y activará.</div>
+      </div>
+      <div class="form-group"><label class="form-label">Notas (opcional)</label>
+        <textarea class="form-textarea" id="domain-own-notes" rows="2" style="font-family:inherit" placeholder="Ej: ya configuré el DNS en NIC.py"></textarea>
+      </div>
+    </div>
+    <div id="flow-buy" style="display:none">
+      <div style="background:var(--blue-pale);border:1px solid #BFDBFE;border-radius:var(--radius);padding:14px;font-size:13px;color:var(--navy);margin-bottom:16px">
+        Te ayudamos a registrar y configurar tu dominio. Te contactaremos para coordinar.
+      </div>
+      <div class="form-group"><label class="form-label">Dominio deseado (opcional)</label>
+        <input class="form-input" id="domain-buy-input" placeholder="miempresa.com.py"/>
+      </div>
+      <div class="form-group"><label class="form-label">Extensión preferida</label>
+        <select class="form-input" id="domain-buy-ext">
+          <option>.com.py — recomendado para empresas paraguayas</option>
+          <option>.com — internacional</option>
+          <option>.py</option>
+          <option>Cualquiera — me asesorás</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Notas (opcional)</label>
+        <textarea class="form-textarea" id="domain-buy-notes" rows="2" style="font-family:inherit"></textarea>
+      </div>
+    </div>
+    <div class="alert alert-success" id="domain-ok"></div>
+    <div class="alert alert-error"   id="domain-err"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px">
+      <button class="btn btn-secondary" onclick="closeDomainModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="submitDomainRequest()" id="domain-submit-btn">Solicitar activación</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _domainType='own';
+function openDomainModal(id,label){
+  label=label||'';
+  // Cargar dns_proxy_host dinámico
+  fetch('/api/site-config').then(r=>r.json()).then(cfg=>{
+    if(cfg.success&&cfg.data.dns_proxy_host){
+      const el=document.getElementById('dns-proxy-host');
+      if(el) el.textContent=cfg.data.dns_proxy_host;
+    }
+  }).catch(()=>{});
+  document.getElementById('domain-instance-id').value=id;
+  ['own-input','own-notes','buy-input','buy-notes'].forEach(k=>{const el=document.getElementById('domain-'+k);if(el)el.value='';});
+  document.getElementById('domain-ok').className='alert alert-success';
+  document.getElementById('domain-err').className='alert alert-error';
+  selectDomainType('own');
+  document.getElementById('domain-modal').classList.add('open');
+}
+function closeDomainModal(){document.getElementById('domain-modal').classList.remove('open');}
+function selectDomainType(type){
+  _domainType=type;
+  const sel=type==='own';
+  document.getElementById('type-own-card').style.borderColor=sel?'var(--blue)':'var(--gray-200)';
+  document.getElementById('type-own-card').style.background=sel?'var(--blue-pale)':'';
+  document.getElementById('type-buy-card').style.borderColor=sel?'var(--gray-200)':'var(--blue)';
+  document.getElementById('type-buy-card').style.background=sel?'':'var(--blue-pale)';
+  document.getElementById('flow-own').style.display=sel?'block':'none';
+  document.getElementById('flow-buy').style.display=sel?'none':'block';
+  document.getElementById('domain-submit-btn').textContent=sel?'Solicitar activación':'Enviar solicitud';
+}
+async function submitDomainRequest(){
+  const instanceId=document.getElementById('domain-instance-id').value;
+  const btn=document.getElementById('domain-submit-btn');
+  btn.disabled=true;
+  const body={instance_id:parseInt(instanceId),type:_domainType};
+  if(_domainType==='own'){
+    body.domain=(document.getElementById('domain-own-input').value.trim().toLowerCase()).replace(/^https?:\/\//,'').replace(/^www\./,'');
+    body.notes=document.getElementById('domain-own-notes').value.trim();
+    if(!body.domain){showDomainErr('Ingresá tu dominio');btn.disabled=false;return;}
+  } else {
+    body.domain=document.getElementById('domain-buy-input').value.trim();
+    body.notes=document.getElementById('domain-buy-notes').value.trim();
+  }
+  try{
+    const data=await apiCall('POST','/portal/domain-request',body);
+    if(data.success){
+      const ok=document.getElementById('domain-ok');
+      ok.textContent=data.message; ok.className='alert alert-success show';
+      setTimeout(()=>{closeDomainModal();loadInstance();},3000);
+    } else showDomainErr(data.error||'Error al enviar solicitud');
+  }catch(e){showDomainErr('Error de conexión');}
+  btn.disabled=false;
+}
+function showDomainErr(msg){const el=document.getElementById('domain-err');el.textContent=msg;el.className='alert alert-error show';}
+</script>
+
+
+
+<!-- HEPTA-CORREO-UI:inicio -->
+<script>
+/* ═══ HEPTA Cloud — Correo (portal del cliente) ══════════════════════════
+   Bloque autocontenido: se monta solo en el sidebar y en .portal-content.
+   Usa apiCall(), showAlert(), sectionLoaders y showSection ya definidos.
+   Para quitarlo, borrá este <script> entero. */
+(function () {
+  if (window.__heptaMailPortal) return;
+  window.__heptaMailPortal = true;
+
+  const ICON = '<svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
+  /* Un backend sin la ruta devuelve el index.html y el parseo de JSON explota
+     con un mensaje incomprensible. Lo traducimos a la causa real. */
+  function err2msg(e) {
+    const m = String((e && e.message) || e);
+    if (/not valid JSON|Unexpected token|JSON\.parse|Unexpected end of/i.test(m)) {
+      return 'El backend respondió HTML en vez de JSON: esa ruta todavía no existe en el servidor. Aplicá el patch de backend y hacé el rebuild (docker compose up -d --build backend).';
+    }
+    if (/Failed to fetch|NetworkError/i.test(m)) return 'No se pudo contactar al backend.';
+    return m;
+  }
+
+  const fmt = (mb) => (mb >= 1024 ? (mb / 1024).toFixed(mb % 1024 ? 1 : 0) + ' GB' : mb + ' MB');
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  /* ── estilos ────────────────────────────────────────────────────────── */
+  const style = document.createElement('style');
+  style.textContent = `
+    .mail-bar{height:10px;border-radius:5px;background:var(--gray-200);overflow:hidden}
+    .mail-bar>i{display:block;height:100%;background:var(--blue);transition:width .3s}
+    .mail-bar.warn>i{background:#D97706}.mail-bar.full>i{background:var(--red)}
+    .mail-btn-sm{padding:5px 10px;font-size:12px;border-radius:var(--radius);border:1px solid var(--gray-200);background:var(--gray-100);color:var(--gray-800);cursor:pointer;font-family:inherit}
+    .mail-btn-sm:hover{background:var(--gray-200)}
+    .mail-hint{font-size:11px;color:var(--gray-600);margin-top:4px}
+    .mail-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-all}
+    .mail-kv{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;font-size:13px}
+    .mail-kv>div:nth-child(odd){color:var(--gray-600)}
+    /* flex item sin min-width:0 desborda la pagina en vez de scrollear la tabla */
+    .portal-content{min-width:0}
+    @media(max-width:700px){.mail-kv{grid-template-columns:1fr}}
+  `;
+  document.head.appendChild(style);
+
+  /* ── item de sidebar, debajo de "Mi sistema" ────────────────────────── */
+  const side = document.querySelector('.portal-sidebar');
+  if (side) {
+    const a = document.createElement('a');
+    a.className = 'sidebar-item';
+    a.href = '#';
+    a.setAttribute('onclick', "showSection('mail',this)");
+    a.innerHTML = ICON + 'Correo';
+    const inst = side.querySelector('[onclick*="instance"]');
+    if (inst) inst.insertAdjacentElement('afterend', a);
+    else side.appendChild(a);
+  }
+
+  /* ── sección ────────────────────────────────────────────────────────── */
+  const content = document.querySelector('.portal-content');
+  if (content) {
+    const sec = document.createElement('div');
+    sec.className = 'section';
+    sec.id = 'section-mail';
+    sec.innerHTML = `
+      <h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:20px">Correo</h2>
+      <div class="alert alert-success" id="pmail-ok"></div>
+      <div class="alert alert-error"   id="pmail-err"></div>
+      <div id="pmail-content">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          <h3>Cargando...</h3>
+        </div>
+      </div>`;
+    content.appendChild(sec);
+  }
+
+  /* ── modales ────────────────────────────────────────────────────────── */
+  const modals = document.createElement('div');
+  modals.innerHTML = `
+  <div class="modal-overlay" id="pmail-new-modal" onclick="if(event.target===this)pmailCloseNew()">
+    <div class="modal" style="max-width:460px">
+      <div class="modal-title">Nueva casilla</div>
+      <div class="form-group">
+        <label class="form-label">Nombre de la casilla</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input class="form-input" id="pmail-lp" placeholder="ventas" style="flex:1"/>
+          <span class="text-muted" id="pmail-suffix" style="font-size:13px"></span>
+        </div>
+        <div class="mail-hint">Letras, números, punto, guion y guion bajo.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nombre para mostrar</label>
+        <input class="form-input" id="pmail-name" placeholder="Ventas"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Espacio asignado (MB)</label>
+        <input class="form-input" type="number" id="pmail-quota" min="100"/>
+        <div class="mail-hint" id="pmail-quota-hint"></div>
+      </div>
+      <div class="alert alert-error" id="pmail-new-err"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="pmailCloseNew()">Cancelar</button>
+        <button class="btn btn-primary" onclick="pmailCreate()" id="pmail-new-btn">Crear casilla</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="pmail-alias-modal" onclick="if(event.target===this)pmailCloseAlias()">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-title">Nuevo alias</div>
+      <div class="mail-hint" style="margin-bottom:16px">
+        Un alias es una dirección que no ocupa espacio: lo que llega ahí se reparte entre las casillas que elijas.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Dirección del alias</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input class="form-input" id="pmail-alias-lp" placeholder="ventas" style="flex:1"/>
+          <span class="text-muted" id="pmail-alias-suffix" style="font-size:13px"></span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Repartir a</label>
+        <div id="pmail-alias-destinos" style="border:1px solid var(--gray-200);border-radius:var(--radius);padding:10px;max-height:190px;overflow:auto"></div>
+        <div class="mail-hint">Podés elegir más de una casilla.</div>
+      </div>
+      <div class="alert alert-error" id="pmail-alias-err"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="pmailCloseAlias()">Cancelar</button>
+        <button class="btn btn-primary" onclick="pmailCreateAlias()" id="pmail-alias-btn">Crear alias</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="pmail-pass-modal" onclick="if(event.target===this)pmailClosePass()">
+    <div class="modal" style="max-width:460px">
+      <div class="modal-title">Contraseña de la casilla</div>
+      <div class="alert alert-info show" style="margin-bottom:16px">
+        Anotala ahora: por seguridad no se vuelve a mostrar. Al ingresar por primera vez se pide cambiarla.
+      </div>
+      <div class="mail-kv" style="margin-bottom:16px">
+        <div>Casilla</div><div class="mail-mono" id="pmail-pass-addr"></div>
+        <div>Contraseña</div><div class="mail-mono" id="pmail-pass-val" style="font-size:15px;font-weight:600"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="pmailCopyPass(this)">Copiar</button>
+        <button class="btn btn-primary" onclick="pmailClosePass()">Listo</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(modals);
+
+  /* ── estado ─────────────────────────────────────────────────────────── */
+  let state = { domain: null, info: null };
+
+  /* ── carga ──────────────────────────────────────────────────────────── */
+  async function loadMail() {
+    const c = document.getElementById('pmail-content');
+    try {
+      const r = await apiCall('GET', '/portal/mail/domains');
+      if (!r.success) throw new Error(r.error);
+      if (!r.data.length) {
+        c.innerHTML = `<div class="empty-state">
+          <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          <h3>Sin servicio de correo</h3>
+          <p>Contactanos para activar el correo de tu dominio.</p></div>`;
+        return;
+      }
+      state.domain = r.data[0].domain;
+      await renderDomain();
+    } catch (e) {
+      c.innerHTML = `<div class="alert alert-error show">${esc(e.message)}</div>`;
+    }
+  }
+
+  async function renderDomain() {
+    const c = document.getElementById('pmail-content');
+    const [boxes, cfg, alias] = await Promise.all([
+      apiCall('GET', `/portal/mail/domains/${encodeURIComponent(state.domain)}/mailboxes`),
+      apiCall('GET', `/portal/mail/domains/${encodeURIComponent(state.domain)}/settings`).catch(() => ({ success: false })),
+      apiCall('GET', `/portal/mail/domains/${encodeURIComponent(state.domain)}/aliases`).catch(() => ({ success: false })),
+    ]);
+    if (!boxes.success) throw new Error(boxes.error);
+
+    const d = boxes.data;
+    state.info = d;
+    state.aliases = alias.success ? alias.data : [];
+    const pct = d.quota_mb ? Math.round((d.quota_assigned_mb / d.quota_mb) * 100) : 0;
+    const s = cfg.success ? cfg.data : null;
+
+    c.innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">${esc(d.domain)}</div>
+          <button class="btn btn-primary" onclick="pmailOpenNew()" ${d.quota_available_mb < 100 || d.mailboxes.length >= d.max_mailboxes ? 'disabled style="opacity:.5;cursor:not-allowed"' : ''}>
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nueva casilla
+          </button>
+        </div>
+        <div class="card-body">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px">
+            <span><strong>${fmt(d.quota_available_mb)}</strong> <span class="text-muted">libres de ${fmt(d.quota_mb)}</span></span>
+            <span class="text-muted">${d.mailboxes.length} de ${d.max_mailboxes} casillas</span>
+          </div>
+          <div class="mail-bar ${pct > 90 ? 'full' : pct > 75 ? 'warn' : ''}"><i style="width:${Math.min(100, pct)}%"></i></div>
+          ${d.quota_available_mb < 100 ? '<div class="mail-hint" style="color:var(--red)">Te quedaste sin espacio para nuevas casillas. Liberá cuota de alguna existente o pedinos ampliar el plan.</div>' : ''}
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Casilla</th><th>Espacio</th><th>Uso</th><th></th></tr></thead>
+            <tbody>${d.mailboxes.length ? d.mailboxes.map((m) => `
+              <tr>
+                <td>
+                  <strong>${esc(m.address)}</strong>
+                  ${m.name && m.name !== m.address.split('@')[0] ? `<div class="text-muted text-sm">${esc(m.name)}</div>` : ''}
+                  ${m.active ? '' : '<span class="badge badge-suspended" style="margin-top:4px">Desactivada</span>'}
+                </td>
+                <td style="white-space:nowrap">${fmt(m.quota_mb)}</td>
+                <td style="min-width:130px">
+                  <div class="mail-bar ${m.used_pct > 90 ? 'full' : m.used_pct > 75 ? 'warn' : ''}" style="height:8px"><i style="width:${m.used_pct}%"></i></div>
+                  <div class="mail-hint">${fmt(m.used_mb)} · ${m.used_pct}%</div>
+                </td>
+                <td style="text-align:right;white-space:nowrap">
+                  <button class="mail-btn-sm" onclick="pmailQuota('${esc(m.address)}',${m.quota_mb})">Espacio</button>
+                  <button class="mail-btn-sm" onclick="pmailReset('${esc(m.address)}')">Clave</button>
+                  <button class="mail-btn-sm" onclick="pmailDelete('${esc(m.address)}')">Borrar</button>
+                </td>
+              </tr>`).join('') : '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:28px">Todavía no creaste ninguna casilla.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Alias y reenvíos</div>
+          <button class="btn btn-secondary" onclick="pmailOpenAlias()" ${d.mailboxes.length ? '' : 'disabled style="opacity:.5;cursor:not-allowed"'}>
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nuevo alias
+          </button>
+        </div>
+        ${state.aliases.length ? `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Alias</th><th>Reparte a</th><th></th></tr></thead>
+            <tbody>${state.aliases.map((a) => `
+              <tr>
+                <td><strong>${esc(a.address)}</strong>${a.address.startsWith('@') ? '<div class="text-muted text-sm">todo lo que no coincida con una casilla</div>' : ''}</td>
+                <td class="text-muted text-sm">${esc(String(a.goto || '').split(',').join(' · '))}</td>
+                <td style="text-align:right"><button class="mail-btn-sm" onclick="pmailDeleteAlias('${a.id}','${esc(a.address)}')">Borrar</button></td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </div>` : `
+        <div class="card-body">
+          <div class="text-muted text-sm">
+            Todavía no tenés alias. Sirven para direcciones como <strong>ventas@${esc(d.domain)}</strong> o
+            <strong>info@${esc(d.domain)}</strong> que llegan a varias personas sin ocupar espacio ni necesitar una casilla aparte.
+          </div>
+        </div>`}
+      </div>
+
+      ${s ? `
+      <div class="card">
+        <div class="card-header"><div class="card-title">Cómo configurar tu correo</div></div>
+        <div class="card-body">
+          <a href="${esc(s.webmail)}" target="_blank" class="instance-url" style="margin-top:0;margin-bottom:18px">
+            <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            Abrir webmail
+          </a>
+          <div class="mail-kv">
+            <div>Usuario</div><div>${esc(s.usuario)}</div>
+            <div>Entrante (IMAP)</div><div class="mail-mono">${esc(s.imap.host)} · puerto ${s.imap.port} · ${esc(s.imap.security)}</div>
+            <div>Saliente (SMTP)</div><div class="mail-mono">${esc(s.smtp.host)} · puerto ${s.smtp.port} · ${esc(s.smtp.security)}</div>
+            <div>SMTP alternativo</div><div class="mail-mono">${esc(s.smtp_alt.host)} · puerto ${s.smtp_alt.port} · ${esc(s.smtp_alt.security)}</div>
+          </div>
+          <div class="mail-hint" style="margin-top:12px">En Outlook o Thunderbird alcanza con poner la dirección completa y la contraseña: el resto se configura solo.</div>
+        </div>
+      </div>` : ''}`;
+  }
+
+  /* ── nueva casilla ──────────────────────────────────────────────────── */
+  window.pmailOpenNew = function () {
+    const d = state.info;
+    if (!d) return;
+    document.getElementById('pmail-suffix').textContent = '@' + d.domain;
+    document.getElementById('pmail-lp').value = '';
+    document.getElementById('pmail-name').value = '';
+    document.getElementById('pmail-quota').value = Math.min(d.def_quota_mb || 1024, d.quota_available_mb);
+    document.getElementById('pmail-quota').max = d.quota_available_mb;
+    document.getElementById('pmail-quota-hint').textContent = `Máximo disponible: ${fmt(d.quota_available_mb)}`;
+    document.getElementById('pmail-new-err').className = 'alert alert-error';
+    document.getElementById('pmail-new-modal').classList.add('open');
+  };
+  window.pmailCloseNew = function () {
+    document.getElementById('pmail-new-modal').classList.remove('open');
+  };
+
+  window.pmailCreate = async function () {
+    const lp = document.getElementById('pmail-lp').value.trim().toLowerCase();
+    const name = document.getElementById('pmail-name').value.trim();
+    const quota = Number(document.getElementById('pmail-quota').value) || undefined;
+    if (!lp) return showAlert('pmail-new-err', 'error', 'Poné un nombre para la casilla', 0);
+
+    const btn = document.getElementById('pmail-new-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      const r = await apiCall('POST', `/portal/mail/domains/${encodeURIComponent(state.domain)}/mailboxes`, { local_part: lp, name, quota_mb: quota });
+      if (!r.success) throw new Error(r.error);
+      pmailCloseNew();
+      showPass(r.data.address, r.data.password);
+      await renderDomain();
+    } catch (e) {
+      showAlert('pmail-new-err', 'error', err2msg(e), 0);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Crear casilla';
+    }
+  };
+
+  function showPass(addr, pass) {
+    document.getElementById('pmail-pass-addr').textContent = addr;
+    document.getElementById('pmail-pass-val').textContent = pass || '(la que definiste)';
+    document.getElementById('pmail-pass-modal').classList.add('open');
+  }
+  window.pmailClosePass = function () {
+    document.getElementById('pmail-pass-modal').classList.remove('open');
+  };
+  window.pmailCopyPass = function (btn) {
+    const txt = document.getElementById('pmail-pass-val').textContent;
+    const done = () => { btn.textContent = '✓ Copiada'; setTimeout(() => (btn.textContent = 'Copiar'), 1500); };
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(done).catch(done);
+    else { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done(); }
+  };
+
+  /* ── alias ──────────────────────────────────────────────────────────── */
+  window.pmailOpenAlias = function () {
+    const d = state.info;
+    if (!d || !d.mailboxes.length) return;
+    document.getElementById('pmail-alias-suffix').textContent = '@' + d.domain;
+    document.getElementById('pmail-alias-lp').value = '';
+    document.getElementById('pmail-alias-err').className = 'alert alert-error';
+    document.getElementById('pmail-alias-destinos').innerHTML = d.mailboxes.map((m) => `
+      <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:13px">
+        <input type="checkbox" class="pmail-dest" value="${esc(m.address)}"/>
+        <span>${esc(m.address)}${m.name && m.name !== m.address.split('@')[0] ? ` <span class="text-muted">— ${esc(m.name)}</span>` : ''}</span>
+      </label>`).join('');
+    document.getElementById('pmail-alias-modal').classList.add('open');
+  };
+  window.pmailCloseAlias = function () {
+    document.getElementById('pmail-alias-modal').classList.remove('open');
+  };
+
+  window.pmailCreateAlias = async function () {
+    const lp = document.getElementById('pmail-alias-lp').value.trim().toLowerCase();
+    const destinos = [...document.querySelectorAll('.pmail-dest:checked')].map((c) => c.value);
+    if (!lp) return showAlert('pmail-alias-err', 'error', 'Poné la dirección del alias', 0);
+    if (!destinos.length) return showAlert('pmail-alias-err', 'error', 'Elegí al menos una casilla de destino', 0);
+
+    const btn = document.getElementById('pmail-alias-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      const r = await apiCall('POST', `/portal/mail/domains/${encodeURIComponent(state.domain)}/aliases`, { local_part: lp, goto: destinos.join(',') });
+      if (!r.success) throw new Error(r.error);
+      pmailCloseAlias();
+      showAlert('pmail-ok', 'success', `${r.data.address} reparte a ${r.data.goto.join(', ')}`, 6000);
+      await renderDomain();
+    } catch (e) {
+      showAlert('pmail-alias-err', 'error', err2msg(e), 0);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Crear alias';
+    }
+  };
+
+  window.pmailDeleteAlias = async function (id, address) {
+    if (!window.confirm(`¿Borrar el alias ${address}?\nLos mensajes enviados a esa dirección dejan de llegar.`)) return;
+    try {
+      const r = await apiCall('DELETE', `/portal/mail/domains/${encodeURIComponent(state.domain)}/aliases/${encodeURIComponent(id)}`);
+      if (!r.success) throw new Error(r.error);
+      showAlert('pmail-ok', 'success', `Alias ${address} eliminado.`);
+      await renderDomain();
+    } catch (e) {
+      showAlert('pmail-err', 'error', err2msg(e), 6000);
+    }
+  };
+
+  /* ── acciones por casilla ───────────────────────────────────────────── */
+  window.pmailQuota = async function (address, actual) {
+    const libre = state.info ? state.info.quota_available_mb : 0;
+    const val = window.prompt(`Espacio para ${address}, en MB.\nActual: ${actual} MB · Máximo asignable: ${actual + libre} MB`, String(actual));
+    if (val === null) return;
+    const q = Number(val);
+    if (!(q > 0)) return showAlert('pmail-err', 'error', 'Valor inválido', 4000);
+    try {
+      const r = await apiCall('PATCH', `/portal/mail/domains/${encodeURIComponent(state.domain)}/mailboxes/${encodeURIComponent(address)}`, { quota_mb: q });
+      if (!r.success) throw new Error(r.error);
+      showAlert('pmail-ok', 'success', `${address}: espacio actualizado a ${fmt(q)}.`);
+      await renderDomain();
+    } catch (e) {
+      showAlert('pmail-err', 'error', err2msg(e), 6000);
+    }
+  };
+
+  window.pmailReset = async function (address) {
+    if (!window.confirm(`¿Generar una contraseña nueva para ${address}?\nLa anterior deja de funcionar en todos sus dispositivos.`)) return;
+    try {
+      const r = await apiCall('POST', `/portal/mail/domains/${encodeURIComponent(state.domain)}/mailboxes/${encodeURIComponent(address)}/reset-password`, {});
+      if (!r.success) throw new Error(r.error);
+      showPass(r.data.address, r.data.password);
+    } catch (e) {
+      showAlert('pmail-err', 'error', err2msg(e), 6000);
+    }
+  };
+
+  window.pmailDelete = async function (address) {
+    if (!window.confirm(`¿Borrar ${address}?\nSe pierden todos los mensajes guardados en esa casilla. Esta acción no se puede deshacer.`)) return;
+    try {
+      const r = await apiCall('DELETE', `/portal/mail/domains/${encodeURIComponent(state.domain)}/mailboxes/${encodeURIComponent(address)}`);
+      if (!r.success) throw new Error(r.error);
+      showAlert('pmail-ok', 'success', `${address} eliminada.`);
+      await renderDomain();
+    } catch (e) {
+      showAlert('pmail-err', 'error', err2msg(e), 6000);
+    }
+  };
+
+  /* ── registro en la navegación ──────────────────────────────────────── */
+  try { sectionLoaders.mail = loadMail; } catch (e) {}
+  window.loadPortalMail = loadMail;
+})();
+
+</script>
+<!-- HEPTA-CORREO-UI:fin -->
+</body>
+</html>
