@@ -2,14 +2,23 @@ const router  = require('express').Router();
 const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
+const rateLimit = require('express-rate-limit');
 const pool    = require('../config/db');
 const { requireAuth } = require('../middleware/auth');
 
 const SECRET  = process.env.JWT_SECRET;
 const EXPIRES = process.env.JWT_EXPIRES_IN || '7d';
 
+// Freno a la fuerza bruta: 10 intentos fallidos cada 15 minutos por dirección IP.
+// Los ingresos correctos no cuentan (un equipo detrás de la misma IP no se bloquea por usar el sistema).
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 10, skipSuccessfulRequests: true,
+  standardHeaders: true, legacyHeaders: false,
+  message: { success: false, code: 'TOO_MANY_ATTEMPTS', error: 'Demasiados intentos. Probá de nuevo en 15 minutos.' },
+});
+
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ success: false, error: 'Email y contraseña requeridos' });
