@@ -31,6 +31,22 @@ log = logging.getLogger("hepta.perimetral")
 app = FastAPI(title="Hepta Perimetral API", version="1.0.0", docs_url=None, redoc_url=None)
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
 
+# ── Quién puede hablarle a esta API ───────────────────────────
+# ALLOWED_IPS (en el .env): IPs separadas por coma. Vacío = sin filtro. La clave sigue
+# haciendo falta; esto corta antes a cualquier otro equipo de la red, también en /health.
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+ALLOWED_IPS = {ip.strip() for ip in os.getenv("ALLOWED_IPS", "").split(",") if ip.strip()}
+
+@app.middleware("http")
+async def solo_origenes_permitidos(request: Request, call_next):
+    origen = request.client.host if request.client else ""
+    if ALLOWED_IPS and origen not in ALLOWED_IPS:
+        log.warning(f"Rechazado: origen {origen} no permitido ({request.method} {request.url.path})")
+        return JSONResponse(status_code=403, content={"detail": "Origen no permitido"})
+    return await call_next(request)
+
 def verify_api_key(key: str = Security(api_key_header)):
     if key != API_KEY:
         log.warning("API key inválida")
