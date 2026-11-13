@@ -79,8 +79,6 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
 
 ## Pendientes
 
-- [ ] **Plan Despegue con Inventario y Punto de venta a la vista** (alta de ensayo del 2026-11-12): según el plan
-      son de Crecimiento. Ningún módulo propio los pide; ver qué módulo de terceros los arrastra y decidir.
 - [ ] **`HGSVRLNX104`: el usuario `odoo` tiene `sudo` total sin contraseña** (`(ALL) NOPASSWD: ALL`, visto el
       2026-11-12). Es el usuario que corre el Odoo de todos los clientes y la API de alta: limitarlo a los
       comandos que usa el alta (`psql`/`createdb` como postgres) y probar el alta después.
@@ -96,3 +94,7 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
 - 2026-11-12 — Alta de tenants sin `admin`/`admin`: script y API nuevos en `HGSVRLNX104` (instalan el plan, contraseña
   al azar para `admin`, usuario propio del cliente), alta en segundo plano y flujo del Admin ordenado. Probado en
   producción con dos altas de ensayo (Crecimiento y Despegue). `tienda2` era el único tenant con la clave de fábrica.
+- 2026-11-13 — Tenants nuevos: menú de inicio `web_responsive` (OCA) con colores de HEPTA Cloud en lugar del de
+  Zehntech, que arrastraba Punto de venta e Inventario a Despegue; el alta completa y verifica la contabilidad
+  (antes nacían con diarios sin cuenta) y el menú "Inicio" del sitio apunta a la portada. En producción desde
+  `odoo-tenants-addons@ebd0513`, probado con un alta desde el Admin. Los tenants anteriores no se tocaron.
