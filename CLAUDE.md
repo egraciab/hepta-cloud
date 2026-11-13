@@ -79,11 +79,9 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
 
 ## Pendientes
 
-- [ ] **`HGSVRLNX104`: el usuario `odoo` tiene `sudo` total sin contraseña** (`(ALL) NOPASSWD: ALL`, visto el
-      2026-11-12). Es el usuario que corre el Odoo de todos los clientes y la API de alta: limitarlo a los
-      comandos que usa el alta (`psql`/`createdb` como postgres) y probar el alta después.
 - [ ] API perimetral: validar `domain` y `db` en `/vhost` y sacar la lista de suspendidos de `/health`.
-- [ ] Limitar el puerto 8888 de las dos APIs a la IP de HEPTA Cloud (hoy escuchan en todas las interfaces, sin TLS).
+- [ ] TLS entre HEPTA Cloud y las dos APIs del puerto 8888: la contraseña inicial del cliente viaja sin cifrar
+      dentro de la red interna. (El filtro por IP ya está: `ALLOWED_IPS` en el `.env` de cada API.)
 - [ ] RetoPA: la ficha del cliente se crea solo con un botón del Admin; enganchar al alta si se ofrece en el plan.
 - [ ] Entorno de prueba (no existe) y pasar los JS en línea de los HTML a archivos.
 
@@ -98,3 +96,6 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
   Zehntech, que arrastraba Punto de venta e Inventario a Despegue; el alta completa y verifica la contabilidad
   (antes nacían con diarios sin cuenta) y el menú "Inicio" del sitio apunta a la portada. En producción desde
   `odoo-tenants-addons@ebd0513`, probado con un alta desde el Admin. Los tenants anteriores no se tocaron.
+- 2026-11-13 — Seguridad del alta: las APIs del puerto 8888 solo responden a HEPTA Cloud (`ALLOWED_IPS`), y el
+  usuario `odoo` de `HGSVRLNX104` ya no tiene `sudo` total: solo `psql` y `createdb` como postgres
+  (`/etc/sudoers.d/odoo-provision`). Marca de agua del menú de inicio en producción.
