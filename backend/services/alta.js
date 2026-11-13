@@ -224,8 +224,14 @@ async function correoBienvenida({ to, nombre, instancia_url, plan, cred, portal 
       "SELECT subject, body_html FROM email_templates WHERE slug='welcome_client'");
     if (!tplRows[0]) { console.log('[welcome_email] Plantilla no encontrada'); return false; }
 
-    const logoHtml = smtp.logo_url
-      ? `<img src="${smtp.logo_url}" alt="Hepta Cloud" style="max-height:40px;max-width:180px;object-fit:contain"/>`
+    // En un correo la imagen tiene que ser una dirección completa: una ruta del sitio
+    // ("/uploads/logo.png") no carga y queda el recuadro roto.
+    const { rows: su } = await pool.query("SELECT value FROM site_config WHERE key='site_url'");
+    const base = ((su[0] && su[0].value) || 'https://cloud.hepta.com.py').replace(/\/+$/, '');
+    const logoUrl = /^https?:\/\//i.test(smtp.logo_url || '') ? smtp.logo_url
+      : (smtp.logo_url ? base + '/' + String(smtp.logo_url).replace(/^\/+/, '') : '');
+    const logoHtml = logoUrl
+      ? `<img src="${escapeHtml(logoUrl)}" alt="Hepta Cloud" style="max-height:40px;max-width:180px;object-fit:contain"/>`
       : `<div style="display:inline-block;background:#1254A4;border-radius:6px;padding:8px 14px"><span style="color:#ffffff;font-size:14px;font-weight:600;letter-spacing:.5px">HEPTA CLOUD</span></div>`;
 
     const { rows: wcRows } = await pool.query(

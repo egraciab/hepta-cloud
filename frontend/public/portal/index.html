@@ -264,6 +264,9 @@
 </div>
 
 <script>
+// Nombre comercial del plan (en la base se guarda el código)
+const planNombre=p=>({starter:'Despegue',professional:'Crecimiento',enterprise:'Empresa'})[p]||p||'';
+
 const API = '/api';
 let TOKEN = localStorage.getItem('hc_portal_token');
 let currentUser = null;
@@ -354,7 +357,7 @@ async function loadDashboard(){
     const inst=data.data.instance;
     const statusMap={active:'Activo',suspended:'Suspendido',provisioning:'Aprovisionando',cancelled:'Cancelado'};
     document.getElementById('kpi-status').textContent=inst?statusMap[inst.status]||'—':'—';
-    document.getElementById('kpi-plan').textContent=inst?`Plan ${inst.plan}`:'Sin instancia';
+    document.getElementById('kpi-plan').textContent=inst?`Plan ${planNombre(inst.plan)}`:'Sin instancia';
 
     const inv=data.data.invoices_summary;
     document.getElementById('kpi-invoices').textContent=inv?inv.pending:'—';
@@ -371,7 +374,7 @@ async function loadDashboard(){
               <h3 style="font-size:15px">${i.label||'Mi sistema'}</h3>
               <span class="badge ${i.status==='active'?'badge-active':i.status==='suspended'?'badge-suspended':'badge-provisioning'}">${statusMap[i.status]||i.status}</span>
             </div>
-            <p class="text-muted text-sm">${i.instance_url||''} · Plan ${i.plan}</p>
+            <p class="text-muted text-sm">${i.instance_url||''} · Plan ${planNombre(i.plan)}</p>
             ${i.instance_url&&i.status==='active'?`
               <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
                 <a href="${i.instance_url}" target="_blank" class="instance-url" style="margin-top:0">
@@ -414,7 +417,7 @@ async function loadInstance(){
             <span class="badge ${statusClass[inst.status]||'badge-suspended'}">${statusMap[inst.status]||inst.status}</span>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-            <div><div class="text-muted text-sm">Plan</div><div style="font-weight:600">${inst.plan}</div></div>
+            <div><div class="text-muted text-sm">Plan</div><div style="font-weight:600">${planNombre(inst.plan)}</div></div>
             <div><div class="text-muted text-sm">Versión</div><div style="font-weight:600">${inst.odoo_version||'—'}</div></div>
             <div><div class="text-muted text-sm">Activo desde</div><div style="font-weight:600">${inst.activated_at?new Date(inst.activated_at).toLocaleDateString('es-PY'):'—'}</div></div>
             <div><div class="text-muted text-sm">Subdominio</div><div style="font-weight:600;font-size:12px">${inst.db_name?inst.db_name.split('.')[0]:'—'}</div></div>
