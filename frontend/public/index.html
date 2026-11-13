@@ -35,7 +35,7 @@
     .nav-mobile-btn span{display:block;width:24px;height:2px;background:var(--navy);border-radius:2px}
 
     /* HERO */
-    .hero{padding:80px 5% 72px;display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center;max-width:1200px;margin:0 auto}
+    .hero{padding:80px 5% 72px;display:grid;grid-template-columns:5fr 6fr;gap:56px;align-items:center;max-width:1280px;margin:0 auto}
     .hero-badge{display:inline-flex;align-items:center;gap:6px;background:var(--blue-pale);color:var(--blue);font-size:13px;font-weight:600;padding:5px 14px;border-radius:20px;margin-bottom:24px}
     .hero h1{font-size:clamp(28px,3.5vw,42px);font-weight:700;line-height:1.2;color:var(--navy);margin-bottom:20px}
     .hero h1 em{font-style:normal;color:var(--blue)}
@@ -193,6 +193,7 @@
     @media(max-width:900px){
       .hero{grid-template-columns:1fr;padding:48px 5%}
       .hero-screen{display:none}
+      .hero-screen.con-video{display:block}
       .pain-grid{grid-template-columns:1fr 1fr}
       .solutions-grid{grid-template-columns:1fr 1fr}
       .plans-grid{grid-template-columns:1fr}
@@ -258,8 +259,23 @@
       <img id="hero-panel-img-el" src="" alt="Preview del sistema" style="width:100%;height:100%;object-fit:cover;border-radius:var(--radius-lg)"/>
     </div>
 
-    <!-- Default: animación CSS del portal -->
-    <div id="hero-panel-anim">
+    <!-- Por defecto: video del sistema funcionando (tenant de demostración, datos de ejemplo).
+         Si el video no carga, queda la animación de abajo. -->
+    <div id="hero-panel-video">
+      <div class="screen-bar">
+        <div class="screen-dot"></div><div class="screen-dot"></div><div class="screen-dot"></div>
+        <div class="screen-url">miempresa.erp.hepta.com.py</div>
+      </div>
+      <video id="hero-video" autoplay muted loop playsinline preload="metadata" poster="/assets/media/sistema.jpg"
+             aria-label="El sistema funcionando: oportunidades, facturas y tienda en línea"
+             style="display:block;width:100%;height:auto;background:#f5f8fc">
+        <source src="/assets/media/sistema.webm" type="video/webm"/>
+        <source src="/assets/media/sistema.mp4" type="video/mp4"/>
+      </video>
+    </div>
+
+    <!-- Respaldo: animación CSS del portal -->
+    <div id="hero-panel-anim" style="display:none">
       <div class="screen-bar">
         <div class="screen-dot"></div><div class="screen-dot"></div><div class="screen-dot"></div>
         <div class="screen-url">app.miempresa.cloud.hepta.com.py</div>
@@ -511,6 +527,9 @@ function applyConfig(data) {
       imgEl.src = data.hero_panel_image;
       imgWrap.style.display = 'block';
       anim.style.display = 'none';
+      const vid = document.getElementById('hero-panel-video');
+      if (vid) { vid.style.display = 'none'; document.getElementById('hero-video')?.pause(); }
+      document.getElementById('hero-panel')?.classList.remove('con-video');
     }
   }
 
@@ -705,12 +724,40 @@ function panelGoTo(i) {
   _panelTimer = setInterval(() => panelGoTo((_panelCur+1) % screens.length), 3200);
 }
 
+// Si el video no se puede reproducir (archivo ausente, navegador sin soporte), vuelve la animación
+function initHeroVideo() {
+  const v = document.getElementById('hero-video'), caja = document.getElementById('hero-panel-video');
+  if (!v || !caja) return;
+  const respaldo = () => {
+    if (document.getElementById('hero-panel-img')?.style.display === 'block') return;
+    caja.style.display = 'none';
+    document.getElementById('hero-panel')?.classList.remove('con-video');
+    const anim = document.getElementById('hero-panel-anim');
+    if (anim && anim.style.display === 'none') { anim.style.display = ''; initPanel(); }
+  };
+  const panel = document.getElementById('hero-panel');
+  const sinFuente = () => v.networkState === HTMLMediaElement.NETWORK_NO_SOURCE;
+  v.addEventListener('error', respaldo);
+  const fuentes = v.querySelectorAll('source');
+  if (fuentes.length) fuentes[fuentes.length - 1].addEventListener('error', respaldo);
+  // El error puede haber ocurrido antes de que corra este código: se revisa ahora y un poco después
+  if (sinFuente()) respaldo(); else setTimeout(() => { if (sinFuente()) respaldo(); }, 2500);
+  // En pantallas chicas el panel estaba oculto: con el video listo, se muestra
+  const listo = () => panel && panel.classList.add('con-video');
+  if (v.readyState >= 2) listo(); else v.addEventListener('loadeddata', listo, { once: true });
+  // Quien pidió menos movimiento ve la imagen fija, con controles para reproducir si quiere
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    v.removeAttribute('autoplay'); v.pause(); v.setAttribute('controls', '');
+  }
+}
+
 function initPanel() {
   if (document.getElementById('hero-panel-anim')?.style.display === 'none') return;
   _panelTimer = setInterval(() => panelGoTo((_panelCur+1) % _panelScreens.length), 3200);
 }
 
 loadAll();
+initHeroVideo();
 initPanel();
 </script>
 </body>
