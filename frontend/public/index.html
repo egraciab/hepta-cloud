@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title id="meta-title">Hepta Cloud — Soluciones empresariales para Paraguay</title>
-  <meta name="description" id="meta-desc" content="ERP, CRM, e-commerce y punto de venta para PyMEs paraguayas."/>
+  <title id="meta-title">Hepta Cloud — Sistema de gestión para PyMEs en Paraguay</title>
+  <meta name="description" id="meta-desc" content="Ventas, clientes, inventario y facturación electrónica SIFEN en un solo sistema, configurado para tu negocio y alojado en Paraguay. Planes desde ₲ 169.000 por mes."/>
   <meta name="theme-color" content="#0D1F5C"/>
   <link rel="canonical" href="https://cloud.hepta.com.py/"/>
   <meta property="og:type" content="website"/>
   <meta property="og:site_name" content="Hepta Cloud"/>
   <meta property="og:url" content="https://cloud.hepta.com.py/"/>
-  <meta property="og:title" id="og-title" content="Hepta Cloud — Soluciones empresariales para Paraguay"/>
-  <meta property="og:description" id="og-desc" content="ERP, CRM, e-commerce y punto de venta para PyMEs paraguayas."/>
+  <meta property="og:title" id="og-title" content="Hepta Cloud — Sistema de gestión para PyMEs en Paraguay"/>
+  <meta property="og:description" id="og-desc" content="Ventas, clientes, inventario y facturación electrónica SIFEN en un solo sistema, configurado para tu negocio y alojado en Paraguay. Planes desde ₲ 169.000 por mes."/>
   <meta property="og:image" content="https://cloud.hepta.com.py/assets/media/sistema.jpg"/>
   <meta name="twitter:card" content="summary_large_image"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -416,7 +416,7 @@
   <div class="plans-inner">
     <div class="section-label" id="plans-label">Planes</div>
     <div class="section-title" id="plans-title">Planes simples, sin sorpresas</div>
-    <div class="section-sub" id="plans-subtitle">Todos los planes incluyen implementación, capacitación y soporte local.</div>
+    <div class="section-sub" id="plans-subtitle">Precios con IVA incluido. Todos los planes incluyen implementación, capacitación y soporte local.</div>
     <div class="plans-grid" id="plans-grid">
       <div class="plan-card skeleton" style="height:320px"></div>
       <div class="plan-card skeleton" style="height:320px"></div>
@@ -433,7 +433,7 @@
     <div class="section-sub">Sin proyectos eternos ni consultoras que desaparecen.</div>
     <div class="steps-grid">
       <div class="step"><div class="step-num">1</div><div><h3>Diagnóstico gratuito</h3><p>Entendemos tu negocio, tus procesos y qué módulos realmente necesitás. Sin costo, sin compromiso.</p></div></div>
-      <div class="step"><div class="step-num">2</div><div><h3>Configuramos tu sistema</h3><p>Instalamos, configuramos y migramos tus datos. Vos seguís trabajando mientras nosotros preparamos todo.</p></div></div>
+      <div class="step"><div class="step-num">2</div><div><h3>Configuramos tu sistema</h3><p>Instalamos y configuramos tu sistema. Vos seguís trabajando mientras nosotros preparamos todo.</p></div></div>
       <div class="step"><div class="step-num">3</div><div><h3>Empezás a operar</h3><p>Capacitación incluida. Tu equipo listo para usar el sistema desde el día uno. Normalmente en menos de 5 días hábiles.</p></div></div>
     </div>
   </div>
@@ -617,6 +617,8 @@ function applyConfig(data) {
   // SEO
   if (data.meta_title)       document.title = data.meta_title;
   if (data.meta_description) document.querySelector('meta[name="description"]')?.setAttribute('content', data.meta_description);
+  if (data.meta_title)       document.getElementById('og-title')?.setAttribute('content', data.meta_title);
+  if (data.meta_description) document.getElementById('og-desc')?.setAttribute('content', data.meta_description);
 
   // Logo
   if (data.logo_url) {
