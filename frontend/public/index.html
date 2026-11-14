@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title id="meta-title">Hepta Cloud — Soluciones empresariales para Paraguay</title>
   <meta name="description" id="meta-desc" content="ERP, CRM, e-commerce y punto de venta para PyMEs paraguayas."/>
+  <meta name="theme-color" content="#0D1F5C"/>
+  <link rel="canonical" href="https://cloud.hepta.com.py/"/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:site_name" content="Hepta Cloud"/>
+  <meta property="og:url" content="https://cloud.hepta.com.py/"/>
+  <meta property="og:title" id="og-title" content="Hepta Cloud — Soluciones empresariales para Paraguay"/>
+  <meta property="og:description" id="og-desc" content="ERP, CRM, e-commerce y punto de venta para PyMEs paraguayas."/>
+  <meta property="og:image" content="https://cloud.hepta.com.py/assets/media/sistema.jpg"/>
+  <meta name="twitter:card" content="summary_large_image"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
@@ -82,7 +91,7 @@
     .section-sub{font-size:16px;color:var(--gray-600);margin-bottom:48px;max-width:560px}
 
     /* PAIN */
-    .pain{padding:80px 5%;max-width:1200px;margin:0 auto}
+    .pain{padding:80px max(5%,calc((100% - 1200px)/2))}
     .pain-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
     .pain-card{background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gray-200);padding:28px 24px;transition:.2s}
     .pain-card:hover{border-color:var(--blue-mid);box-shadow:0 4px 20px rgba(18,84,164,.08)}
@@ -97,8 +106,8 @@
     .solutions .section-label{color:var(--blue-mid)}
     .solutions .section-title{color:#fff}
     .solutions .section-sub{color:var(--blue-mid)}
-    .solutions-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-    .sol-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:var(--radius-lg);padding:24px 20px;transition:.2s}
+    .solutions-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:16px}
+    .sol-card{flex:1 1 300px;max-width:calc((100% - 32px)/3);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:var(--radius-lg);padding:24px 20px;transition:.2s}
     .sol-card:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2)}
     .sol-card.featured{background:var(--blue);border-color:var(--blue-light)}
     .sol-badge{font-size:11px;font-weight:700;background:rgba(255,255,255,.15);color:#fff;padding:3px 10px;border-radius:10px;display:inline-block;margin-bottom:14px}
@@ -111,13 +120,14 @@
     .plans-section{padding:80px 5%;background:var(--gray-50)}
     .plans-inner{max-width:1200px;margin:0 auto}
     .plans-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
-    .plan-card{background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gray-200);padding:28px 24px;position:relative;transition:.2s}
+    .plan-card{display:flex;flex-direction:column;background:#fff;border-radius:var(--radius-lg);border:1px solid var(--gray-200);padding:28px 24px;position:relative;transition:.2s}
     .plan-card.featured{border:2px solid var(--blue);box-shadow:0 4px 24px rgba(18,84,164,.12)}
     .plan-ribbon{position:absolute;top:-1px;right:20px;background:var(--blue);color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:0 0 8px 8px}
     .plan-name{font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px}
     .plan-price{font-size:26px;font-weight:700;color:var(--blue);margin-bottom:8px}
+    .plan-price small{font-size:14px;font-weight:500;color:var(--gray-600)}
     .plan-desc{font-size:14px;color:var(--gray-600);margin-bottom:20px;line-height:1.6}
-    .plan-features{list-style:none;margin-bottom:24px;display:flex;flex-direction:column;gap:8px}
+    .plan-features{list-style:none;margin-bottom:24px;display:flex;flex-direction:column;gap:8px;flex:1}
     .plan-features li{font-size:14px;color:var(--gray-800);padding-left:22px;position:relative;line-height:1.5}
     .plan-features li::before{content:'✓';position:absolute;left:0;color:var(--teal);font-weight:700}
     .plan-cta{display:block;text-align:center;background:var(--blue);color:#fff;padding:11px;border-radius:var(--radius-md);font-size:14px;font-weight:600;text-decoration:none;transition:.2s;font-family:'Exo 2',sans-serif;border:none;width:100%;cursor:pointer}
@@ -195,7 +205,7 @@
       .hero-screen{display:none}
       .hero-screen.con-video{display:block}
       .pain-grid{grid-template-columns:1fr 1fr}
-      .solutions-grid{grid-template-columns:1fr 1fr}
+      .sol-card{max-width:calc((100% - 16px)/2)}
       .plans-grid{grid-template-columns:1fr}
       .steps-grid{grid-template-columns:1fr}
       .retopa-inner{flex-direction:column}
@@ -204,9 +214,18 @@
       .nav-mobile-btn{display:flex}
     }
     @media(max-width:600px){
-      .pain-grid{grid-template-columns:1fr}
-      .solutions-grid{grid-template-columns:1fr}
+      .pain-grid{grid-template-columns:1fr;gap:12px}
+      .sol-card{max-width:100%}
       .form-row{grid-template-columns:1fr}
+      /* En celular: menos alto por sección y tarjetas de problemas compactas (ícono al costado) */
+      .pain,.solutions,.plans-section,.steps{padding-top:56px;padding-bottom:56px}
+      .section-sub{margin-bottom:32px}
+      .pain-card{display:grid;grid-template-columns:44px 1fr;column-gap:14px;padding:18px 16px}
+      .pain-icon{grid-row:1 / span 2;margin-bottom:0}
+      .pain-card h3{margin-bottom:4px}
+      nav{padding:0 4%}
+      .nav-logo-text{font-size:14px;white-space:nowrap}
+      .nav-cta{padding:8px 12px;font-size:13px;white-space:nowrap}
     }
   </style>
 </head>
@@ -658,7 +677,7 @@ function renderPlans(plans) {
       <div class="plan-card ${p.is_featured ? 'featured' : ''}">
         ${p.badge_text ? `<div class="plan-ribbon">${p.badge_text}</div>` : ''}
         <div class="plan-name">${p.name}</div>
-        <div class="plan-price">${p.price_label || '—'}</div>
+        <div class="plan-price">${String(p.price_label || '—').replace(/\s*\/\s*(mes|año)\s*$/i, ' <small>/ $1</small>')}</div>
         <div class="plan-desc">${p.description || ''}</div>
         <ul class="plan-features">${features.map(f => `<li>${f}</li>`).join('')}</ul>
         <button class="plan-cta" onclick="openModal()">Solicitar este plan</button>
