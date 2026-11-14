@@ -1121,9 +1121,9 @@ async function loadDashboard() {
 
     document.getElementById('dash-recent-leads').innerHTML = d.recent_leads.length
       ? d.recent_leads.map(l => `<tr>
-          <td><strong>${l.full_name}</strong></td>
-          <td>${l.company_name||'—'}</td>
-          <td><span class="badge badge-gray">${l.source}</span></td>
+          <td><strong>${esc(l.full_name)}</strong></td>
+          <td>${esc(l.company_name||'—')}</td>
+          <td><span class="badge badge-gray">${esc(l.source)}</span></td>
           <td><span class="badge ${statusColor[l.status]||'badge-gray'}">${statusLabel[l.status]||l.status}</span></td>
           <td class="text-muted text-sm">${new Date(l.created_at).toLocaleDateString('es-PY')}</td>
         </tr>`).join('')
@@ -1220,7 +1220,7 @@ function renderSvcGrid(id,items,type){
       <div class="svc-title">${s.title}</div>
       <div class="svc-desc">${s.description||'—'}</div>
       <div class="svc-actions">
-        <button class="btn btn-secondary btn-sm" onclick='openSvcModal(${JSON.stringify(s).replace(/'/g,"&#39;")}, "${s.type}")'>Editar</button>
+        <button class="btn btn-secondary btn-sm" onclick='openSvcModal(${jsAttr(s)}, "${s.type}")'>Editar</button>
         ${s.is_featured?'<span class="badge badge-blue">Destacado</span>':''}
         <span class="badge ${s.is_active?'badge-green':'badge-gray'}">${s.is_active?'Activo':'Inactivo'}</span>
         ${currentUser&&currentUser.role==='godmode'?`<button class="btn btn-danger btn-sm" onclick="deleteSvc(${s.id})">×</button>`:''}
@@ -1271,7 +1271,7 @@ async function loadPlans(){
       <div class="plan-desc">${p.description||''}</div>
       <ul class="plan-features-list">${f.map(i=>`<li>${i}</li>`).join('')}</ul>
       <div class="plan-actions">
-        <button class="btn btn-secondary btn-sm" onclick='openPlanModal(${JSON.stringify(p).replace(/'/g,"&#39;")})'>Editar</button>
+        <button class="btn btn-secondary btn-sm" onclick='openPlanModal(${jsAttr(p)})'>Editar</button>
         <span class="badge ${p.is_active?'badge-green':'badge-gray'}">${p.is_active?'Activo':'Inactivo'}</span>
         ${currentUser&&currentUser.role==='godmode'?`<button class="btn btn-danger btn-sm" onclick="deletePlan(${p.id})">×</button>`:''}
       </div>
@@ -1335,7 +1335,7 @@ async function loadTemplates(){
     <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--gray-200)">
       <div class="flex justify-between items-center" style="margin-bottom:6px">
         <div style="font-weight:600;color:var(--navy)">${t.name}</div>
-        <button class="btn btn-secondary btn-sm" onclick='openTemplateModal(${JSON.stringify(t).replace(/'/g,"&#39;")})'>Editar</button>
+        <button class="btn btn-secondary btn-sm" onclick='openTemplateModal(${jsAttr(t)})'>Editar</button>
       </div>
       <div class="text-sm text-muted">Slug: <code>${t.slug}</code></div>
       <div class="text-sm text-muted">Asunto: ${t.subject}</div>
@@ -1393,10 +1393,10 @@ async function loadLeads(){
   tbody.innerHTML=data.data.map(l=>`
     <tr>
       <td>${l.id}</td>
-      <td><strong>${l.full_name}</strong></td>
-      <td>${l.company_name||'—'}</td>
-      <td>${l.email?`<div>${l.email}</div>`:''}${l.phone?`<div class="text-muted">${l.phone}</div>`:''}</td>
-      <td class="text-muted text-sm" style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l.message||'—'}</td>
+      <td><strong>${esc(l.full_name)}</strong></td>
+      <td>${esc(l.company_name||'—')}</td>
+      <td>${l.email?`<div>${esc(l.email)}</div>`:''}${l.phone?`<div class="text-muted">${esc(l.phone)}</div>`:''}</td>
+      <td class="text-muted text-sm" style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(l.message||'—')}</td>
       <td>
         <select class="status-select" onchange="updateLeadStatus(${l.id},this.value)">
           <option value="new" ${l.status==='new'?'selected':''}>Nuevo</option>
@@ -1419,12 +1419,12 @@ async function loadUsers(){
     <tr>
       <td><strong>${esc(u.full_name)}</strong>${(u.clientes||[]).length?`<div class="text-muted text-sm">${u.clientes.map(c=>esc(c.razon_social)).join(' · ')}</div>`:'<div class="text-sm" style="color:#B45309">Sin cliente vinculado</div>'}</td>
       <td>${esc(u.email)}</td>
-      <td><span class="badge badge-blue">${u.role}</span></td>
+      <td><span class="badge badge-blue">${esc(u.role)}</span></td>
       <td>${u.odoo_partner_id||'<span class="text-muted">—</span>'}</td>
       <td class="text-muted text-sm">${u.last_login_at?new Date(u.last_login_at).toLocaleDateString('es-PY'):'Nunca'}</td>
       <td><span class="badge ${u.is_active?'badge-green':'badge-gray'}">${u.is_active?'Activo':'Inactivo'}</span></td>
       <td style="white-space:nowrap">
-        <button class="btn btn-secondary btn-sm" onclick='openUserModal(${JSON.stringify(u).replace(/'/g,"&#39;")})'>Editar</button>
+        <button class="btn btn-secondary btn-sm" onclick='openUserModal(${jsAttr(u)})'>Editar</button>
         <button class="btn btn-secondary btn-sm" onclick="deleteUser(${u.id},'${(u.email||'').replace(/'/g,"&#39;")}')">Eliminar</button>
       </td>
     </tr>`).join('');
@@ -1475,6 +1475,8 @@ async function saveUser(){
 }
 
 // Texto seguro para meter en HTML
+// Objeto para poner dentro de onclick='…' sin que su contenido pueda cerrar el atributo
+function jsAttr(o){return JSON.stringify(o).replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/</g,'&lt;');}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
 // ── CLIENTES (entidades fiscales) ──────────────────────────
@@ -1809,15 +1811,15 @@ async function loadPayments() {
   tbody.innerHTML = data.data.map(p => `
     <tr>
       <td>${p.id}</td>
-      <td><strong>${p.full_name||'—'}</strong><div class="text-sm text-muted">${p.email||''}</div>
-          ${p.notes?`<div class="text-sm text-muted">${p.notes}</div>`:''}</td>
+      <td><strong>${esc(p.full_name||'—')}</strong><div class="text-sm text-muted">${esc(p.email||'')}</div>
+          ${p.notes?`<div class="text-sm text-muted">${esc(p.notes)}</div>`:''}</td>
       <td><span class="badge badge-blue">${planLabel[p.plan]||p.plan}</span></td>
       <td style="font-weight:600">₲ ${Number(p.amount).toLocaleString('es-PY')}</td>
       <td><span class="badge ${statusColor[p.status]||'badge-gray'}">${statusLabel[p.status]||p.status}</span></td>
       <td class="text-sm text-muted">${new Date(p.created_at).toLocaleDateString('es-PY')}</td>
       <td style="display:flex;gap:6px;flex-wrap:wrap">
         ${p.status==='pending'?`
-          <button class="btn btn-primary btn-sm" onclick="openPayConfirm(${p.id},'${p.full_name?.replace(/'/g,'')}','${p.plan}',${p.amount})">✓ Confirmar</button>
+          <button class="btn btn-primary btn-sm" onclick="openPayConfirm(${p.id},'${esc(String(p.full_name||'').replace(/['\\]/g,''))}','${esc(p.plan)}',${p.amount})">✓ Confirmar</button>
           <button class="btn btn-secondary btn-sm" onclick="cancelPayment(${p.id})">Cancelar</button>
         `:p.instance_url?`<a href="${p.instance_url}" target="_blank" class="btn btn-secondary btn-sm">Ver instancia</a>`:'—'}
       </td>
@@ -1880,16 +1882,16 @@ async function loadInstances(){
   const statusLabel={active:'Activo',suspended:'Suspendido',provisioning:'Provisionando',cancelled:'Cancelado'};
   tbody.innerHTML=data.data.filter(i=>i.status!=='cancelled').map(i=>`
     <tr>
-      <td><strong>${i.full_name||'—'}</strong><div class="text-sm text-muted">${i.email||''}</div></td>
-      <td><code style="font-size:12px">${i.db_name||'—'}</code></td>
-      <td>${i.instance_url?`<a href="${i.instance_url}" target="_blank" style="color:var(--blue);font-size:12px">${i.instance_url}</a>`:'—'}</td>
+      <td><strong>${esc(i.full_name||'—')}</strong><div class="text-sm text-muted">${esc(i.email||'')}</div></td>
+      <td><code style="font-size:12px">${esc(i.db_name||'—')}</code></td>
+      <td>${i.instance_url?`<a href="${esc(i.instance_url)}" target="_blank" style="color:var(--blue);font-size:12px">${esc(i.instance_url)}</a>`:'—'}</td>
       <td><span class="badge badge-blue">${({starter:'Despegue',professional:'Crecimiento',enterprise:'Empresa'})[i.plan]||i.plan}</span></td>
       <td><span class="badge ${statusMap[i.status]||'badge-gray'}">${statusLabel[i.status]||i.status}</span></td>
       <td class="text-sm text-muted">${i.activated_at?new Date(i.activated_at).toLocaleDateString('es-PY'):'—'}</td>
       <td style="display:flex;gap:4px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" onclick='openInstEditModal(${JSON.stringify(i).replace(/'/g,"&#39;")})'>Editar</button>
+        <button class="btn btn-secondary btn-sm" onclick='openInstEditModal(${jsAttr(i)})'>Editar</button>
         ${i.status==='active'?`<button class="btn btn-sm" style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D" onclick="suspendInstance(${i.id})">Suspender</button>`:''}        ${i.status==='suspended'?`<button class="btn btn-sm" style="background:var(--teal-pale);color:var(--teal);border:1px solid var(--teal)" onclick="reactivateInstance(${i.id})">Reactivar</button>`:''}
-        <button class="btn btn-sm" style="background:var(--red-pale);color:var(--red);border:1px solid #FCA5A5;margin-left:4px" onclick="deleteInstance(${i.id},'${(i.label||i.db_name||'').replace(/'/g,'')}')">Eliminar</button>
+        <button class="btn btn-sm" style="background:var(--red-pale);color:var(--red);border:1px solid #FCA5A5;margin-left:4px" onclick="deleteInstance(${i.id},'${esc((i.label||i.db_name||'').replace(/['\\]/g,''))}')">Eliminar</button>
       </td>
     </tr>`).join('');
 }
@@ -2143,7 +2145,7 @@ async function openInstEditModal(inst){
   const sel=document.getElementById('inst-edit-user-id');
   sel.innerHTML='<option value="">Sin asignar</option>';
   if(users.success) users.data.forEach(u=>{
-    sel.innerHTML+=`<option value="${u.id}" ${u.id==inst.user_id?'selected':''}>${u.full_name} (${u.email}) [${u.role}]</option>`;
+    sel.innerHTML+=`<option value="${u.id}" ${u.id==inst.user_id?'selected':''}>${esc(u.full_name)} (${esc(u.email)}) [${esc(u.role)}]</option>`;
   });
   document.getElementById('inst-edit-modal').classList.add('open');
 }
