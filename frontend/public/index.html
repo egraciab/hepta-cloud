@@ -268,7 +268,19 @@
       </div>
       <video id="hero-video" autoplay muted loop playsinline preload="metadata" poster="/assets/media/sistema.jpg"
              aria-label="El sistema funcionando: oportunidades, facturas y tienda en línea"
-             style="display:block;width:100%;height:auto;background:#f5f8fc">
+             style="display:block;width:100%;height:auto;background:#f5f8fc;cursor:zoom-in" title="Ver en grande">
+        <source src="/assets/media/sistema.webm" type="video/webm"/>
+        <source src="/assets/media/sistema.mp4" type="video/mp4"/>
+      </video>
+    </div>
+
+    <!-- El mismo video en grande, al hacer clic -->
+    <div id="hero-video-grande" role="dialog" aria-modal="true" aria-label="El sistema funcionando"
+         style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(13,31,92,.82);align-items:center;justify-content:center;padding:16px">
+      <button type="button" id="hero-video-cerrar" aria-label="Cerrar"
+              style="position:absolute;top:14px;right:18px;width:42px;height:42px;border:0;border-radius:50%;background:#fff;color:#0d1f5c;font-size:24px;line-height:1;cursor:pointer">×</button>
+      <video id="hero-video-full" controls loop playsinline preload="none" poster="/assets/media/sistema.jpg"
+             style="max-width:min(1180px,100%);max-height:88vh;width:100%;height:auto;border-radius:10px;background:#f5f8fc;box-shadow:0 20px 60px rgba(0,0,0,.4)">
         <source src="/assets/media/sistema.webm" type="video/webm"/>
         <source src="/assets/media/sistema.mp4" type="video/mp4"/>
       </video>
@@ -745,6 +757,18 @@ function initHeroVideo() {
   // En pantallas chicas el panel estaba oculto: con el video listo, se muestra
   const listo = () => panel && panel.classList.add('con-video');
   if (v.readyState >= 2) listo(); else v.addEventListener('loadeddata', listo, { once: true });
+  // Clic en el video: se abre en grande, con controles; Esc o clic afuera lo cierra
+  const grande = document.getElementById('hero-video-grande'), full = document.getElementById('hero-video-full');
+  if (grande && full) {
+    const cerrar = () => { full.pause(); grande.style.display = 'none'; document.body.style.overflow = ''; v.play().catch(() => {}); };
+    v.addEventListener('click', () => {
+      v.pause(); grande.style.display = 'flex'; document.body.style.overflow = 'hidden';
+      full.currentTime = 0; full.play().catch(() => {});
+    });
+    document.getElementById('hero-video-cerrar').addEventListener('click', cerrar);
+    grande.addEventListener('click', e => { if (e.target === grande) cerrar(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && grande.style.display === 'flex') cerrar(); });
+  }
   // Quien pidió menos movimiento ve la imagen fija, con controles para reproducir si quiere
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     v.removeAttribute('autoplay'); v.pause(); v.setAttribute('controls', '');
