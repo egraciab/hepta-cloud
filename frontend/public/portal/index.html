@@ -113,7 +113,12 @@
     .flex{display:flex}.gap-2{gap:8px}.items-center{align-items:center}.justify-between{justify-content:space-between}
 
     @media(max-width:700px){
-      .portal-sidebar{display:none}
+      /* En celular el menú no desaparece: pasa a ser una barra arriba que se desliza */
+      .portal-layout{flex-direction:column}
+      .portal-content{padding:16px;width:100%}
+      .portal-sidebar{display:flex;width:100%;height:auto;position:sticky;top:56px;z-index:20;padding:0;border-right:0;border-bottom:1px solid var(--gray-200);overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+      .sidebar-item{flex:0 0 auto;padding:12px 14px;border-left:0;border-bottom:3px solid transparent;white-space:nowrap}
+      .sidebar-item.active{border-left-color:transparent;border-bottom-color:var(--blue)}
       .kpi-row{grid-template-columns:1fr}
       .instance-card{flex-direction:column;align-items:flex-start}
     }
