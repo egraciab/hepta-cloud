@@ -12,7 +12,7 @@ router.get('/dashboard', async (req, res) => {
 
     // Todas las instancias del usuario
     const { rows: instances } = await pool.query(
-      `SELECT i.id, i.label, i.instance_url, i.plan, i.status, i.odoo_version, i.activated_at, i.db_name
+      `SELECT i.id, i.label, i.instance_url, i.plan, i.status, i.odoo_version, i.activated_at, i.db_name, i.custom_domain, i.custom_domain_status
        FROM instances i
        JOIN users u ON u.id = i.user_id
        WHERE u.email = $1 AND i.status != 'cancelled'
@@ -114,6 +114,63 @@ router.post('/tickets', async (req, res) => {
 });
 
 
+// ── GET /api/portal/account ──────────────────────────────────
+// Datos de la cuenta y de la o las entidades a las que se factura. Solo lectura.
+router.get('/account', async (req, res) => {
+  try {
+    const { rows: [u] } = await pool.query('SELECT full_name, email, created_at FROM users WHERE id=$1', [req.user.id]);
+    const { rows: clientes } = await pool.query(
+      `SELECT c.razon_social, c.nombre_comercial, c.tipo_doc, c.numero_doc, c.dv, c.email, c.telefono
+         FROM account_billing_customers a JOIN billing_customers c ON c.id = a.billing_customer_id
+        WHERE a.user_id = $1 ORDER BY c.razon_social`, [req.user.id]);
+    res.json({ success: true, data: { usuario: u, clientes } });
+  } catch (err) {
+    console.error('[portal/account]', err.message);
+    res.status(500).json({ success: false, error: 'Error interno' });
+  }
+});
+
+// ── POST /api/portal/support ─────────────────────────────────
+// Consulta de soporte para cuentas que todavía no están vinculadas a la mesa de ayuda: llega por correo
+// al equipo (con respuesta directa al cliente) y queda registrada en Leads.
+const rateLimit = require('express-rate-limit');
+const { enviarCorreo, marco, escapeHtml } = require('../services/correo');
+const supportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: req => 'u' + req.user.id,
+  message: { success: false, error: 'Enviaste varias consultas seguidas. Probá de nuevo en un rato o escribinos por WhatsApp.' },
+});
+router.post('/support', supportLimiter, async (req, res) => {
+  const asunto  = String(req.body.asunto || '').trim().slice(0, 150);
+  const mensaje = String(req.body.mensaje || '').trim().slice(0, 4000);
+  if (!asunto || !mensaje) return res.status(400).json({ success: false, error: 'Contanos el asunto y el detalle de tu consulta' });
+  try {
+    const { rows: [u] } = await pool.query('SELECT full_name, email FROM users WHERE id=$1', [req.user.id]);
+    const { rows: inst } = await pool.query("SELECT label, db_name, plan FROM instances WHERE user_id=$1 AND status <> 'cancelled' ORDER BY id", [req.user.id]);
+    const sistemas = inst.map(i => `${i.label || i.db_name} (${i.db_name}, ${i.plan})`).join('; ') || 'sin sistema';
+    await pool.query(
+      `INSERT INTO leads (full_name, email, company_name, message, source, status) VALUES ($1,$2,$3,$4,'other','new')`,
+      [u.full_name || u.email, u.email, inst[0]?.label || null, `[Soporte] ${asunto}\n\n${mensaje}\n\nSistemas: ${sistemas}`]);
+    const { rows: cfg } = await pool.query("SELECT key,value FROM site_config WHERE key IN ('contact_email','notify_leads_email')");
+    const c = Object.fromEntries(cfg.map(r => [r.key, r.value]));
+    const enviado = await enviarCorreo({
+      to: c.contact_email || c.notify_leads_email, replyTo: u.email,
+      subject: `[Soporte] ${asunto} — ${u.full_name || u.email}`,
+      html: marco('Consulta desde el portal', `
+        <p style="font-size:14px"><strong>${escapeHtml(u.full_name || '')}</strong> &lt;${escapeHtml(u.email)}&gt;</p>
+        <p style="font-size:13px;color:#4B5563">Sistemas: ${escapeHtml(sistemas)}</p>
+        <p style="font-size:14px"><strong>${escapeHtml(asunto)}</strong></p>
+        <p style="font-size:14px;line-height:1.6;white-space:pre-wrap">${escapeHtml(mensaje)}</p>
+        <p style="font-size:12px;color:#6B7280">Respondé este correo para contestarle al cliente.</p>`),
+    });
+    if (!enviado) console.error('[portal/support] consulta guardada en Leads, pero el correo de aviso no salió');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[portal/support]', err.message);
+    res.status(500).json({ success: false, error: 'No pudimos enviar tu consulta. Escribinos por WhatsApp.' });
+  }
+});
+
 // ── POST /api/portal/domain-request ──────────────────────────
 router.post('/domain-request', async (req, res) => {
   const { instance_id, type, domain, notes } = req.body;
@@ -126,12 +183,13 @@ router.post('/domain-request', async (req, res) => {
     );
     if (!rows[0]) return res.status(404).json({ success: false, error: 'Instancia no encontrada' });
     const inst = rows[0];
+    // Va como lead con origen 'other': la tabla no acepta otros orígenes y con 'domain_request' el pedido fallaba.
     const msg = type === 'own'
-      ? `Dominio propio: ${domain} para ${inst.label} (${inst.db_name}). Notas: ${notes||'—'}`
-      : `Solicitud compra dominio para ${inst.label}. Deseado: ${domain||'a definir'}. Notas: ${notes||'—'}`;
+      ? `[Dominio] Dominio propio: ${domain} para ${inst.label} (${inst.db_name}). Notas: ${notes||'—'}`
+      : `[Dominio] Solicitud compra dominio para ${inst.label}. Deseado: ${domain||'a definir'}. Notas: ${notes||'—'}`;
     await pool.query(
       `INSERT INTO leads (full_name, email, company_name, message, source, status)
-       VALUES ($1,$2,$3,$4,'domain_request','new')`,
+       VALUES ($1,$2,$3,$4,'other','new')`,
       [req.user.full_name, req.user.email, inst.label, msg]
     );
     await pool.query(

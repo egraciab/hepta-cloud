@@ -133,14 +133,36 @@
       <div class="login-logo-icon" id="login-logo">H7</div>
       <div style="font-size:15px;font-weight:700;color:var(--navy)">HEPTA <span style="color:var(--gray-600);font-weight:400">CLOUD</span></div>
     </div>
-    <div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:4px">Portal de clientes</div>
-    <div style="font-size:13px;color:var(--gray-600);margin-bottom:24px">Ingresá con tu cuenta para acceder a tu sistema.</div>
-    <div class="alert alert-error" id="login-error"></div>
-    <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="login-email" placeholder="tu@empresa.com"/></div>
-    <div class="form-group"><label class="form-label">Contraseña</label><input class="form-input" type="password" id="login-pass" placeholder="••••••••"/></div>
-    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()" id="login-btn">Ingresar</button>
-    <div style="margin-top:16px;text-align:center;font-size:12px;color:var(--gray-600)">
-      ¿Necesitás acceso? <a href="/" style="color:var(--blue)">Contactanos</a>
+    <div id="vista-login">
+      <div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:4px">Portal de clientes</div>
+      <div style="font-size:13px;color:var(--gray-600);margin-bottom:24px">Ingresá con tu cuenta para acceder a tu sistema.</div>
+      <div class="alert alert-success" id="login-ok"></div>
+      <div class="alert alert-error" id="login-error"></div>
+      <div class="form-group"><label class="form-label">Correo</label><input class="form-input" type="email" id="login-email" placeholder="tu@empresa.com" autocomplete="username"/></div>
+      <div class="form-group"><label class="form-label">Contraseña</label><input class="form-input" type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"/></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogin()" id="login-btn">Ingresar</button>
+      <div style="margin-top:14px;text-align:center;font-size:13px"><a href="#" onclick="verVista('olvide');return false" style="color:var(--blue)">¿Olvidaste tu contraseña?</a></div>
+      <div style="margin-top:10px;text-align:center;font-size:12px;color:var(--gray-600)">
+        ¿Necesitás acceso? <a href="/" style="color:var(--blue)">Contactanos</a>
+      </div>
+    </div>
+    <div id="vista-olvide" style="display:none">
+      <div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:4px">Recuperar contraseña</div>
+      <div style="font-size:13px;color:var(--gray-600);margin-bottom:24px">Escribí el correo de tu cuenta y te enviamos un enlace para crear una contraseña nueva.</div>
+      <div class="alert alert-success" id="olvide-ok"></div>
+      <div class="alert alert-error" id="olvide-err"></div>
+      <div class="form-group"><label class="form-label">Correo</label><input class="form-input" type="email" id="olvide-email" placeholder="tu@empresa.com" autocomplete="username"/></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="pedirEnlace()" id="olvide-btn">Enviarme el enlace</button>
+      <div style="margin-top:14px;text-align:center;font-size:13px"><a href="#" onclick="verVista('login');return false" style="color:var(--blue)">Volver a ingresar</a></div>
+    </div>
+    <div id="vista-nueva" style="display:none">
+      <div style="font-size:18px;font-weight:700;color:var(--navy);margin-bottom:4px">Creá tu contraseña nueva</div>
+      <div style="font-size:13px;color:var(--gray-600);margin-bottom:24px">Tiene que tener al menos 8 caracteres.</div>
+      <div class="alert alert-error" id="nueva-err"></div>
+      <div class="form-group"><label class="form-label">Contraseña nueva</label><input class="form-input" type="password" id="nueva-pass" autocomplete="new-password"/></div>
+      <div class="form-group"><label class="form-label">Repetila</label><input class="form-input" type="password" id="nueva-pass2" autocomplete="new-password"/></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="guardarNueva()" id="nueva-btn">Guardar y volver a ingresar</button>
+      <div style="margin-top:14px;text-align:center;font-size:13px"><a href="#" onclick="verVista('olvide');return false" style="color:var(--blue)">Pedir otro enlace</a></div>
     </div>
   </div>
 </div>
@@ -164,13 +186,13 @@
     <aside class="portal-sidebar">
       <a class="sidebar-item active" onclick="showSection('dashboard',this)" href="#">
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        Dashboard
+        Inicio
       </a>
       <a class="sidebar-item" onclick="showSection('instance',this)" href="#">
         <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
         Mi sistema
       </a>
-      <a class="sidebar-item" onclick="showSection('invoices',this)" href="#">
+      <a class="sidebar-item" id="menu-invoices" onclick="showSection('invoices',this)" href="#">
         <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Facturas
       </a>
@@ -189,12 +211,12 @@
 
       <!-- DASHBOARD -->
       <div class="section active" id="section-dashboard">
-        <h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:20px">Dashboard</h2>
+        <h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:20px">Inicio</h2>
         <div id="dash-content">
           <div class="kpi-row">
             <div class="kpi"><div class="kpi-label">Estado del sistema</div><div class="kpi-val" id="kpi-status">—</div><div class="kpi-sub" id="kpi-plan">—</div></div>
-            <div class="kpi"><div class="kpi-label">Facturas pendientes</div><div class="kpi-val" id="kpi-invoices">—</div><div class="kpi-sub">Sin pagar</div></div>
-            <div class="kpi"><div class="kpi-label">Tickets abiertos</div><div class="kpi-val" id="kpi-tickets">—</div><div class="kpi-sub">En proceso</div></div>
+            <div class="kpi" id="kpi-caja-invoices"><div class="kpi-label">Facturas pendientes</div><div class="kpi-val" id="kpi-invoices">—</div><div class="kpi-sub">Sin pagar</div></div>
+            <div class="kpi" id="kpi-caja-tickets"><div class="kpi-label">Consultas abiertas</div><div class="kpi-val" id="kpi-tickets">—</div><div class="kpi-sub">En proceso</div></div>
           </div>
           <div id="dash-instance-preview"></div>
         </div>
@@ -223,9 +245,9 @@
       <div class="section" id="section-tickets">
         <div class="flex justify-between items-center" style="margin-bottom:20px">
           <h2 style="font-size:20px;font-weight:700;color:var(--navy)">Soporte</h2>
-          <button class="btn btn-primary" onclick="openTicketModal()">
+          <button class="btn btn-primary" onclick="openTicketModal()" id="ticket-nuevo-btn">
             <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Nuevo ticket
+            Nueva consulta
           </button>
         </div>
         <div id="tickets-content">
@@ -236,6 +258,10 @@
       <!-- ACCOUNT -->
       <div class="section" id="section-account">
         <h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:20px">Mi cuenta</h2>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><div class="card-title">Tus datos</div></div>
+          <div class="card-body" id="cuenta-datos"><span class="text-muted">Cargando…</span></div>
+        </div>
         <div class="card">
           <div class="card-header"><div class="card-title">Cambiar contraseña</div></div>
           <div class="card-body" style="max-width:400px">
@@ -256,14 +282,14 @@
 <!-- MODAL TICKET -->
 <div class="modal-overlay" id="ticket-modal" onclick="closeTicketModalOutside(event)">
   <div class="modal">
-    <div class="modal-title">Nuevo ticket de soporte</div>
-    <div class="alert alert-success" id="ticket-ok">Ticket creado. Te responderemos pronto.</div>
+    <div class="modal-title">Nueva consulta a soporte</div>
+    <div class="alert alert-success" id="ticket-ok">Consulta enviada. Te responderemos pronto.</div>
     <div class="alert alert-error" id="ticket-err"></div>
     <div class="form-group"><label class="form-label">Título *</label><input class="form-input" id="ticket-name" placeholder="Describí el problema brevemente"/></div>
     <div class="form-group"><label class="form-label">Detalle</label><textarea class="form-textarea" id="ticket-desc" placeholder="Contanos más detalles para ayudarte mejor..."></textarea></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeTicketModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="submitTicket()" id="ticket-btn">Enviar ticket</button>
+      <button class="btn btn-primary" onclick="submitTicket()" id="ticket-btn">Enviar consulta</button>
     </div>
   </div>
 </div>
@@ -276,6 +302,7 @@ const API = '/api';
 let TOKEN = localStorage.getItem('hc_portal_token');
 let currentUser = null;
 let portalData = {};
+let siteCfg = {};
 
 function authHeaders(){ return {'Content-Type':'application/json','Authorization':`Bearer ${TOKEN}`}; }
 
@@ -315,7 +342,45 @@ async function doLogin(){
   }catch(e){showAlert('login-error','error','Error de conexión',0);}
   finally{btn.disabled=false;btn.textContent='Ingresar';}
 }
-document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.getElementById('login-screen').style.display!=='none')doLogin();});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter'||document.getElementById('login-screen').style.display==='none') return;
+  ({login:doLogin,olvide:pedirEnlace,nueva:guardarNueva})[vistaActual]();
+});
+
+// Texto seguro para meter en HTML
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+// ── RECUPERAR CONTRASEÑA ───────────────────────────────────
+let vistaActual='login';
+const RESET_TOKEN=new URLSearchParams(location.hash.slice(1)).get('reset')||new URLSearchParams(location.search).get('reset');
+function verVista(v){
+  vistaActual=v;
+  ['login','olvide','nueva'].forEach(n=>document.getElementById('vista-'+n).style.display=n===v?'':'none');
+  if(v==='olvide'&&!document.getElementById('olvide-email').value) document.getElementById('olvide-email').value=document.getElementById('login-email').value;
+}
+async function postAuth(ruta,body){
+  try{ return await(await fetch(`${API}/auth/${ruta}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json(); }
+  catch(e){ return {success:false,error:'No hay conexión con el servidor. Probá de nuevo.'}; }
+}
+async function pedirEnlace(){
+  const email=document.getElementById('olvide-email').value.trim(); if(!email) return;
+  const btn=document.getElementById('olvide-btn'); btn.disabled=true;
+  document.getElementById('olvide-err').className='alert alert-error';
+  const data=await postAuth('forgot',{email}); btn.disabled=false;
+  if(data.success) showAlert('olvide-ok','success',data.message,0);
+  else showAlert('olvide-err','error',data.error||'No pudimos procesar el pedido.',0);
+}
+async function guardarNueva(){
+  const a=document.getElementById('nueva-pass').value,b=document.getElementById('nueva-pass2').value;
+  if(a.length<8){showAlert('nueva-err','error','La contraseña tiene que tener al menos 8 caracteres.',0);return;}
+  if(a!==b){showAlert('nueva-err','error','Las dos contraseñas no coinciden.',0);return;}
+  const btn=document.getElementById('nueva-btn'); btn.disabled=true;
+  const data=await postAuth('reset',{token:RESET_TOKEN,new_password:a}); btn.disabled=false;
+  if(!data.success){showAlert('nueva-err','error',data.error||'No se pudo cambiar la contraseña.',0);return;}
+  history.replaceState(null,'',location.pathname);   // el código del enlace no queda en la barra ni en el historial
+  document.getElementById('nueva-pass').value='';document.getElementById('nueva-pass2').value='';
+  verVista('login'); showAlert('login-ok','success','Listo: ya podés ingresar con tu contraseña nueva.',0);
+}
 function doLogout(){localStorage.removeItem('hc_portal_token');TOKEN=null;location.reload();}
 
 async function showPortal(){
@@ -332,6 +397,7 @@ async function showPortal(){
   // Logo
   try{
     const cfg=await fetch('/api/site-config').then(r=>r.json());
+    if(cfg.success) siteCfg=cfg.data;
     if(cfg.success&&cfg.data.logo_url){
       const html=`<img src="${cfg.data.logo_url}" alt="Logo"/>`;
       document.getElementById('nav-logo').innerHTML=html;
@@ -339,11 +405,18 @@ async function showPortal(){
     }
   }catch(e){}
 
+  // Facturas y el contador de consultas dependen del vínculo con nuestra administración: sin vínculo no se muestran vacíos.
+  const vinculada=!!currentUser.odoo_partner_id;
+  document.getElementById('menu-invoices').style.display=vinculada?'':'none';
+  document.getElementById('kpi-caja-invoices').style.display=vinculada?'':'none';
+  document.getElementById('kpi-caja-tickets').style.display=vinculada?'':'none';
+  if(!vinculada) document.querySelector('.kpi-row').style.gridTemplateColumns='minmax(0,320px)';
   loadDashboard();
 }
+function irA(n){const el=document.querySelector(`.sidebar-item[onclick*="'${n}'"]`); if(el) showSection(n,el);}
 
 // ── NAV ────────────────────────────────────────────────────
-const sectionLoaders={invoices:loadInvoices,tickets:loadTickets,instance:loadInstance};
+const sectionLoaders={invoices:loadInvoices,tickets:loadTickets,instance:loadInstance,account:loadAccount};
 function showSection(name,el){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.sidebar-item').forEach(s=>s.classList.remove('active'));
@@ -360,9 +433,9 @@ async function loadDashboard(){
     portalData=data.data;
 
     const inst=data.data.instance;
-    const statusMap={active:'Activo',suspended:'Suspendido',provisioning:'Aprovisionando',cancelled:'Cancelado'};
+    const statusMap={active:'Activo',suspended:'Suspendido',provisioning:'En preparación',cancelled:'Cancelado'};
     document.getElementById('kpi-status').textContent=inst?statusMap[inst.status]||'—':'—';
-    document.getElementById('kpi-plan').textContent=inst?`Plan ${planNombre(inst.plan)}`:'Sin instancia';
+    document.getElementById('kpi-plan').textContent=inst?`Plan ${planNombre(inst.plan)}`:'Sin sistema todavía';
 
     const inv=data.data.invoices_summary;
     document.getElementById('kpi-invoices').textContent=inv?inv.pending:'—';
@@ -390,12 +463,12 @@ async function loadDashboard(){
                 ${i.custom_domain_status==='pending_dns'||i.custom_domain_status==='pending_purchase'?`<span style="font-size:12px;color:var(--gray-600);padding:10px 0">⏳ ${i.custom_domain||'Dominio'} — en proceso</span>`:''}
                 ${i.custom_domain_status==='active'?`<span style="font-size:12px;color:var(--teal);padding:10px 0">✓ ${i.custom_domain} activo</span>`:''}
               </div>`:
-            i.status==='suspended'?'<div style="color:var(--red);font-size:12px;margin-top:6px">⚠️ Instancia suspendida</div>':''}
+            i.status==='suspended'?'<div style="color:var(--red);font-size:12px;margin-top:6px">⚠️ Sistema suspendido. Escribinos desde Soporte.</div>':''}
           </div>
         </div>`).join('');
     } else {
       document.getElementById('dash-instance-preview').innerHTML=`
-        <div class="alert alert-info show">Tu instancia está siendo configurada. Te notificaremos cuando esté lista.</div>`;
+        <div class="alert alert-info show">Todavía no tenés un sistema activo en esta cuenta. Si ya lo contrataste, te avisamos por correo apenas esté listo; si tenés dudas, escribinos desde <a href="#" onclick="irA('tickets');return false" style="color:var(--blue);font-weight:600">Soporte</a>.</div>`;
     }
   }catch(e){console.error(e);}
 }
@@ -407,10 +480,10 @@ async function loadInstance(){
     if(!data.success) return;
     const c=document.getElementById('instance-content');
     if(!data.data.length){
-      c.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><h3>Sin instancia asignada</h3><p>Contactanos para comenzar la configuración de tu sistema.</p></div>`;
+      c.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><h3>Todavía no tenés un sistema</h3><p>Si ya lo contrataste, te avisamos por correo apenas esté listo.</p></div>`;
       return;
     }
-    const statusMap={active:'Activo',suspended:'Suspendido',provisioning:'Aprovisionando',cancelled:'Cancelado'};
+    const statusMap={active:'Activo',suspended:'Suspendido',provisioning:'En preparación',cancelled:'Cancelado'};
     const statusClass={active:'badge-active',suspended:'badge-suspended',provisioning:'badge-provisioning',cancelled:'badge-suspended'};
 
     // Múltiples instancias
@@ -433,7 +506,7 @@ async function loadInstance(){
               <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
               Acceder a ${inst.label||'mi sistema'}
             </a>`:
-          inst.status==='suspended'?`<div style="color:var(--red);font-size:13px;margin-top:8px">⚠️ Esta instancia está suspendida. Contactá a soporte.</div>`:''}
+          inst.status==='suspended'?`<div style="color:var(--red);font-size:13px;margin-top:8px">⚠️ Este sistema está suspendido. Escribinos desde Soporte.</div>`:''}
         </div>
       </div>`).join('');
   }catch(e){console.error(e);}
@@ -471,7 +544,19 @@ async function loadInvoices(){
 async function loadTickets(){
   const c=document.getElementById('tickets-content');
   if(!currentUser.odoo_partner_id){
-    c.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><h3>Podés crear un ticket</h3><p>Usá el botón "Nuevo ticket" para contactar a soporte.</p></div>`;
+    document.getElementById('ticket-nuevo-btn').style.display='none';
+    const wa=siteCfg.wa_business_link||(siteCfg.whatsapp_number?`https://wa.me/${String(siteCfg.whatsapp_number).replace(/\D/g,'')}`:'');
+    c.innerHTML=`<div class="card"><div class="card-header"><div class="card-title">Escribinos</div></div>
+      <div class="card-body" style="max-width:560px">
+        <p class="text-muted" style="font-size:13px;margin-bottom:16px">Contanos qué necesitás y te respondemos por correo a <strong>${esc(currentUser.email)}</strong>. Atendemos de lunes a viernes, de 9:00 a 17:00.</p>
+        <div class="alert alert-success" id="sop-ok"></div><div class="alert alert-error" id="sop-err"></div>
+        <div class="form-group"><label class="form-label">Asunto *</label><input class="form-input" id="sop-asunto" maxlength="150" placeholder="Por ejemplo: no puedo emitir una factura"/></div>
+        <div class="form-group"><label class="form-label">Detalle *</label><textarea class="form-textarea" id="sop-mensaje" rows="5" maxlength="4000" placeholder="Qué estabas haciendo, qué esperabas y qué pasó."></textarea></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-primary" onclick="enviarConsulta()" id="sop-btn">Enviar consulta</button>
+          ${wa?`<a href="${esc(wa)}" target="_blank" rel="noopener" style="font-size:13px;color:var(--blue);font-weight:600">o escribinos por WhatsApp</a>`:''}
+        </div>
+      </div></div>`;
     return;
   }
   try{
@@ -479,11 +564,11 @@ async function loadTickets(){
     if(!data.success){c.innerHTML=`<div class="alert alert-error show">${data.error}</div>`;return;}
     document.getElementById('kpi-tickets').textContent=data.data.filter(t=>!['done','cancelled'].includes(t.stage_id?.[1]?.toLowerCase())).length;
     if(!data.data.length){
-      c.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><h3>Sin tickets</h3><p>¿Todo va bien? Si necesitás ayuda, creá un ticket.</p></div>`;
+      c.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><h3>Sin consultas</h3><p>¿Todo va bien? Si necesitás ayuda, escribinos con "Nueva consulta".</p></div>`;
       return;
     }
     c.innerHTML=`<div class="card"><div class="table-wrap"><table>
-      <thead><tr><th>Ticket</th><th>Estado</th><th>Prioridad</th><th>Fecha</th></tr></thead>
+      <thead><tr><th>Consulta</th><th>Estado</th><th>Prioridad</th><th>Fecha</th></tr></thead>
       <tbody>${data.data.map(t=>`<tr>
         <td><strong>${t.name}</strong>${t.description?`<div class="text-muted text-sm" style="margin-top:2px">${t.description.substring(0,60)}...</div>`:''}</td>
         <td>${t.stage_id?`<span class="badge badge-info">${t.stage_id[1]}</span>`:'—'}</td>
@@ -491,7 +576,18 @@ async function loadTickets(){
         <td class="text-muted text-sm">${new Date(t.create_date).toLocaleDateString('es-PY')}</td>
       </tr>`).join('')}</tbody>
     </table></div></div>`;
-  }catch(e){c.innerHTML=`<div class="alert alert-error show">Error al cargar tickets.</div>`;}
+  }catch(e){c.innerHTML=`<div class="alert alert-error show">No se pudieron cargar tus consultas.</div>`;}
+}
+
+async function enviarConsulta(){
+  const asunto=document.getElementById('sop-asunto').value.trim(),mensaje=document.getElementById('sop-mensaje').value.trim();
+  document.getElementById('sop-err').className='alert alert-error';
+  if(!asunto||!mensaje){showAlert('sop-err','error','Completá el asunto y el detalle.',0);return;}
+  const btn=document.getElementById('sop-btn'); btn.disabled=true;
+  let data; try{ data=await apiCall('POST','/portal/support',{asunto,mensaje}); }catch(e){ data={success:false,error:'No hay conexión con el servidor.'}; }
+  btn.disabled=false;
+  if(data.success){document.getElementById('sop-asunto').value='';document.getElementById('sop-mensaje').value='';showAlert('sop-ok','success','Recibimos tu consulta. Te respondemos por correo.',0);}
+  else showAlert('sop-err','error',data.error||'No pudimos enviar tu consulta.',0);
 }
 
 function openTicketModal(){document.getElementById('ticket-modal').classList.add('open');}
@@ -506,17 +602,27 @@ async function submitTicket(){
   try{
     const data=await apiCall('POST','/portal/tickets',{name,description:document.getElementById('ticket-desc').value.trim()});
     if(data.success){
-      showAlert('ticket-ok','success','Ticket creado. Te responderemos pronto.',0);
+      showAlert('ticket-ok','success','Consulta enviada. Te responderemos pronto.',0);
       document.getElementById('ticket-name').value='';
       document.getElementById('ticket-desc').value='';
       setTimeout(closeTicketModal,2000);
       loadTickets();
     } else showAlert('ticket-err','error',data.error);
-  }catch(e){showAlert('ticket-err','error','Error al crear ticket.');}
-  finally{btn.disabled=false;btn.textContent='Enviar ticket';}
+  }catch(e){showAlert('ticket-err','error','No se pudo enviar la consulta.');}
+  finally{btn.disabled=false;btn.textContent='Enviar consulta';}
 }
 
 // ── ACCOUNT ────────────────────────────────────────────────
+async function loadAccount(){
+  const c=document.getElementById('cuenta-datos');
+  let data; try{ data=await apiCall('GET','/portal/account'); }catch(e){ data={success:false}; }
+  if(!data.success){c.innerHTML='<span class="text-muted">No se pudieron cargar tus datos.</span>';return;}
+  const u=data.data.usuario||{}, dato=(t,v)=>`<div><div class="text-muted text-sm">${t}</div><div style="font-weight:600;word-break:break-word">${esc(v||'—')}</div></div>`;
+  const doc=k=>`${String(k.tipo_doc||'').toUpperCase()} ${k.numero_doc||''}${k.dv?'-'+k.dv:''}`.trim();
+  c.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">${dato('Nombre',u.full_name)}${dato('Correo de acceso',u.email)}</div>`
+    +(data.data.clientes.length?`<div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--gray-200)"><div class="text-muted text-sm" style="margin-bottom:10px">Facturamos a</div>${data.data.clientes.map(k=>`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:12px">${dato('Razón social',k.razon_social)}${dato('Documento',doc(k))}${dato('Correo',k.email)}${dato('Teléfono',k.telefono)}</div>`).join('')}</div>`:'')
+    +`<p class="text-muted" style="font-size:12px;margin-top:14px">¿Hay algo para corregir? Escribinos desde <a href="#" onclick="irA('tickets');return false" style="color:var(--blue)">Soporte</a>.</p>`;
+}
 async function changePassword(){
   const current=document.getElementById('pwd-current').value;
   const newPwd=document.getElementById('pwd-new').value;
@@ -528,7 +634,10 @@ async function changePassword(){
   else showAlert('pwd-err','error',data.error,0);
 }
 
-if(TOKEN) showPortal();
+if(RESET_TOKEN){ localStorage.removeItem('hc_portal_token'); TOKEN=null; verVista('nueva'); }
+else if(TOKEN) showPortal();
+// Si el enlace del correo se abre en una pestaña donde el portal ya estaba cargado, solo cambia lo que va después de #
+window.addEventListener('hashchange',()=>{ if(/reset=/.test(location.hash)) location.reload(); });
 </script>
 
 <!-- MODAL DOMINIO PROPIO -->

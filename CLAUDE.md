@@ -84,6 +84,11 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
       dentro de la red interna. (El filtro por IP ya está: `ALLOWED_IPS` en el `.env` de cada API.)
 - [ ] RetoPA: la ficha del cliente se crea solo con un botón del Admin; enganchar al alta si se ofrece en el plan.
 - [ ] Entorno de prueba (no existe) y pasar los JS en línea de los HTML a archivos.
+- [ ] Portal, después del lanzamiento: contratar y cambiar de plan desde el portal (la ruta `POST /api/portal/payment-request`
+      existe pero ninguna pantalla la usa) y vincular al cliente con el ERP del grupo en el alta (`users.tenant_partner_id`):
+      hasta entonces Facturas no se muestra y Soporte es un formulario que llega por correo.
+- [ ] Admin, después del lanzamiento: menú plegable en celular, Configuración general en pestañas, buscador y paginado en
+      Instancias/Usuarios/Leads, reenviar bienvenida, y quitar `plan` de `PUT /api/admin/instances/:id` (no cambia nada en Odoo).
 
 ## Hecho
 
@@ -99,3 +104,12 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
 - 2026-11-13 — Seguridad del alta: las APIs del puerto 8888 solo responden a HEPTA Cloud (`ALLOWED_IPS`), y el
   usuario `odoo` de `HGSVRLNX104` ya no tiene `sudo` total: solo `psql` y `createdb` como postgres
   (`/etc/sudoers.d/odoo-provision`). Marca de agua del menú de inicio en producción.
+- 2026-11-14 — Sitio: retoque de diseño, contenido ajustado a lo que entrega cada plan (`sql/2026-11-14_contenido_sitio.sql`),
+  `/api/site-config` sin `email_wc_*` ni `notify_*`, video de portada que no cae a la animación al recargar.
+- 2026-11-14 — Admin: datos de afuera escapados (un lead con HTML se ejecutaba en el navegador del administrador), baja de
+  instancias que exige el corte real y se puede reactivar, estado sin edición a mano, roles y contraseñas solo godmode,
+  aviso cuando una carga falla.
+- 2026-11-14 — Portal: menú en celular, recuperar contraseña por correo (`password_resets`, enlace de un uso, 1 hora; el
+  código viaja después de `#` y solo se guarda su hash), Mi cuenta con datos en solo lectura, Soporte por formulario
+  (`POST /api/portal/support`, queda en Leads con `[Soporte]`) y Facturas oculta mientras la cuenta no esté vinculada al ERP.
+  Los pedidos de dominio fallaban: `leads.source` solo acepta website/whatsapp/retopa/referral/other.
