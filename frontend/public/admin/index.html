@@ -574,6 +574,7 @@
         <div class="card">
           <div class="card-header">
             <div class="card-title">Instancias de clientes</div>
+            <label class="text-sm text-muted" style="margin-left:auto;margin-right:12px;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="inst-ver-bajas" onchange="loadInstances()"/> Ver dadas de baja <span id="inst-bajas-n"></span></label>
             <button class="btn btn-primary btn-sm" onclick="openProvisionModal()">
               <svg viewBox="0 0 24 24" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Nueva instancia
@@ -804,17 +805,11 @@ El alta tarda <strong>de 2 a 8 minutos</strong> y sigue aunque cierres esta vent
   <div class="modal">
     <div class="modal-title">Editar instancia</div>
     <input type="hidden" id="inst-edit-id"/>
-    <div class="form-group"><label class="form-label">Label</label><input class="form-input" id="inst-edit-label"/></div>
+    <div class="form-group"><label class="form-label">Nombre</label><input class="form-input" id="inst-edit-label"/></div>
     <div class="form-group"><label class="form-label">Propietario</label>
       <select class="form-select" id="inst-edit-user-id"><option value="">Cargando...</option></select>
     </div>
-    <div class="form-group"><label class="form-label">Estado</label>
-      <select class="form-select" id="inst-edit-status">
-        <option value="active">Activo</option>
-        <option value="suspended">Suspendido</option>
-        <option value="cancelled">Cancelado</option>
-      </select>
-    </div>
+    <div class="form-hint" style="margin:-4px 0 14px">El estado se cambia con los botones de la lista (Suspender, Reactivar, Dar de baja), que son los que cortan o devuelven el acceso.</div>
     <div class="form-group"><label class="form-label">Dominio propio</label>
       <div style="display:flex;gap:8px">
         <input class="form-input" id="inst-edit-domain" placeholder="miempresa.com.py" style="flex:1"/>
@@ -1027,17 +1022,38 @@ function authHeaders(){return{'Content-Type':'application/json','Authorization':
 async function api(method,path,body){
   const opts={method,headers:authHeaders()};
   if(body) opts.body=JSON.stringify(body);
-  const res=await fetch(API+path,opts);
+  let res;
+  try{ res=await fetch(API+path,opts); }
+  catch(e){ const d={success:false,error:'No hay conexión con el servidor. Revisá tu internet y probá de nuevo.'}; if(method==='GET') avisoCarga(path,d.error); return d; }
   if(res.status===401){doLogout();throw new Error('Sesión expirada');}
   let data;
   try{ data=await res.json(); }
   catch(e){
     // El proxy devolvió una página (corte por tiempo, servidor reiniciando) en vez de datos
     const motivo=res.status===504||res.status===502?'el servidor tardó demasiado o se está reiniciando':'respuesta inesperada del servidor';
-    return {success:false,error:`No se pudo completar (${res.status}): ${motivo}. Probá de nuevo en un momento.`};
+    const d={success:false,error:`No se pudo completar (${res.status}): ${motivo}. Probá de nuevo en un momento.`};
+    if(method==='GET') avisoCarga(path,d.error);
+    return d;
   }
+  if(method==='GET'&&data&&data.success===false&&res.status!==404) avisoCarga(path,data.error);   // 404 = todavía no existe, no es una falla
   return data;
 }
+// Una consulta que falla ya no deja la pantalla en "Cargando…" sin explicación: sale un aviso arriba.
+// (El estado de las APIs externas tiene su propio indicador y no pasa por acá.)
+const _fallas=new Map();
+function avisoCarga(path,error){
+  if(/\/health$|\/provision\/jobs/.test(path)) return;
+  _fallas.set(path.split('?')[0],error||'error del servidor');
+  let el=document.getElementById('aviso-carga');
+  if(!el){
+    el=document.createElement('div'); el.id='aviso-carga';
+    el.style.cssText='position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:500;max-width:min(680px,92vw);background:#FEF2F2;color:#991B1B;border:1px solid #FCA5A5;border-radius:10px;padding:12px 16px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.12)';
+    document.body.appendChild(el);
+  }
+  el.innerHTML='<strong>No se pudo cargar parte de esta pantalla.</strong><div style="margin-top:4px">'+[..._fallas].map(([p,e])=>esc(p.replace('/admin/',''))+': '+esc(e)).join('<br>')+'</div><div style="margin-top:8px;display:flex;gap:8px"><button class="btn btn-secondary btn-sm" onclick="location.reload()">Recargar</button><button class="btn btn-secondary btn-sm" onclick="cerrarAvisoCarga()">Cerrar</button></div>';
+  document.querySelectorAll('.section.active td, .section.active div').forEach(n=>{ if(n.children.length===0&&/^Cargando(\.\.\.|…)$/.test(n.textContent.trim())) n.textContent='No se pudo cargar.'; });
+}
+function cerrarAvisoCarga(){_fallas.clear();document.getElementById('aviso-carga')?.remove();}
 function showAlert(id,type,msg,duration=3000){
   const el=document.getElementById(id);
   if(!el) return;
@@ -1090,6 +1106,7 @@ async function showApp(){
 const sectionTitles={dashboard:'Dashboard',payments:'Solicitudes de pago',general:'Configuración general',services:'Servicios y soluciones',plans:'Planes',smtp:'SMTP y plantillas',leads:'Leads',instances:'Instancias',pages:'Páginas legales',users:'Usuarios del portal',clients:'Clientes (entidades fiscales)',credentials:'Credenciales de integración'};
 const sectionLoaders={dashboard:loadDashboard,payments:loadPayments,general:loadGeneral,services:loadServices,plans:loadPlans,smtp:loadSMTP,leads:loadLeads,instances:loadInstances,pages:loadPages,users:loadUsers,clients:loadClients,credentials:loadCredentials};
 function showSection(name,el){
+  cerrarAvisoCarga();
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.menu-item').forEach(m=>m.classList.remove('active'));
   document.getElementById(`section-${name}`).classList.add('active');
@@ -1442,6 +1459,11 @@ async function openUserModal(u,despues){
   document.getElementById('user-odoo-id').value=u?.odoo_partner_id||'';
   document.getElementById('user-active').checked=u?u.is_active:true;
   document.getElementById('user-email').disabled=!!u;
+  // Roles y contraseñas los cambia solo godmode (el servidor también lo exige)
+  const god=currentUser&&currentUser.role==='godmode';
+  document.getElementById('user-role-select').disabled=!god;
+  document.getElementById('user-password').disabled=!god;
+  if(!god) document.getElementById('user-pass-hint').textContent='(solo godmode puede cambiarla)';
   document.getElementById('user-err').className='alert alert-error';
   // Entidades fiscales para vincular
   const sel=document.getElementById('user-client');
@@ -1880,18 +1902,27 @@ async function loadInstances(){
   }
   const statusMap={active:'badge-green',suspended:'badge-red',provisioning:'badge-blue',cancelled:'badge-gray'};
   const statusLabel={active:'Activo',suspended:'Suspendido',provisioning:'Provisionando',cancelled:'Cancelado'};
-  tbody.innerHTML=data.data.filter(i=>i.status!=='cancelled').map(i=>`
+  const bajas=data.data.filter(i=>i.status==='cancelled').length;
+  document.getElementById('inst-bajas-n').textContent=bajas?`(${bajas})`:'';
+  const verBajas=document.getElementById('inst-ver-bajas').checked;
+  const lista=data.data.filter(i=>verBajas||i.status!=='cancelled');
+  if(!lista.length){
+    tbody.innerHTML='<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">No hay instancias activas. Tildá "Ver dadas de baja" para ver las anteriores.</td></tr>';
+    return;
+  }
+  const statusLabelBaja={cancelled:'Dada de baja'};
+  tbody.innerHTML=lista.map(i=>`
     <tr>
       <td><strong>${esc(i.full_name||'—')}</strong><div class="text-sm text-muted">${esc(i.email||'')}</div></td>
       <td><code style="font-size:12px">${esc(i.db_name||'—')}</code></td>
       <td>${i.instance_url?`<a href="${esc(i.instance_url)}" target="_blank" style="color:var(--blue);font-size:12px">${esc(i.instance_url)}</a>`:'—'}</td>
       <td><span class="badge badge-blue">${({starter:'Despegue',professional:'Crecimiento',enterprise:'Empresa'})[i.plan]||i.plan}</span></td>
-      <td><span class="badge ${statusMap[i.status]||'badge-gray'}">${statusLabel[i.status]||i.status}</span></td>
+      <td><span class="badge ${statusMap[i.status]||'badge-gray'}">${statusLabelBaja[i.status]||statusLabel[i.status]||esc(i.status)}</span></td>
       <td class="text-sm text-muted">${i.activated_at?new Date(i.activated_at).toLocaleDateString('es-PY'):'—'}</td>
       <td style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick='openInstEditModal(${jsAttr(i)})'>Editar</button>
-        ${i.status==='active'?`<button class="btn btn-sm" style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D" onclick="suspendInstance(${i.id})">Suspender</button>`:''}        ${i.status==='suspended'?`<button class="btn btn-sm" style="background:var(--teal-pale);color:var(--teal);border:1px solid var(--teal)" onclick="reactivateInstance(${i.id})">Reactivar</button>`:''}
-        <button class="btn btn-sm" style="background:var(--red-pale);color:var(--red);border:1px solid #FCA5A5;margin-left:4px" onclick="deleteInstance(${i.id},'${esc((i.label||i.db_name||'').replace(/['\\]/g,''))}')">Eliminar</button>
+        ${i.status==='active'?`<button class="btn btn-sm" style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D" onclick="suspendInstance(${i.id})">Suspender</button>`:''}        ${i.status==='suspended'||i.status==='cancelled'?`<button class="btn btn-sm" style="background:var(--teal-pale);color:var(--teal);border:1px solid var(--teal)" onclick="reactivateInstance(${i.id})">Reactivar</button>`:''}
+        ${i.status==='cancelled'||i.status==='provisioning'?'':`<button class="btn btn-sm" style="background:var(--red-pale);color:var(--red);border:1px solid #FCA5A5;margin-left:4px" onclick="deleteInstance(${i.id},'${esc((i.label||i.db_name||'').replace(/['\\]/g,''))}')">Dar de baja</button>`}
       </td>
     </tr>`).join('');
 }
@@ -2112,10 +2143,10 @@ async function loadAltas(){
 }
 
 async function deleteInstance(id,label){
-  if(!confirm(`¿Eliminar "${label}" de Hepta Cloud?\n\nNOTA: Solo se elimina el registro. La DB en Odoo CE NO se borra.`)) return;
+  if(!confirm(`¿Dar de baja "${label}"?\n\nEl cliente deja de poder entrar a su sistema. La base NO se borra: queda en "Ver dadas de baja" y se puede reactivar.`)) return;
   const data=await api('DELETE',`/admin/instances/${id}`);
-  if(data.success){showAlert('inst-ok','success',data.message);loadInstances();}
-  else showAlert('inst-err','error',data.error);
+  if(data.success){showAlert('inst-ok','success',data.message,6000);loadInstances();}
+  else{showAlert('inst-err','error',data.error,0);loadInstances();}
 }
 
 async function suspendInstance(id){
@@ -2126,7 +2157,7 @@ async function suspendInstance(id){
 }
 
 async function reactivateInstance(id){
-  if(!confirm('¿Reactivar esta instancia?')) return;
+  if(!confirm('¿Reactivar esta instancia? El cliente vuelve a poder entrar a su sistema.')) return;
   const data=await api('POST',`/admin/provision/reactivate/${id}`);
   if(data.success){showAlert('inst-ok','success','Instancia reactivada.');loadInstances();}
   else showAlert('inst-err','error',data.error);
@@ -2135,7 +2166,6 @@ async function reactivateInstance(id){
 async function openInstEditModal(inst){
   document.getElementById('inst-edit-id').value=inst.id;
   document.getElementById('inst-edit-label').value=inst.label||'';
-  document.getElementById('inst-edit-status').value=inst.status||'active';
   document.getElementById('inst-edit-notes').value=inst.notes||'';
   document.getElementById('inst-edit-domain').value=inst.custom_domain||'';
   const statusHints={none:'Sin dominio propio',pending_dns:'Pendiente verificación DNS',pending_purchase:'Solicitud de compra pendiente',active:'Dominio activo'};
@@ -2155,11 +2185,11 @@ async function saveInstEdit(){
   const userId=document.getElementById('inst-edit-user-id').value;
   const data=await api('PUT',`/admin/instances/${id}`,{
     label:   document.getElementById('inst-edit-label').value,
-    status:  document.getElementById('inst-edit-status').value,
     notes:   document.getElementById('inst-edit-notes').value,
     user_id: userId?parseInt(userId):null,
   });
   if(data.success){closeInstEditModal();loadInstances();}
+  else alert(data.error||'No se pudo guardar');
 }
 
 async function activateCustomDomain(){

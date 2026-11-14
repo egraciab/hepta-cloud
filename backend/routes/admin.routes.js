@@ -255,6 +255,8 @@ router.post('/users', requireGodmode, async (req, res) => {
     return res.status(400).json({ success: false, error: 'Nombre y correo son obligatorios' });
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(email).trim()))
     return res.status(400).json({ success: false, error: 'El correo no parece válido' });
+  if (role && !['client', 'admin', 'godmode'].includes(role))
+    return res.status(400).json({ success: false, error: 'Rol desconocido' });
   if (password && String(password).length < 8)
     return res.status(400).json({ success: false, error: 'La contraseña tiene que tener al menos 8 caracteres' });
   try {
@@ -278,9 +280,25 @@ router.post('/users', requireGodmode, async (req, res) => {
   }
 });
 
+// Un administrador común edita nombre y estado de los clientes. Cambiar un rol, fijar una contraseña o
+// tocar a otro administrador queda para godmode: si no, cualquier admin podía subirse de rol solo.
+const ROLES = ['client', 'admin', 'godmode'];
 router.put('/users/:id', async (req, res) => {
   const { full_name, role, is_active, odoo_partner_id, password } = req.body;
+  const esGodmode = req.user.role === 'godmode';
   try {
+    const { rows: [actual] } = await pool.query('SELECT id, role FROM users WHERE id=$1', [req.params.id]);
+    if (!actual) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+    if (role && !ROLES.includes(role))
+      return res.status(400).json({ success: false, error: 'Rol desconocido' });
+    const cambiaRol = role && role !== actual.role;
+    if (!esGodmode && (cambiaRol || password || actual.role !== 'client'))
+      return res.status(403).json({ success: false, code: 'SOLO_GODMODE',
+        error: 'Cambiar roles o contraseñas, o editar a otro administrador, lo hace solo un usuario godmode.' });
+    if (String(actual.id) === String(req.user.id) && (cambiaRol || is_active === false))
+      return res.status(400).json({ success: false, error: 'No podés cambiar tu propio rol ni desactivarte.' });
+    if (password && String(password).length < 8)
+      return res.status(400).json({ success: false, error: 'La contraseña tiene que tener al menos 8 caracteres' });
     if (password) {
       const hash = await bcrypt.hash(password, 10);
       await pool.query('UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2',[hash,req.params.id]);
@@ -293,9 +311,14 @@ router.put('/users/:id', async (req, res) => {
        WHERE id=$5 RETURNING id,email,full_name,role,is_active,tenant_partner_id AS odoo_partner_id`,
       [full_name||null,role||null,is_active??null,odoo_partner_id||null,req.params.id]
     );
-    if (!rows[0]) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+    if (cambiaRol || password) {
+      // Queda registrado quién lo hizo; la contraseña no se guarda en el registro.
+      await pool.query('INSERT INTO admin_logs (user_id,action,target,detail) VALUES ($1,$2,$3,$4)',
+        [req.user.id, 'update_user_access', `user:${req.params.id}`,
+         JSON.stringify({ rol_anterior: actual.role, rol_nuevo: rows[0].role, cambio_clave: !!password })]).catch(() => {});
+    }
     res.json({ success: true, data: rows[0] });
-  } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
+  } catch (err) { console.error('[admin/users PUT]', err.message); res.status(500).json({ success: false, error: 'Error interno' }); }
 });
 
 // Borrado de usuario. Se borra de verdad SOLO si no tiene nada colgando: sirve
@@ -398,63 +421,69 @@ router.put("/pages/:slug", async (req, res) => {
 
 
 // ── DELETE /admin/instances/:id ───────────────────────────────
+// Baja de una instancia: se corta el acceso (Odoo y perimetral) y queda como "cancelled". No borra la base
+// del cliente. Si el corte falla, NO se marca como dada de baja: antes quedaba cancelada acá y abierta allá.
+async function llamarApi(url, key, ruta, body) {
+  const r = await fetch(`${url}${ruta}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': key || '' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10000),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data.success) throw new Error(data.detail || data.error || `respondió ${r.status}`);
+}
+
 router.delete('/instances/:id', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT label, db_name FROM instances WHERE id=$1', [req.params.id]);
+    const { rows } = await pool.query('SELECT label, db_name, status FROM instances WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ success: false, error: 'Instancia no encontrada' });
-
-    const db     = rows[0].db_name;
+    const { label, status } = rows[0];
+    const db     = rows[0].db_name || '';
     const tenant = db.split('.')[0];
-    const label  = rows[0].label;
+    if (status === 'cancelled') return res.json({ success: true, message: 'Ya estaba dada de baja.' });
+    if (status === 'provisioning')
+      return res.status(409).json({ success: false, error: 'El alta todavía está en curso. Esperá a que termine.' });
 
-    // Obtener config de APIs
-    const { rows: cfgRows } = await pool.query(
-      "SELECT key,value FROM site_config WHERE key IN ('provision_api_url','provision_api_key','perimetral_api_url','perimetral_api_key')"
-    );
-    const cfg = Object.fromEntries(cfgRows.map(r => [r.key, r.value]));
-
-    const errors = [];
-
-    // 1. Revocar acceso DB en Odoo CE
-    try {
-      await fetch(`${cfg.provision_api_url}/suspend`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': cfg.provision_api_key },
-        body: JSON.stringify({ db }),
-        signal: AbortSignal.timeout(10000),
-      });
-    } catch(e) { errors.push('Odoo CE: ' + e.message); }
-
-    // 2. Bloquear en Nginx Perimetral (503)
-    try {
-      if (cfg.perimetral_api_url) {
-        await fetch(`${cfg.perimetral_api_url}/suspend`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': cfg.perimetral_api_key },
-          body: JSON.stringify({ tenant }),
-          signal: AbortSignal.timeout(10000),
-        });
+    // Una instancia ya suspendida tiene el acceso cortado: no hace falta volver a llamar.
+    if (status !== 'suspended') {
+      const { rows: cfgRows } = await pool.query(
+        "SELECT key,value FROM site_config WHERE key IN ('provision_api_url','provision_api_key','perimetral_api_url','perimetral_api_key')"
+      );
+      const cfg = Object.fromEntries(cfgRows.map(r => [r.key, r.value]));
+      if (!cfg.provision_api_url)
+        return res.status(500).json({ success: false, error: 'API de provisioning no configurada: no se puede cortar el acceso.' });
+      try {
+        await llamarApi(cfg.provision_api_url, cfg.provision_api_key, '/suspend', { db });
+      } catch (e) {
+        console.error('[baja instancia] Odoo:', e.message);
+        return res.status(502).json({ success: false, code: 'CORTE_FALLO',
+          error: `No se dio de baja: no se pudo cortar el acceso en Odoo (${e.message}). La instancia sigue activa.` });
       }
-    } catch(e) { errors.push('Perimetral: ' + e.message); }
+      try {
+        if (cfg.perimetral_api_url) await llamarApi(cfg.perimetral_api_url, cfg.perimetral_api_key, '/suspend', { tenant });
+      } catch (e) {
+        // Igual que al suspender: no se cambia el estado, así el reintento vuelve a pedir los dos cortes.
+        console.error('[baja instancia] perimetral:', e.message);
+        return res.status(502).json({ success: false, code: 'CORTE_PARCIAL',
+          error: `No se dio de baja: Odoo quedó cortado pero el perimetral no respondió (${e.message}). Probá de nuevo.` });
+      }
+    }
 
-    // 3. Marcar como cancelled en HC
     await pool.query(
-      "UPDATE instances SET status='cancelled', suspended_at=NOW(), updated_at=NOW() WHERE id=$1",
+      "UPDATE instances SET status='cancelled', suspended_at=COALESCE(suspended_at,NOW()), updated_at=NOW() WHERE id=$1",
       [req.params.id]
     );
-
-    console.log(`[admin] Instancia cancelada: ${db}`);
-    res.json({
-      success: true,
-      message: `Instancia "${label}" cancelada. Acceso público bloqueado.${errors.length ? ' Advertencias: ' + errors.join(', ') : ''}`,
-    });
+    await pool.query('INSERT INTO admin_logs (user_id,action,target,detail) VALUES ($1,$2,$3,$4)',
+      [req.user.id, 'cancel_instance', `instance:${req.params.id}`, JSON.stringify({ db, tenant })]).catch(() => {});
+    console.log(`[admin] Instancia dada de baja: ${db}`);
+    res.json({ success: true, message: `"${label || tenant}" dada de baja. El acceso quedó cortado; la base del cliente no se borró.` });
   } catch (err) {
-    console.error('[delete instance]', err.message);
+    console.error('[baja instancia]', err.message);
     res.status(500).json({ success: false, error: 'Error interno' });
   }
 });
 
-module.exports = router;
 
 // ── Dashboard stats ───────────────────────────────────────
 router.get('/dashboard-stats', async (req, res) => {
@@ -525,22 +554,25 @@ router.get('/instances', async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
 });
 
+// El estado NO se edita acá: cambiarlo a mano no suspendía ni reactivaba nada en Odoo. Para eso están
+// suspender, reactivar y dar de baja, que sí cortan o devuelven el acceso.
 router.put('/instances/:id', async (req, res) => {
-  const { label, instance_url, db_name, plan, status, odoo_version, notes, user_id } = req.body;
+  const { label, instance_url, db_name, plan, odoo_version, notes, user_id } = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE instances SET
          label=COALESCE($1,label), instance_url=COALESCE($2,instance_url),
          db_name=COALESCE($3,db_name), plan=COALESCE($4,plan),
-         status=COALESCE($5,status), odoo_version=COALESCE($6,odoo_version),
-         notes=COALESCE($7,notes),
-         user_id=COALESCE($9,user_id),
-         suspended_at=CASE WHEN $5='suspended' THEN NOW() ELSE suspended_at END,
+         odoo_version=COALESCE($5,odoo_version),
+         notes=COALESCE($6,notes),
+         user_id=COALESCE($8,user_id),
          updated_at=NOW()
-       WHERE id=$8 RETURNING *`,
-      [label,instance_url,db_name,plan,status,odoo_version,notes,req.params.id,user_id||null]
+       WHERE id=$7 RETURNING *`,
+      [label,instance_url,db_name,plan,odoo_version,notes,req.params.id,user_id||null]
     );
     if(!rows[0]) return res.status(404).json({ success: false, error: 'No encontrada' });
     res.json({ success: true, data: rows[0] });
-  } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
+  } catch (err) { console.error('[admin/instances PUT]', err.message); res.status(500).json({ success: false, error: 'Error interno' }); }
 });
+
+module.exports = router;
