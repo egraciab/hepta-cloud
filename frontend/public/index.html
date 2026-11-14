@@ -767,16 +767,29 @@ function initHeroVideo() {
     document.getElementById('hero-panel')?.classList.remove('con-video');
     const anim = document.getElementById('hero-panel-anim');
     if (anim && anim.style.display === 'none') { anim.style.display = ''; initPanel(); }
+    // Si la falla fue pasajera (corte de red, servidor ocupado), se vuelve a pedir el video un par de veces;
+    // cuando carga, "listo" lo vuelve a mostrar.
+    if (reintentos < 2) { reintentos++; setTimeout(() => { v.addEventListener('loadeddata', listo, { once: true }); v.load(); v.play().catch(() => {}); }, 4000 * reintentos); }
   };
+  let reintentos = 0;
   const panel = document.getElementById('hero-panel');
   const sinFuente = () => v.networkState === HTMLMediaElement.NETWORK_NO_SOURCE;
   v.addEventListener('error', respaldo);
   const fuentes = v.querySelectorAll('source');
   if (fuentes.length) fuentes[fuentes.length - 1].addEventListener('error', respaldo);
-  // El error puede haber ocurrido antes de que corra este código: se revisa ahora y un poco después
-  if (sinFuente()) respaldo(); else setTimeout(() => { if (sinFuente()) respaldo(); }, 2500);
-  // En pantallas chicas el panel estaba oculto: con el video listo, se muestra
-  const listo = () => panel && panel.classList.add('con-video');
+  // El error puede haber ocurrido antes de que corra este código: se revisa un poco después. NO se revisa
+  // ahora mismo: mientras el navegador todavía está eligiendo entre los <source>, networkState también vale
+  // NO_SOURCE, y al recargar (página en caché, todo llega junto) eso mandaba a la animación sin motivo.
+  const fallo = () => sinFuente() && v.readyState === 0;
+  [2500, 6000].forEach(ms => setTimeout(() => { if (fallo()) respaldo(); }, ms));
+  // Con el video listo se muestra (en pantallas chicas el panel estaba oculto) y, si se había pasado a la
+  // animación por error, se vuelve al video.
+  function listo() {
+    if (document.getElementById('hero-panel-img')?.style.display === 'block') return;
+    caja.style.display = '';
+    const anim = document.getElementById('hero-panel-anim'); if (anim) anim.style.display = 'none';
+    panel && panel.classList.add('con-video');
+  }
   if (v.readyState >= 2) listo(); else v.addEventListener('loadeddata', listo, { once: true });
   // Clic en el video: se abre en grande, con controles; Esc o clic afuera lo cierra
   const grande = document.getElementById('hero-video-grande'), full = document.getElementById('hero-video-full');
