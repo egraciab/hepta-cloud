@@ -201,9 +201,17 @@
     .panel-dot{width:6px;height:6px;border-radius:50%;background:var(--gray-200);cursor:pointer;transition:.2s;display:inline-block}
     .panel-dot.active{background:var(--blue);width:18px;border-radius:3px}
     @media(max-width:900px){
-      .hero{grid-template-columns:1fr;padding:48px 5%}
+      /* En pantallas chicas el video va arriba, entre el texto y los botones (antes quedaba oculto hasta
+         que cargaba, y en celular un video oculto no carga nunca). Si el video falla, el panel se oculta. */
+      .hero{display:flex;flex-direction:column;gap:0;padding:40px 5% 48px}
+      .hero>div:first-child{display:contents}
+      .hero-badge{order:1;align-self:flex-start;margin-bottom:18px}
+      .hero h1{order:2;margin-bottom:14px}
+      .hero p{order:3;margin-bottom:24px}
       .hero-screen{display:none}
-      .hero-screen.con-video{display:block}
+      .hero-screen.con-video{display:block;order:4;margin-bottom:28px}
+      .hero-btns{order:5;margin-bottom:28px}
+      .hero-checks{order:6}
       .pain-grid{grid-template-columns:1fr 1fr}
       .sol-card{max-width:calc((100% - 16px)/2)}
       .plans-grid{grid-template-columns:1fr}
@@ -272,7 +280,7 @@
       <span>Sin costos ocultos</span>
     </div>
   </div>
-  <div class="hero-screen" id="hero-panel">
+  <div class="hero-screen con-video" id="hero-panel">
     <!-- Fallback: imagen/GIF configurable desde admin -->
     <div id="hero-panel-img" style="display:none;width:100%;height:100%">
       <img id="hero-panel-img-el" src="" alt="Preview del sistema" style="width:100%;height:100%;object-fit:cover;border-radius:var(--radius-lg)"/>
