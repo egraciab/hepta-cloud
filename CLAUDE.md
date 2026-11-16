@@ -30,6 +30,7 @@ infra/                       # copia de la API perimetral y dónde vive lo demá
 backend/services/alta.js     # alta de un tenant en segundo plano (trabajos en memoria) y correo de bienvenida;
                              # la usan el alta manual (provision.routes) y la confirmación de pago (payments.routes)
 backend/services/mailcow/    # cliente de mailcow, DNS y Cloudflare para el servicio de correo
+infra/backup/                # respaldos por VM: hepta-backup.sh, configuración de cada VM y retiro al NAS
 backend/scripts/             # import_mail, provision_mail, avisar_credenciales (se corren a mano)
 sql/, backend/migrate_*.sql, migracion_*.sql   # migraciones (se aplican a mano; no editar las ya aplicadas)
 tools/webmail_add.sh         # alta de un webmail de cliente en el nginx perimetral
@@ -113,3 +114,7 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
   código viaja después de `#` y solo se guarda su hash), Mi cuenta con datos en solo lectura, Soporte por formulario
   (`POST /api/portal/support`, queda en Leads con `[Soporte]`) y Facturas oculta mientras la cuenta no esté vinculada al ERP.
   Los pedidos de dominio fallaban: `leads.source` solo acepta website/whatsapp/retopa/referral/other.
+- 2026-11-15 — Respaldos de datos por VM: `infra/backup/hepta-backup.sh` (bases, carpetas de datos y configuración, con
+  verificación de volcados) corre cada 6 h en `hepta-cloud`, `retopa-core`, `HGSVRLNX104` y `HGSVRLNX111`;
+  `hepta-backup-retirar.sh` en `hcsvrnd01` los lleva al NAS con histórico y control de vida. Detalle y pendientes en el
+  runbook `runbook-ha-backups.md` del Project. En esta VM el respaldo queda en `/var/backups/hepta/`.
