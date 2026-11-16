@@ -11,8 +11,12 @@ Un mismo script para todas las VM; lo que cambia es `/etc/hepta-backup.conf`.
 
 ## Instalar en una VM
 
+Antes que nada, confirmar que la VM (o el nodo) tiene cron: `systemctl is-active cron` tiene que decir `active`.
+Si no, `apt-get install -y cron && systemctl enable --now cron`. El 16-nov se encontró que `hcsvrnd01` y la VM
+`hepta-cloud` no lo tenían: los archivos de `/etc/cron.d/` estaban, pero nadie los leía.
+
 ```bash
-apt-get install -y rsync
+apt-get install -y rsync cron
 install -m 755 infra/backup/hepta-backup.sh /usr/local/sbin/hepta-backup.sh
 install -m 600 infra/backup/conf/<VM>.conf /etc/hepta-backup.conf   # una configuración por VM en conf/
 hepta-backup.sh --solo-ver     # muestra qué respaldaría, sin escribir
