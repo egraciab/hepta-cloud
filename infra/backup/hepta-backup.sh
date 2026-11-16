@@ -10,7 +10,7 @@
 #
 # Uso:   hepta-backup.sh            respaldo completo
 #        hepta-backup.sh --solo-ver muestra qué respaldaría, sin escribir nada
-# Config: /etc/hepta-backup.conf (ver hepta-backup.conf.ejemplo)
+# Config: /etc/hepta-backup.conf (una por VM, en infra/backup/conf/)
 set -uo pipefail
 
 CONF="${HEPTA_BACKUP_CONF:-/etc/hepta-backup.conf}"

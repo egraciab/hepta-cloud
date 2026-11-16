@@ -14,7 +14,7 @@ Un mismo script para todas las VM; lo que cambia es `/etc/hepta-backup.conf`.
 ```bash
 apt-get install -y rsync
 install -m 755 infra/backup/hepta-backup.sh /usr/local/sbin/hepta-backup.sh
-install -m 600 infra/backup/hepta-backup.conf.ejemplo /etc/hepta-backup.conf   # y editarlo para esa VM
+install -m 600 infra/backup/conf/<VM>.conf /etc/hepta-backup.conf   # una configuración por VM en conf/
 hepta-backup.sh --solo-ver     # muestra qué respaldaría, sin escribir
 hepta-backup.sh; echo "salida=$?"; cat /var/backups/hepta/estado.json
 ```
