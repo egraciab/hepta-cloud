@@ -209,8 +209,10 @@ def e(s):
 
 
 def pastilla(estado):
-    return (f'<span style="display:inline-block;padding:2px 10px;border-radius:10px;background:{COLOR[estado]};color:#fff;'
-            f'font-size:11px;font-weight:bold;letter-spacing:.5px">{ETIQUETA[estado]}</span>')
+    # En una tabla y no en un <span>: Outlook no respeta el relleno ni los bordes redondeados de un span.
+    return (f'<table role="presentation" cellpadding="0" cellspacing="0" align="right" style="border-collapse:separate"><tr>'
+            f'<td bgcolor="{COLOR[estado]}" style="background:{COLOR[estado]};border-radius:10px;padding:3px 11px;color:#ffffff;'
+            f'font-size:11px;font-weight:bold;letter-spacing:.5px;font-family:Arial,Helvetica,sans-serif;white-space:nowrap">{ETIQUETA[estado]}</td></tr></table>')
 
 
 def fila(estado, titulo, detalle, notas=(), errores=()):
