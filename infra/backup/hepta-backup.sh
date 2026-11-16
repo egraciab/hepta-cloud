@@ -26,6 +26,7 @@ PG_BASES=auto              # "auto" = todas menos plantillas, o lista separada p
 PG_EXCLUIR=""              # bases que no se respaldan (separadas por espacios)
 DIRECTORIOS=()             # carpetas de datos (filestore, uploads): copia espejo con rsync
 CONFIGS=()                 # archivos y carpetas chicas de configuración: un .tar.gz por corrida
+                           # En las dos listas, "?/ruta" = opcional: si no existe se saltea sin dar error.
 RETENER=8                  # corridas que quedan en la VM (el histórico largo vive en el servidor de respaldos)
 # shellcheck disable=SC1090
 . "$CONF"
@@ -57,7 +58,7 @@ usuario_pg() { [ "$PG_MODO" = docker ] && echo "-U $PG_USUARIO"; }
 listar_bases() {
   if [ "$PG_BASES" != auto ]; then echo "$PG_BASES" | tr ' ' '\n'; return; fi
   # shellcheck disable=SC2046
-  pg psql $(usuario_pg) -d postgres -Atc "SELECT datname FROM pg_database WHERE NOT datistemplate AND datname <> 'postgres' ORDER BY 1"
+  pg psql $(usuario_pg) -d postgres -Atc "SELECT datname FROM pg_database WHERE NOT datistemplate AND datname <> 'postgres' ORDER BY 1" 2>/dev/null
 }
 
 if [ "$SOLO_VER" = 1 ]; then
@@ -68,8 +69,9 @@ if [ "$SOLO_VER" = 1 ]; then
       case " $PG_EXCLUIR " in *" $b "*) echo "  - $b (excluida)";; *) echo "  - $b";; esac
     done
   else echo "  (sin Postgres)"; fi
-  echo "Carpetas de datos:"; for d in "${DIRECTORIOS[@]:-}"; do [ -n "$d" ] && { [ -d "$d" ] && echo "  - $d ($(du -sh "$d" 2>/dev/null | cut -f1))" || echo "  - $d  ¡NO EXISTE!"; }; done
-  echo "Configuración:";     for c in "${CONFIGS[@]:-}";     do [ -n "$c" ] && { [ -e "$c" ] && echo "  - $c" || echo "  - $c  ¡NO EXISTE!"; }; done
+  falta() { case "$1" in \?*) echo "  - ${1#\?}  (opcional, no existe: se saltea)";; *) echo "  - $1  ¡NO EXISTE!";; esac; }
+  echo "Carpetas de datos:"; for d in "${DIRECTORIOS[@]:-}"; do [ -n "$d" ] && { [ -d "${d#\?}" ] && echo "  - ${d#\?} ($(du -sh "${d#\?}" 2>/dev/null | cut -f1))" || falta "$d"; }; done
+  echo "Configuración:";     for c in "${CONFIGS[@]:-}";     do [ -n "$c" ] && { [ -e "${c#\?}" ] && echo "  - ${c#\?}" || falta "$c"; }; done
   exit 0
 fi
 
@@ -111,6 +113,7 @@ fi
 # ── 2. Carpetas de datos (espejo; el servidor de respaldos guarda el histórico) ──
 for d in "${DIRECTORIOS[@]:-}"; do
   [ -n "$d" ] || continue
+  case "$d" in \?*) d="${d#\?}"; [ -d "$d" ] || continue;; esac
   if [ ! -d "$d" ]; then falla "la carpeta $d no existe"; continue; fi
   dest="$DESTINO/archivos/$(echo "$d" | sed 's#^/##; s#/#__#g')"
   mkdir -p "$dest"
@@ -121,7 +124,11 @@ done
 rm -f "$CORRIDA/_rsync.err"
 
 # ── 3. Configuración ──
-LISTA=(); for c in "${CONFIGS[@]:-}"; do [ -n "$c" ] || continue; if [ -e "$c" ]; then LISTA+=("$c"); else falla "configuración: $c no existe"; fi; done
+LISTA=(); for c in "${CONFIGS[@]:-}"; do
+  [ -n "$c" ] || continue
+  case "$c" in \?*) c="${c#\?}"; [ -e "$c" ] || continue;; esac
+  if [ -e "$c" ]; then LISTA+=("$c"); else falla "configuración: $c no existe"; fi
+done
 if [ "${#LISTA[@]}" -gt 0 ]; then
   if tar -czf "$CORRIDA/_config.tar.gz" --ignore-failed-read -P "${LISTA[@]}" 2>"$CORRIDA/_config.err" && [ -s "$CORRIDA/_config.tar.gz" ]; then
     rm -f "$CORRIDA/_config.err"; aviso "  configuración: $(du -h "$CORRIDA/_config.tar.gz" | cut -f1)"

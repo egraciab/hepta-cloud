@@ -33,3 +33,20 @@ createdb <base>_restaurada && pg_restore -d <base>_restaurada --no-owner /var/ba
 ```
 
 Después de restaurar, correr `pg_dump` sobre la base restaurada: si falla, el respaldo no sirve (caso pgvector del ERP).
+
+## Copia al NAS (`hepta-backup-retirar.sh`, en `hcsvrnd01`)
+
+Las VM no escriben en el NAS: el nodo que lo tiene montado entra a cada VM con `lxc exec`, retira las corridas
+nuevas, verifica cada archivo con sha256 y arma el histórico (todo lo de 2 días, uno por día hasta 14 días, uno por
+semana hasta 8 semanas; carpetas de datos: un paquete por día, 7 días). Si una VM no tiene un respaldo bueno en las
+últimas 7 horas, no responde, o una copia no coincide, termina con error y deja el motivo en
+`/mnt/nas/hepta-backups/ALERTA.txt`. Si todo está bien actualiza `ultimo-retiro-ok`. Sin el NAS montado no escribe nada.
+
+```bash
+install -m 755 hepta-backup-retirar.sh /usr/local/sbin/hepta-backup-retirar.sh
+hepta-backup-retirar.sh                      # primera pasada a mano
+echo '47 */3 * * * root /usr/local/sbin/hepta-backup-retirar.sh >> /var/log/hepta-backup-retirar.log 2>&1' > /etc/cron.d/hepta-backup-retirar
+```
+
+En el NAS los archivos quedan sin cifrar, igual que los exports de VM que ya están ahí. La copia fuera de sitio
+(Drive) va cifrada con rclone crypt.
