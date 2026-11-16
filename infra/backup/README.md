@@ -50,3 +50,15 @@ echo '47 */3 * * * root /usr/local/sbin/hepta-backup-retirar.sh >> /var/log/hept
 
 En el NAS los archivos quedan sin cifrar, igual que los exports de VM que ya están ahí. La copia fuera de sitio
 (Drive) va cifrada con rclone crypt.
+
+## Export semanal de las VM completas (`export-vms.sh`, en `hcsvrnd01`)
+
+Recupera lo que no es dato: sistema, imágenes de Docker, módulos Enterprise. Con `--semanal` marca el lote como
+completo, deja los últimos 4 lotes completos (los hechos a mano no se borran solos) y anota el resultado en
+`/mnt/nas/lxd-exports/ultimo-lote-ok` o `ultimo-lote-fallo`; `hepta-backup-retirar.sh` avisa si el último lote falló o
+tiene más de 8 días. Un lote semanal que falla queda en el NAS sin la marca: hay que borrarlo a mano.
+
+```bash
+install -m 755 export-vms.sh /root/bin/export-vms.sh
+echo '0 5 * * 0 root /root/bin/export-vms.sh --semanal >> /var/log/export-vms.log 2>&1' > /etc/cron.d/export-vms   # domingo 02:00 de Paraguay (el nodo está en UTC)
+```

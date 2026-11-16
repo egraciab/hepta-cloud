@@ -6,6 +6,7 @@
 #   - Corridas de volcados: se copian las que faltan y se verifica cada archivo con sha256.
 #   - Carpetas de datos (filestore, uploads): un paquete por día.
 #   - Histórico de volcados en el NAS: todo lo de 2 días, uno por día hasta 14 días, uno por semana hasta 8 semanas.
+#   - También vigila el export semanal de VMs completas (export-vms.sh --semanal).
 #   - Control de vida: si una VM no tiene un respaldo bueno en las últimas MAX_HORAS, o no responde,
 #     el script termina con error y deja el motivo en $NAS/ALERTA.txt (el monitoreo mira ese archivo).
 #
@@ -84,6 +85,14 @@ for vm in $VMS; do
   done
   unset visto
 done
+
+# ── Control de vida del export semanal de VMs completas (export-vms.sh --semanal) ──
+EXPORTS="${HEPTA_EXPORTS:-$MONTAJE/lxd-exports}"
+if [ -f "$EXPORTS/ultimo-lote-fallo" ]; then alerta "export semanal de VMs: $(cut -c1-200 "$EXPORTS/ultimo-lote-fallo")"; fi
+if [ -f "$EXPORTS/ultimo-lote-ok" ]; then
+  dias=$(( (AHORA - $(date -d "$(cat "$EXPORTS/ultimo-lote-ok")" +%s)) / 86400 ))
+  [ "$dias" -ge 8 ] && alerta "export semanal de VMs: el último lote completo es de hace $dias días"
+fi
 
 if [ "${#ALERTAS[@]}" -gt 0 ]; then
   { date '+%F %T'; printf '%s\n' "${ALERTAS[@]}"; } > "$NAS/ALERTA.txt"
