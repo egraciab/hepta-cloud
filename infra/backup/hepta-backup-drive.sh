@@ -49,7 +49,8 @@ fi
 [ -s "$FILTRO" ] || { aviso "No hay nada para subir ($MODO)."; exit 0; }
 echo "- **" >> "$FILTRO"
 
-OPC=(--filter-from "$FILTRO" --transfers 2 --checkers 4 --retries 3 --low-level-retries 10 --stats 5m --stats-one-line)
+# Una línea de avance por minuto (cuánto va, velocidad y tiempo restante), a la vista y en el log
+OPC=(--filter-from "$FILTRO" --transfers 2 --checkers 4 --retries 3 --low-level-retries 10 --stats 1m --stats-one-line --stats-log-level NOTICE)
 [ -n "$LIMITE" ] && OPC+=(--bwlimit "$LIMITE")
 
 if [ "$SOLO_VER" = 1 ]; then
@@ -64,8 +65,7 @@ fallo() {
   echo "$(date -Is) $MODO: $*" > "$NAS/ultimo-drive-$MODO-fallo"
   aviso "FALLÓ la copia a Drive ($MODO): $*"; exit 1
 }
-rclone sync "$ORIGEN" "$DESTINO" "${OPC[@]}" --delete-excluded 2>&1 | tail -15
-[ "${PIPESTATUS[0]}" -eq 0 ] || fallo "rclone sync terminó con error (ver el log)"
+rclone sync "$ORIGEN" "$DESTINO" "${OPC[@]}" --delete-excluded 2>&1 || fallo "rclone sync terminó con error (ver el log)"
 aviso "Verificando contra la copia cifrada…"
 rclone cryptcheck "$ORIGEN" "$DESTINO" --filter-from "$FILTRO" --one-way --checkers 4 2>&1 | tail -4
 [ "${PIPESTATUS[0]}" -eq 0 ] || fallo "la verificación encontró diferencias entre el NAS y Drive"
