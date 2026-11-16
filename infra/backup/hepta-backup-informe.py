@@ -203,6 +203,32 @@ def evaluar_export(ahora):
     return r
 
 
+def evaluar_drive(ahora):
+    """Copia cifrada a Google Drive (hepta-backup-drive.sh): datos una vez por día, exports una vez por semana."""
+    filas = []
+    for modo, titulo, max_h, cada in (('datos', 'Respaldos de datos a Drive (diario)', 30, 'corre todas las noches'),
+                                      ('exports', 'Export de VMs a Drive (semanal)', 8 * 24, 'corre los domingos')):
+        r = {'titulo': titulo, 'estado': OK, 'notas': [], 'detalle': ''}
+        try:
+            with open(f"{NAS}/ultimo-drive-{modo}-ok", encoding='utf-8') as f:
+                lineas = f.read().splitlines()
+            cuando = datetime.fromisoformat(lineas[0].strip())
+            r['detalle'] = f"Última subida verificada: {e(fecha(cuando))}" + (f" &middot; {e(lineas[1])}" if len(lineas) > 1 else '')
+            horas = (ahora - cuando).total_seconds() / 3600
+            if horas > max_h:
+                r['estado'] = ERROR; r['notas'].append(f"La última subida buena fue hace {horas / 24:.0f} día(s); {cada}.")
+        except (OSError, ValueError, IndexError):
+            r['estado'] = AVISO; r['detalle'] = 'Sin subidas todavía'
+            r['notas'].append('Todavía no hay copia fuera de sitio de esto: si se pierde la sala, se pierde.')
+        try:
+            with open(f"{NAS}/ultimo-drive-{modo}-fallo", encoding='utf-8', errors='replace') as f:
+                r['estado'] = ERROR; r['notas'].append('La última subida falló: ' + f.read().strip()[:200])
+        except OSError:
+            pass
+        filas.append(r)
+    return filas
+
+
 # ── HTML (tablas y estilos en línea: es lo que los programas de correo muestran bien) ──
 def e(s):
     return html.escape(str(s))
@@ -234,7 +260,8 @@ def armar(tipo, ahora):
     vms = [evaluar_vm(v, ahora, dias) for v in VMS]
     ret = evaluar_retiro(ahora, dias)
     exp = evaluar_export(ahora)
-    general = max([v['estado'] for v in vms] + [ret['estado'], exp['estado']])
+    drv = evaluar_drive(ahora)
+    general = max([v['estado'] for v in vms] + [ret['estado'], exp['estado']] + [x['estado'] for x in drv])
     n = {s: sum(1 for v in vms if v['estado'] == s) for s in (OK, AVISO, ERROR)}
     titular = {OK: 'Todos los respaldos están bien', AVISO: 'Respaldos hechos, con avisos para mirar', ERROR: 'Hay respaldos con error'}[general]
     periodo = 'Últimas 24 horas' if dias == 1 else 'Últimos 7 días'
@@ -272,9 +299,11 @@ def armar(tipo, ahora):
                          f'<td style="padding:3px 0 3px 10px;color:#5F6368;text-align:right">{s // 60} min {s % 60:02d} s</td></tr>' for v, t, s in exp['vms'])
         f_exp.append(f'<tr><td colspan="2" style="padding:6px 12px 10px 16px;border-bottom:1px solid #E8EAED"><table style="font-size:12px;border-collapse:collapse">{celdas}</table></td></tr>')
 
-    orden = [seccion('Export semanal (VM completas)', f_exp), seccion(f'Respaldos de datos por VM · {periodo.lower()}', f_vms), seccion('Copia al NAS', f_nas)]
+    f_drv = [fila(x['estado'], x['titulo'], x['detalle'], x['notas']) for x in drv]
+    s_drv = seccion('Copia fuera de sitio (Google Drive, cifrada)', f_drv)
+    orden = [seccion('Export semanal (VM completas)', f_exp), seccion(f'Respaldos de datos por VM · {periodo.lower()}', f_vms), seccion('Copia al NAS', f_nas), s_drv]
     if tipo == 'diario':
-        orden = [orden[1], orden[2], orden[0]]
+        orden = [orden[1], orden[2], s_drv, orden[0]]
     resumen = f"{n[OK]} VM bien" + (f" &middot; {n[AVISO]} con aviso" if n[AVISO] else '') + (f" &middot; {n[ERROR]} con error" if n[ERROR] else '')
     cuerpo = f'''<!DOCTYPE html><html lang="es"><body style="margin:0;padding:16px;background:#F1F3F4;font-family:Arial,Helvetica,sans-serif">
 <table role="presentation" width="100%" style="max-width:640px;margin:0 auto;background:#fff;border-radius:10px;border-collapse:separate;overflow:hidden;border:1px solid #DADCE0">
@@ -295,6 +324,8 @@ def armar(tipo, ahora):
         lineas.append(f"[{ETIQUETA[v['estado']]}] {v['nombre']} ({v['vm']}): {v['buenas']} buenas, {v['fallidas']} fallidas. " + ' '.join(v['notas']))
     lineas.append(f"[{ETIQUETA[ret['estado']]}] Copia al NAS. " + ' '.join(ret['notas'] + ret['alertas']))
     lineas.append(f"[{ETIQUETA[exp['estado']]}] Export semanal. " + ' '.join(exp['notas']))
+    for x in drv:
+        lineas.append(f"[{ETIQUETA[x['estado']]}] {x['titulo']}. " + ' '.join(x['notas']))
     icono = {OK: '✅', AVISO: '⚠️', ERROR: '❌'}[general]
     asunto = f"{icono} Respaldos HEPTA · {tipo} · {titular} ({fecha(ahora, False)})"
     return general, asunto, cuerpo, '\n'.join(lineas)

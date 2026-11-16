@@ -80,3 +80,29 @@ hepta-backup-informe semanal --prueba                  # enviarlo ahora con [PRU
 
 Los datos del correo quedan en `/etc/hepta-backup-correo.conf` (600, root). Si un envío falla, el motivo queda en
 `/var/log/hepta-backup-informe.log`.
+
+## Copia fuera de sitio, cifrada (`hepta-backup-drive.sh`, en `hcsvrnd01`)
+
+Sube a Google Drive por el remote de rclone `gdrive-crypt` (tipo crypt sobre `gdrive:hepta-respaldos`): contenido y
+nombres se cifran antes de salir del nodo. **Las dos contraseñas del crypt se generan en KeePass y se guardan en el
+vault antes de configurarlo; sin ellas la copia no se puede leer.**
+
+- `datos`: de `/mnt/nas/hepta-backups` sube una corrida por día y por VM (la última de cada día que el NAS conserva)
+  y los paquetes diarios de carpetas. Todas las noches.
+- `exports`: de `/mnt/nas/lxd-exports` sube los lotes semanales completos. Los domingos, después del export.
+- Drive queda igual a esa selección (lo que el NAS depura se borra de Drive y pasa 30 días por su papelera) y cada
+  subida se verifica contra la copia cifrada (`rclone cryptcheck`). Resultado en el NAS:
+  `ultimo-drive-<modo>-ok` / `-fallo`, que el informe por correo muestra en la sección "Copia fuera de sitio".
+
+```bash
+install -m 755 hepta-backup-drive.sh /usr/local/sbin/hepta-backup-drive.sh
+hepta-backup-drive.sh datos --solo-ver       # qué subiría, sin tocar Drive
+cat > /etc/cron.d/hepta-backup-drive <<'CRON'
+# El nodo está en UTC: 07:30 UTC = 04:30 de Paraguay; domingo 06:00 UTC = 03:00
+30 7 * * * root /usr/local/sbin/hepta-backup-drive.sh datos   >> /var/log/hepta-backup-drive.log 2>&1
+0 6 * * 0  root /usr/local/sbin/hepta-backup-drive.sh exports >> /var/log/hepta-backup-drive.log 2>&1
+CRON
+```
+
+Recuperar desde Drive (en cualquier máquina con rclone y las dos contraseñas):
+`rclone copy gdrive-crypt:hepta-backups/<VM>/dumps/<corrida> ./recuperado`.
