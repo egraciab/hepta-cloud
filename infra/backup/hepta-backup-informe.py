@@ -229,6 +229,36 @@ def evaluar_drive(ahora):
     return filas
 
 
+def evaluar_restauracion(ahora):
+    """Última restauración de prueba del ERP (hepta-prueba-restauracion-erp.sh, una vez por mes)."""
+    r = {'estado': OK, 'notas': [], 'detalle': ''}
+    informes = sorted(glob.glob(f"{NAS}/pruebas-restauracion/*-HGSVRLNX111-*.txt"), key=os.path.getmtime)
+    if not informes:
+        r['estado'] = AVISO; r['detalle'] = 'Sin pruebas todavía'
+        r['notas'].append('Nunca se probó restaurar el ERP desde la copia de Drive.')
+        return r
+    ultimo = informes[-1]
+    cuando = datetime.fromtimestamp(os.path.getmtime(ultimo), timezone.utc)
+    resultado = os.path.basename(ultimo).rsplit('-', 1)[-1].replace('.txt', '')
+    try:
+        with open(ultimo, encoding='utf-8', errors='replace') as f:
+            texto = f.read()
+    except OSError:
+        texto = ''
+    m = re.search(r'duración total: ([^\n]+)', texto)
+    r['detalle'] = f"Última prueba: {e(fecha(cuando))} &middot; resultado {e(resultado)}" + (f" &middot; {e(m.group(1).strip())}" if m else '')
+    dias = (ahora - cuando).days
+    if resultado == 'FALLA':
+        r['estado'] = ERROR
+        r['notas'] += [l.strip()[2:].strip() for l in texto.splitlines() if l.strip().startswith('✗')][:3] or ['La última prueba falló.']
+    elif dias > 40:
+        r['estado'] = ERROR; r['notas'].append(f"La última prueba es de hace {dias} días (corre una vez por mes).")
+    elif resultado == 'AVISO':
+        r['estado'] = AVISO
+        r['notas'] += [l.strip()[2:].strip() for l in texto.splitlines() if l.strip().startswith('!')][:3]
+    return r
+
+
 # ── HTML (tablas y estilos en línea: es lo que los programas de correo muestran bien) ──
 def e(s):
     return html.escape(str(s))
@@ -261,7 +291,8 @@ def armar(tipo, ahora):
     ret = evaluar_retiro(ahora, dias)
     exp = evaluar_export(ahora)
     drv = evaluar_drive(ahora)
-    general = max([v['estado'] for v in vms] + [ret['estado'], exp['estado']] + [x['estado'] for x in drv])
+    res = evaluar_restauracion(ahora)
+    general = max([v['estado'] for v in vms] + [ret['estado'], exp['estado'], res['estado']] + [x['estado'] for x in drv])
     n = {s: sum(1 for v in vms if v['estado'] == s) for s in (OK, AVISO, ERROR)}
     titular = {OK: 'Todos los respaldos están bien', AVISO: 'Respaldos hechos, con avisos para mirar', ERROR: 'Hay respaldos con error'}[general]
     periodo = 'Últimas 24 horas' if dias == 1 else 'Últimos 7 días'
@@ -300,7 +331,8 @@ def armar(tipo, ahora):
         f_exp.append(f'<tr><td colspan="2" style="padding:6px 12px 10px 16px;border-bottom:1px solid #E8EAED"><table style="font-size:12px;border-collapse:collapse">{celdas}</table></td></tr>')
 
     f_drv = [fila(x['estado'], x['titulo'], x['detalle'], x['notas']) for x in drv]
-    s_drv = seccion('Copia fuera de sitio (Google Drive, cifrada)', f_drv)
+    f_drv.append(fila(res['estado'], 'Restauración de prueba del ERP desde Drive (mensual)', res['detalle'], res['notas']))
+    s_drv = seccion('Copia fuera de sitio (Google Drive, cifrada) y prueba de restauración', f_drv)
     orden = [seccion('Export semanal (VM completas)', f_exp), seccion(f'Respaldos de datos por VM · {periodo.lower()}', f_vms), seccion('Copia al NAS', f_nas), s_drv]
     if tipo == 'diario':
         orden = [orden[1], orden[2], s_drv, orden[0]]
@@ -326,6 +358,7 @@ def armar(tipo, ahora):
     lineas.append(f"[{ETIQUETA[exp['estado']]}] Export semanal. " + ' '.join(exp['notas']))
     for x in drv:
         lineas.append(f"[{ETIQUETA[x['estado']]}] {x['titulo']}. " + ' '.join(x['notas']))
+    lineas.append(f"[{ETIQUETA[res['estado']]}] Restauración de prueba del ERP. " + ' '.join(res['notas']))
     icono = {OK: '✅', AVISO: '⚠️', ERROR: '❌'}[general]
     asunto = f"{icono} Respaldos HEPTA · {tipo} · {titular} ({fecha(ahora, False)})"
     return general, asunto, cuerpo, '\n'.join(lineas)

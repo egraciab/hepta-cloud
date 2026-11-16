@@ -32,6 +32,14 @@ en_vm() { lxc exec --project "$PROYECTO" "$VM" -- "$@"; }
 
 command -v rclone >/dev/null && command -v zstd >/dev/null || { echo "Faltan rclone o zstd" >&2; exit 2; }
 mkdir -p "$TRABAJO" "$INFORME_DIR" || exit 2
+# El informe se guarda siempre, también si la prueba se corta a mitad de camino (así el correo lo muestra)
+GUARDADO=0
+guardar() {
+  [ "$GUARDADO" = 1 ] && return; GUARDADO=1
+  [ -s "$TRABAJO/informe.txt" ] || return
+  cp "$TRABAJO/informe.txt" "$INFORME_DIR/$(date +%F_%H%M)-$VM-$RESULTADO.txt" && echo "Informe guardado en $INFORME_DIR/$(date +%F_%H%M)-$VM-$RESULTADO.txt"
+}
+trap guardar EXIT
 T0=$(date +%s)
 linea "RESTAURACIÓN DE PRUEBA DEL ERP — $(date '+%F %H:%M') (hora del nodo) — origen: Google Drive ($REMOTO)"
 linea ""
@@ -39,7 +47,7 @@ linea ""
 # ── 1. Bajar de Drive ──
 linea "1. Copia fuera de sitio"
 PAQUETE="$(rclone lsf "$REMOTO:hepta-backups/$VM/archivos/" 2>/dev/null | grep -E '^archivos-[0-9]{8}\.tar\.zst$' | sort | tail -1)"
-[ -n "$PAQUETE" ] || { mal "no hay paquetes de adjuntos de $VM en Drive"; exit 1; }
+[ -n "$PAQUETE" ] || { mal "no hay paquetes de adjuntos de $VM en Drive (o Drive no responde)"; exit 1; }
 DIA_PAQ="${PAQUETE#archivos-}"; DIA_PAQ="${DIA_PAQ%.tar.zst}"
 # El paquete del día D se arma con la copia de la última corrida del día anterior: se usa esa corrida,
 # así los adjuntos y la base son del mismo momento.
@@ -135,6 +143,6 @@ else mal "pg_dump de la copia falló o salió chico (${RB:-0} bytes): $(v REDUMP
 # ── 6. Cierre ──
 linea ""; linea "RESULTADO: $RESULTADO — duración total: $(( ($(date +%s) - T0) / 60 )) min $(( ($(date +%s) - T0) % 60 )) s"
 linea "Lo temporal (contenedor y archivos en la VM) ya se borró. Producción no se tocó."
-cp "$TRABAJO/informe.txt" "$INFORME_DIR/$(date +%F)-$VM-$RESULTADO.txt" && echo "Informe guardado en $INFORME_DIR/$(date +%F)-$VM-$RESULTADO.txt"
+guardar
 rm -rf "$TRABAJO/dump" "$TRABAJO/$PAQUETE" "$TRABAJO/en_base.txt" "$TRABAJO/en_paquete.txt" "$TRABAJO/vm.txt"
 [ "$RESULTADO" = FALLA ] && exit 1 || exit 0

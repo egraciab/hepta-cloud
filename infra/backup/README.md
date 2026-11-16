@@ -106,3 +106,15 @@ CRON
 
 Recuperar desde Drive (en cualquier máquina con rclone y las dos contraseñas):
 `rclone copy gdrive-crypt:hepta-backups/<VM>/dumps/<corrida> ./recuperado`.
+
+## Restauración de prueba del ERP (`hepta-prueba-restauracion-erp.sh`, en `hcsvrnd01`)
+
+Baja de Drive el volcado de `heptagroup` y el paquete de adjuntos, restaura en un Postgres temporal sin red dentro de
+la VM del ERP, compara contra producción, revisa los adjuntos y vuelve a volcar la copia. No toca producción. Deja el
+informe en `/mnt/nas/hepta-backups/pruebas-restauracion/` y el correo muestra la última (rojo si falló o pasaron más
+de 40 días).
+
+```bash
+install -m 755 hepta-prueba-restauracion-erp.sh /usr/local/sbin/hepta-prueba-restauracion-erp
+echo '0 8 1 * * root /usr/local/sbin/hepta-prueba-restauracion-erp >> /var/log/hepta-prueba-restauracion.log 2>&1' > /etc/cron.d/hepta-prueba-restauracion   # día 1 de cada mes, 05:00 de Paraguay
+```
