@@ -62,3 +62,21 @@ tiene más de 8 días. Un lote semanal que falla queda en el NAS sin la marca: h
 install -m 755 export-vms.sh /root/bin/export-vms.sh
 echo '0 5 * * 0 root /root/bin/export-vms.sh --semanal >> /var/log/export-vms.log 2>&1' > /etc/cron.d/export-vms   # domingo 02:00 de Paraguay (el nodo está en UTC)
 ```
+
+## Informes por correo (`hepta-backup-informe.py`, en `hcsvrnd01`)
+
+Un informe diario (22:00 de Paraguay, últimas 24 horas) y uno semanal (domingo 08:00, últimos 7 días más el detalle
+del export de VMs). Verde = todo bien; naranja = hay respaldo pero algo para mirar (una corrida falló y la siguiente
+salió bien, menos corridas de las esperadas, un volcado que se achicó más de 30 %, poco espacio en el NAS); rojo =
+falta un respaldo vigente (más de 7 horas sin uno bueno, la última corrida falló, alerta abierta, export semanal
+fallido o con más de 8 días). Lee solo el NAS: `historial.jsonl` de cada VM e `historial-retiro.jsonl`, que escribe
+`hepta-backup-retirar.sh`.
+
+```bash
+./hepta-backup-correo-configurar.sh        # pregunta servidor, buzón y contraseña (no se muestra), prueba y programa
+hepta-backup-informe diario --ver /tmp/informe.html    # ver el informe sin enviarlo
+hepta-backup-informe semanal --prueba                  # enviarlo ahora con [PRUEBA] en el asunto
+```
+
+Los datos del correo quedan en `/etc/hepta-backup-correo.conf` (600, root). Si un envío falla, el motivo queda en
+`/var/log/hepta-backup-informe.log`.

@@ -58,10 +58,18 @@ for vm in $VMS; do
        && en_vm "$vm" sh -c "cd $ORIGEN/dumps/$marca && sha256sum *" > "$tmp/.sumas" \
        && ( cd "$tmp" && sha256sum --quiet -c .sumas ); then
       mv "$tmp/.sumas" "$tmp/_sha256.txt"; mv "$tmp" "$dest/dumps/$marca"
+      # Historial para los informes por correo (el histórico del NAS depura corridas; esto no)
+      [ -s "$dest/dumps/$marca/_estado.json" ] && head -1 "$dest/dumps/$marca/_estado.json" >> "$dest/historial.jsonl"
       aviso "   volcados $marca: $(du -sh "$dest/dumps/$marca" | cut -f1), verificados"
     else
       rm -rf "$tmp"; alerta "$vm: la copia de la corrida $marca no coincide con el original"
     fi
+  done
+
+  # ── Corridas fallidas: no se copian, pero su detalle queda en el historial ──
+  for marca in $(en_vm "$vm" sh -c "ls -1 $ORIGEN/dumps 2>/dev/null" | grep -E '^[0-9]{8}_[0-9]{4}\.FALLIDA$' | sed 's/\.FALLIDA$//' | sort); do
+    grep -q "\"corrida\":\"$marca\".*\"ok\":false" "$dest/historial.jsonl" 2>/dev/null && continue
+    en_vm "$vm" cat "$ORIGEN/dumps/$marca.FALLIDA/_estado.json" 2>/dev/null | head -1 >> "$dest/historial.jsonl"
   done
 
   # ── Carpetas de datos: un paquete por día ──
@@ -93,6 +101,9 @@ if [ -f "$EXPORTS/ultimo-lote-ok" ]; then
   dias=$(( (AHORA - $(date -d "$(cat "$EXPORTS/ultimo-lote-ok")" +%s)) / 86400 ))
   [ "$dias" -ge 8 ] && alerta "export semanal de VMs: el último lote completo es de hace $dias días"
 fi
+
+# Historial de pasadas (para los informes)
+{ printf '{"t":"%s","alertas":[' "$(date -Is)"; sep=""; for a in "${ALERTAS[@]:-}"; do [ -n "$a" ] && { printf '%s"%s"' "$sep" "$(echo "$a" | tr -d '\n"\\' | cut -c1-300)"; sep=","; }; done; printf ']}\n'; } >> "$NAS/historial-retiro.jsonl"
 
 if [ "${#ALERTAS[@]}" -gt 0 ]; then
   { date '+%F %T'; printf '%s\n' "${ALERTAS[@]}"; } > "$NAS/ALERTA.txt"
