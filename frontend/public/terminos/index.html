@@ -29,6 +29,12 @@
     .legal-content a{color:var(--blue)}
     .legal-content strong{color:var(--navy)}
     footer{background:var(--gray-100);border-top:1px solid var(--gray-200);padding:24px 5%;text-align:center;font-size:13px;color:var(--gray-600)}
+    .planes-wrap{overflow-x:auto;margin:0 0 16px}
+    table.planes{width:100%;border-collapse:collapse;font-size:14px}
+    table.planes th{text-align:left;background:var(--gray-100);color:var(--navy);padding:8px 10px;border-bottom:2px solid var(--gray-200)}
+    table.planes td{padding:10px;border-bottom:1px solid var(--gray-200);vertical-align:top}
+    table.planes td.precio{white-space:nowrap}
+    .legal-content .ejemplo{background:var(--gray-100);border-left:3px solid var(--blue);padding:10px 14px;font-size:14px}
     .spinner{display:flex;justify-content:center;padding:48px;color:var(--gray-600)}
   </style>
 </head>
@@ -69,9 +75,31 @@ async function loadPage() {
     document.getElementById('page-content').innerHTML = `
       <div class="legal-content">${data.data.content}</div>
     `;
+    await tablaDePlanes();
   } catch(e) {
     document.getElementById('page-content').innerHTML = `<p>Contenido no disponible.</p>`;
   }
+}
+
+// Donde el texto tenga <div data-planes></div> se muestra la tabla de planes con lo cargado en el Admin
+// (la misma fuente que la sección de precios del sitio): los términos no llevan precios escritos a mano.
+const esc = (t) => String(t ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function tablaDePlanes() {
+  const cajas = document.querySelectorAll('[data-planes]');
+  if (!cajas.length) return;
+  let filas = '';
+  try {
+    const r = await fetch('/api/plans').then(x => x.json());
+    if (!r.success || !r.data.length) throw new Error('sin planes');
+    filas = r.data.map(p => {
+      const f = Array.isArray(p.features) ? p.features : JSON.parse(p.features || '[]');
+      return `<tr><td><strong>${esc(p.name)}</strong></td><td class="precio">${esc(p.price_label || 'A medida')}</td><td>${f.map(esc).join(' · ')}</td></tr>`;
+    }).join('');
+  } catch (e) {
+    cajas.forEach(c => c.innerHTML = '<p>Los planes y precios vigentes están en <a href="/#planes">cloud.hepta.com.py</a>.</p>');
+    return;
+  }
+  cajas.forEach(c => c.innerHTML = `<div class="planes-wrap"><table class="planes"><thead><tr><th>Plan</th><th>Precio (IVA incluido)</th><th>Incluye</th></tr></thead><tbody>${filas}</tbody></table></div>`);
 }
 
 loadPage();
