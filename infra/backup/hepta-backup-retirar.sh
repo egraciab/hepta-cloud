@@ -13,7 +13,7 @@
 set -uo pipefail
 
 PROYECTO="${HEPTA_PROYECTO:-HEPTA}"
-VMS="${HEPTA_VMS:-hepta-cloud retopa-core HGSVRLNX104 HGSVRLNX111}"
+VMS="${HEPTA_VMS:-hepta-cloud retopa-core HGSVRLNX104 HGSVRLNX111 dkr-hgsvrlnx003 v-HGSVRLNX004}"
 MONTAJE="${HEPTA_NAS_MONTAJE:-/mnt/nas}"
 NAS="${HEPTA_NAS:-$MONTAJE/hepta-backups}"
 ORIGEN=/var/backups/hepta
