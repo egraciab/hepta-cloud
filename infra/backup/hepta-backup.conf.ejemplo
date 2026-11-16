@@ -1,0 +1,24 @@
+# /etc/hepta-backup.conf — qué respalda hepta-backup.sh en ESTA VM. Permisos 600, dueño root.
+# No lleva contraseñas: el script entra a Postgres como el usuario del sistema (host) o dentro del contenedor (docker).
+
+NOMBRE=hepta-cloud                 # cómo se llama la VM en el servidor de respaldos
+
+# Postgres: host (instalado en la VM) | docker (en un contenedor) | ninguno
+PG_MODO=host
+#PG_CONTENEDOR=retopa-db           # solo con PG_MODO=docker
+#PG_USUARIO=retopa                 # solo con PG_MODO=docker: usuario dueño dentro del contenedor
+PG_BASES=auto                      # todas menos plantillas; o una lista: "heptacloud otra"
+PG_EXCLUIR=""                      # bases de prueba que no hace falta guardar
+
+# Carpetas de datos que no están en git (filestore de Odoo, archivos subidos)
+DIRECTORIOS=(
+  /opt/heptacloud/frontend/assets/uploads
+)
+
+# Configuración y secretos de la VM (va todo junto en un .tar.gz por corrida)
+CONFIGS=(
+  /opt/heptacloud/.env
+  /opt/heptacloud/docker-compose.yml
+)
+
+RETENER=8                          # corridas que quedan en la VM (8 × 6 h = 2 días)
