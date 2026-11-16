@@ -118,3 +118,28 @@ de 40 días).
 install -m 755 hepta-prueba-restauracion-erp.sh /usr/local/sbin/hepta-prueba-restauracion-erp
 echo '0 8 1 * * root /usr/local/sbin/hepta-prueba-restauracion-erp >> /var/log/hepta-prueba-restauracion.log 2>&1' > /etc/cron.d/hepta-prueba-restauracion   # día 1 de cada mes, 05:00 de Paraguay
 ```
+
+## Vigía de servicios (`hepta-vigia.py`, en `hcsvrnd01`)
+
+Cada 5 minutos revisa que respondan Hepta Cloud, RetoPA, los tenants, el ERP, el Centro de Mando y el correo
+(webmail y puertos 465, 587 y 993), y que los respaldos no tengan alertas (`ALERTA.txt`, NAS montado, copia al NAS
+de menos de 4 horas). Avisa por correo cuando algo lleva dos revisiones seguidas caído, recuerda cada 6 horas y
+avisa cuando vuelve. El correo sale con los datos de `/etc/hepta-backup-correo.conf`.
+
+En cada pasada manda una señal a healthchecks.io. Si la señal deja de llegar (el nodo apagado, sin luz o sin
+internet) o llega como falla, healthchecks.io avisa desde afuera: cubre el caso en que el correo propio también
+está caído. En healthchecks.io: un chequeo con período 5 minutos y gracia 10 minutos, con aviso a un correo que
+**no** sea de `hepta.com.py` (Gmail) y, si se quiere, a Telegram o WhatsApp.
+
+```bash
+install -m 755 hepta-vigia.py /usr/local/sbin/hepta-vigia
+hepta-vigia --estado        # cómo está cada cosa ahora, sin avisar a nadie
+hepta-vigia --configurar    # pide la dirección de la señal y la guarda en /etc/hepta-vigia.conf (600)
+hepta-vigia --probar        # manda un correo y una señal de prueba
+echo '*/5 * * * * root /usr/local/sbin/hepta-vigia >> /var/log/hepta-vigia.log 2>&1' > /etc/cron.d/hepta-vigia
+```
+
+La dirección de la señal es una credencial (quien la tiene puede hacer que el aviso externo no salte): no va al
+repo ni al chat. Para cambiar qué se revisa sin tocar el programa, agregar en `/etc/hepta-vigia.conf` líneas
+`CHEQUEO=http|Nombre|https://...` o `CHEQUEO=tcp|Nombre|host:puerto` (si hay alguna, reemplazan a la lista de fábrica).
+Estado entre pasadas: `/var/lib/hepta-vigia/estado.json`.
