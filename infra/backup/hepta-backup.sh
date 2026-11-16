@@ -27,6 +27,8 @@ PG_EXCLUIR=""              # bases que no se respaldan (separadas por espacios)
 DIRECTORIOS=()             # carpetas de datos (filestore, uploads): copia espejo con rsync
 CONFIGS=()                 # archivos y carpetas chicas de configuración: un .tar.gz por corrida
                            # En las dos listas, "?/ruta" = opcional: si no existe se saltea sin dar error.
+VOLCADOS_EXTRA=()          # volcados que no son de Postgres: "archivo|comando". La salida del comando se guarda en
+                           # ese archivo de la corrida; si el comando falla o no escribe nada, el respaldo es fallido.
 RETENER=8                  # corridas que quedan en la VM (el histórico largo vive en el servidor de respaldos)
 # shellcheck disable=SC1090
 . "$CONF"
@@ -70,6 +72,7 @@ if [ "$SOLO_VER" = 1 ]; then
     done
   else echo "  (sin Postgres)"; fi
   falta() { case "$1" in \?*) echo "  - ${1#\?}  (opcional, no existe: se saltea)";; *) echo "  - $1  ¡NO EXISTE!";; esac; }
+  echo "Volcados extra:"; for v in "${VOLCADOS_EXTRA[@]:-}"; do [ -n "$v" ] && echo "  - ${v%%|*}"; done
   echo "Carpetas de datos:"; for d in "${DIRECTORIOS[@]:-}"; do [ -n "$d" ] && { [ -d "${d#\?}" ] && echo "  - ${d#\?} ($(du -sh "${d#\?}" 2>/dev/null | cut -f1))" || falta "$d"; }; done
   echo "Configuración:";     for c in "${CONFIGS[@]:-}";     do [ -n "$c" ] && { [ -e "${c#\?}" ] && echo "  - ${c#\?}" || falta "$c"; }; done
   exit 0
@@ -109,6 +112,19 @@ if [ "$PG_MODO" != ninguno ]; then
     aviso "  base $b: $(du -h "$f" | cut -f1)"
   done
 fi
+
+# ── 1b. Volcados que no son de Postgres (por ejemplo, la base MariaDB de mailcow) ──
+for v in "${VOLCADOS_EXTRA[@]:-}"; do
+  [ -n "$v" ] || continue
+  nombre="${v%%|*}"; comando="${v#*|}"; f="$CORRIDA/$nombre"
+  if ! bash -o pipefail -c "$comando" > "$f" 2>"$f.err"; then
+    falla "volcado $nombre falló: $(head -c 300 "$f.err")"; continue
+  fi
+  if [ ! -s "$f" ]; then falla "el volcado $nombre salió VACÍO"; continue; fi
+  rm -f "$f.err"
+  BASES_OK+=("$nombre:$(stat -c %s "$f")")
+  aviso "  volcado $nombre: $(du -h "$f" | cut -f1)"
+done
 
 # ── 2. Carpetas de datos (espejo; el servidor de respaldos guarda el histórico) ──
 for d in "${DIRECTORIOS[@]:-}"; do
@@ -157,4 +173,4 @@ date -Is > "$DESTINO/ultimo-ok"
 # ── 5. Limpieza: quedan las últimas $RETENER corridas buenas y las fallidas de la última semana ──
 ls -1d "$DESTINO"/dumps/[0-9]*_[0-9][0-9][0-9][0-9] 2>/dev/null | sort -r | tail -n +$((RETENER + 1)) | xargs -r rm -rf
 find "$DESTINO/dumps" -maxdepth 1 -name '*.FALLIDA' -mtime +7 -exec rm -rf {} + 2>/dev/null
-aviso "Respaldo OK: ${#BASES_OK[@]} base/s."
+aviso "Respaldo OK: ${#BASES_OK[@]} volcado/s."
