@@ -50,8 +50,8 @@ for vm in $VMS; do
   # ── Corridas de volcados que faltan en el NAS ──
   for marca in $(en_vm "$vm" sh -c "ls -1 $ORIGEN/dumps 2>/dev/null" | grep -E '^[0-9]{8}_[0-9]{4}$' | sort); do
     [ -d "$dest/dumps/$marca" ] && continue
-    # Una corrida de más de 3 días que no está en el NAS ya fue depurada por el histórico: no se vuelve a traer.
-    [ $(( (AHORA - $(date -d "${marca:0:4}-${marca:4:2}-${marca:6:2}" +%s)) / 86400 )) -gt 3 ] && [ -n "$(ls -A "$dest/dumps" 2>/dev/null)" ] && continue
+    # Una corrida de más de 2 días que no está en el NAS ya fue depurada por el histórico: no se vuelve a traer.
+    [ $(( (AHORA - $(date -d "${marca:0:4}-${marca:4:2}-${marca:6:2}" +%s)) / 86400 )) -gt 2 ] && [ -n "$(ls -A "$dest/dumps" 2>/dev/null)" ] && continue
     tmp="$dest/dumps/.$marca.parcial"; rm -rf "$tmp"; mkdir -p "$tmp"
     if en_vm "$vm" tar -C "$ORIGEN/dumps/$marca" -cf - . | tar -C "$tmp" -xf - \
        && en_vm "$vm" sh -c "cd $ORIGEN/dumps/$marca && sha256sum *" > "$tmp/.sumas" \
