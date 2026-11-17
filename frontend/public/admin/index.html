@@ -1422,7 +1422,7 @@ async function loadLeads(){
       <td><strong>${esc(l.full_name)}</strong></td>
       <td>${esc(l.company_name||'—')}${l.ruc?`<div class="text-muted text-sm">RUC ${esc(l.ruc)}</div>`:''}</td>
       <td>${l.email?`<div>${esc(l.email)}</div>`:''}${l.phone?`<div class="text-muted">${esc(l.phone)}</div>`:''}</td>
-      <td>${l.intent==='contratar'?'<span class="badge badge-green">Contratar</span>':'<span class="badge badge-gray">Consulta</span>'}${l.plan_slug?`<div class="text-muted text-sm">${esc(l.plan_name||l.plan_slug)}</div>`:''}</td>
+      <td>${l.intent==='contratar'?'<span class="badge badge-green">Contratar</span>':'<span class="badge badge-gray">Consulta</span>'}${l.plan_slug?`<div class="text-muted text-sm">${esc(l.plan_name||l.plan_slug)}</div>`:''}${l.pago_clic_at?`<div class="text-sm" style="color:#B45309;font-weight:600" title="Tocó Pagar con tPago: validar en Bancard Comercios">Fue a pagar ${new Date(l.pago_clic_at).toLocaleString('es-PY',{dateStyle:'short',timeStyle:'short'})}</div>`:''}</td>
       <td class="text-muted text-sm" style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(l.message||'')}">${esc(l.message||'—')}</td>
       <td>
         <select class="status-select" onchange="updateLeadStatus(${l.id},this.value)">

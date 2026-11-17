@@ -841,7 +841,7 @@ async function submitForm(e) {
     $m('ok-text').textContent = contratar
       ? (pago && pago.link ? 'Falta un paso: el pago del primer mes.' : 'Te escribimos en menos de 24 horas hábiles con los datos para pagar el primer mes y coordinar la puesta en marcha.')
       : 'Te contactamos en menos de 24 horas hábiles.';
-    const conPago = !!(pago && pago.link && /^https:\/\//i.test(pago.link));
+    const conPago = !!(pago && pago.link && /^\/api\/leads\/\d+\/pagar\?t=[\w-]+$/.test(pago.link));
     $m('ok-pago').hidden = !conPago;
     if (conPago) {
       $m('ok-pago-plan').textContent = `${pago.plan}${pago.precio ? ' · ' + pago.precio : ''}`;

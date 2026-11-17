@@ -1,6 +1,7 @@
 const router     = require('express').Router();
 const rateLimit  = require('express-rate-limit');
 const { isIP }   = require('net');
+const crypto     = require('crypto');
 const nodemailer = require('nodemailer');
 const pool       = require('../config/db');
 const erpLeads   = require('../services/erp_leads');
@@ -93,6 +94,70 @@ async function confirmarPedido(lead, plan, link) {
   });
 }
 
+// ── Botón de pago con aviso ──
+// El botón "Pagar con tPago" (del sitio y del correo) no va directo a tPago: pasa por /api/leads/:id/pagar, que anota
+// el clic, avisa a ventas para que valide el pago en Bancard Comercios y recién ahí redirige. El enlace lleva una firma
+// para que nadie pueda disparar avisos de pedidos ajenos cambiando el número.
+const firmaPago = id => crypto.createHmac('sha256', process.env.JWT_SECRET || 'sin-clave').update(`pago:${id}`).digest('base64url').slice(0, 24);
+async function urlSitio() {
+  const { rows } = await pool.query("SELECT value FROM site_config WHERE key = 'site_url'");
+  return ((rows[0] && rows[0].value) || 'https://cloud.hepta.com.py').replace(/\/+$/, '');
+}
+const rutaPago = id => `/api/leads/${id}/pagar?t=${firmaPago(id)}`;
+
+async function avisarClicPago(lead) {
+  const { rows } = await pool.query("SELECT value FROM site_config WHERE key = 'notify_leads_email'");
+  const destino = rows[0] && rows[0].value;
+  const cuando = new Date().toLocaleString('es-PY', { timeZone: 'America/Asuncion', dateStyle: 'short', timeStyle: 'short' });
+  if (destino) {
+    await enviarCorreo({
+      to: destino,
+      subject: `Fue a pagar con tPago: ${lead.full_name}${lead.plan_name ? ' (' + lead.plan_name + ')' : ''}`.replace(/[\r\n]+/g, ' '),
+      html: marco('Un cliente fue a pagar con tPago', `
+        <p><strong>${escapeHtml(lead.full_name)}</strong>${lead.company_name ? ' — ' + escapeHtml(lead.company_name) : ''} tocó "Pagar con tPago" el ${escapeHtml(cuando)}.</p>
+        <table style="font-size:14px;border-collapse:collapse;margin:8px 0">
+          ${lead.plan_name ? `<tr><td style="padding:4px 12px 4px 0;color:#6B7280">Plan</td><td style="padding:4px 0;font-weight:700">${escapeHtml(lead.plan_name)}${lead.plan_price_label ? ' · ' + escapeHtml(lead.plan_price_label) : ''}</td></tr>` : ''}
+          ${lead.email ? `<tr><td style="padding:4px 12px 4px 0;color:#6B7280">Correo</td><td style="padding:4px 0">${escapeHtml(lead.email)}</td></tr>` : ''}
+          ${lead.phone ? `<tr><td style="padding:4px 12px 4px 0;color:#6B7280">Teléfono</td><td style="padding:4px 0">${escapeHtml(lead.phone)}</td></tr>` : ''}
+          <tr><td style="padding:4px 12px 4px 0;color:#6B7280">Pedido</td><td style="padding:4px 0">#${lead.id}</td></tr>
+        </table>
+        <p><strong>Siguiente paso:</strong> validá en Bancard Comercios que el pago entró. Si entró, hacé el alta desde el Admin (Usuarios → Nuevo, después Instancias → Nueva instancia).</p>
+        <p style="font-size:12px;color:#6B7280">Tocar el botón no garantiza que haya pagado: puede haber cerrado tPago sin terminar.</p>`),
+    });
+  }
+  // Nota en la oportunidad del ERP, si ya existe
+  if (lead.odoo_lead_id) {
+    const odoo = require('../config/odoo');
+    await odoo.erp.ejecutar('crm.lead', 'message_post', [[lead.odoo_lead_id]], {
+      body: `Tocó "Pagar con tPago" en cloud.hepta.com.py (${cuando}). Validar el pago en Bancard Comercios.`,
+      message_type: 'comment', subtype_xmlid: 'mail.mt_note',
+    }).catch(err => console.error('[leads/pago erp]', lead.id, err.message));
+  }
+}
+
+// GET /api/leads/:id/pagar?t=<firma> → anota el primer clic, avisa y redirige al link de pago del plan
+router.get('/:id(\\d+)/pagar', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const t = String(req.query.t || '');
+  const ok = t.length === 24 && crypto.timingSafeEqual(Buffer.from(t), Buffer.from(firmaPago(id)));
+  const volver = async () => res.redirect(302, (await urlSitio()) + '/#planes');
+  try {
+    if (!ok) return volver();
+    const { rows: [lead] } = await pool.query(
+      `SELECT l.*, p.name AS plan_name, p.price_label AS plan_price_label
+         FROM leads l LEFT JOIN plans p ON p.slug = l.plan_slug WHERE l.id = $1`, [id]);
+    const link = lead && await linkDePago(lead.plan_slug);
+    if (!link) return volver();
+    // Solo el primer clic avisa: si vuelve a tocar el botón, va directo a tPago.
+    const { rowCount } = await pool.query('UPDATE leads SET pago_clic_at = NOW() WHERE id = $1 AND pago_clic_at IS NULL', [id]);
+    if (rowCount) avisarClicPago(lead).catch(err => console.error('[leads/pago aviso]', id, err.message));
+    res.redirect(302, link);
+  } catch (err) {
+    console.error('[leads/pagar]', err.message);
+    volver().catch(() => res.status(500).end());
+  }
+});
+
 const limpio = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 // POST /api/leads
@@ -148,8 +213,10 @@ router.post('/', limiter, async (req, res) => {
 
     const data = { id: lead.id };
     if (intent === 'contratar') {
-      data.pago = { plan: plan.name, precio: plan.price_label || '', link: await linkDePago(plan.slug) };
-      confirmarPedido(lead, plan, data.pago.link).catch(err => console.error('[leads/confirmar]', err.message));
+      const hayLink = !!(await linkDePago(plan.slug));
+      data.pago = { plan: plan.name, precio: plan.price_label || '', link: hayLink ? rutaPago(lead.id) : '' };
+      const linkCorreo = hayLink ? (await urlSitio()) + rutaPago(lead.id) : '';
+      confirmarPedido(lead, plan, linkCorreo).catch(err => console.error('[leads/confirmar]', err.message));
     }
     res.json({ success: true, data });
   } catch (err) {
