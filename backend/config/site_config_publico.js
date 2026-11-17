@@ -9,7 +9,7 @@
 const SECRETO = /(pass(word)?|secret|token|api_?key|_key)$/i;
 // email_wc_ (textos del correo de bienvenida) y notify_ (a quién se avisa) no son secretos, pero el
 // sitio no los usa: no tienen por qué salir en el endpoint público.
-const INTERNO = /^(smtp_|provision_|perimetral_|cloudflare_|certbot_|odoo_|mailcow_|retopa_api_|retopa_auto_|retopa_enabled$|email_wc_|notify_)/i;
+const INTERNO = /^(smtp_|provision_|perimetral_|cloudflare_|certbot_|odoo_|mailcow_|retopa_api_|retopa_auto_|retopa_enabled$|email_wc_|notify_|tpago_)/i;
 
 const esSecreto = key => SECRETO.test(String(key || ''));
 const esClaveSensible = key => esSecreto(key) || INTERNO.test(String(key || ''));

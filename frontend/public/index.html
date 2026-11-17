@@ -176,7 +176,28 @@
     /* MODAL */
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:20px}
     .modal-overlay.open{display:flex}
-    .modal{background:#fff;border-radius:var(--radius-lg);padding:36px;width:100%;max-width:480px}
+    .modal{background:#fff;border-radius:var(--radius-lg);padding:36px;width:100%;max-width:520px;position:relative;max-height:calc(100vh - 40px);overflow-y:auto}
+    .modal-x{position:absolute;top:10px;right:12px;background:none;border:none;font-size:26px;line-height:1;color:var(--gray-600);cursor:pointer;padding:6px 10px}
+    .plan-chip{background:var(--gray-100);border:1px solid var(--gray-200);border-radius:8px;padding:10px 14px;margin:-8px 0 20px;font-size:14px;color:var(--navy);display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+    .plan-chip[hidden],.acepta[hidden]{display:none}
+    .plan-chip strong{font-weight:700}
+    .form-group .opc{font-weight:400;color:var(--gray-600)}
+    .form-group input.mal,.form-group select.mal{border-color:#DC2626}
+    .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+    .acepta{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--gray-800);margin:4px 0 0;cursor:pointer}
+    .acepta input{margin-top:3px;flex:0 0 auto}
+    .acepta a,.aviso-priv a{color:var(--blue)}
+    .modal p.aviso-priv{font-size:12px;margin:4px 0 0}
+    .ok-icon{width:52px;height:52px;border-radius:50%;background:var(--teal-pale);color:var(--teal);font-size:28px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+    .pasos{display:flex;gap:6px;list-style:none;margin:0 0 18px;padding:0;font-size:12.5px;color:var(--gray-600)}
+    .pasos li{flex:1;border-top:3px solid var(--gray-200);padding-top:6px}
+    .pasos li.hecho{border-color:var(--teal);color:var(--navy)}
+    .pasos li.ahora{border-color:var(--blue);color:var(--navy);font-weight:700}
+    .pago-box{border:1px solid var(--gray-200);border-radius:10px;padding:18px;margin-top:4px}
+    .pago-plan{font-size:15px;color:var(--navy);font-weight:600;margin-bottom:12px}
+    .pago-btn{display:block;text-align:center;width:100%}
+    .modal p.pago-nota{font-size:12.5px;margin:12px 0 0}
+    @media (max-width:560px){.modal{padding:26px 20px}.modal .form-row{grid-template-columns:1fr;gap:0}}
     .modal h2{font-size:22px;font-weight:700;color:var(--navy);margin-bottom:6px}
     .modal p{font-size:14px;color:var(--gray-600);margin-bottom:24px}
     .form-group{margin-bottom:16px}
@@ -496,27 +517,54 @@
   </div>
 </footer>
 
-<!-- MODAL -->
+<!-- MODAL: consulta / demo, o contratar un plan -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModalOutside(event)">
-  <div class="modal">
-    <h2>Solicitar demo gratuita</h2>
-    <p>Te contactamos en menos de 24 horas hábiles.</p>
-    <form id="contact-form" onsubmit="submitForm(event)">
-      <div class="form-row">
-        <div class="form-group"><label>Nombre *</label><input type="text" id="f-name" placeholder="Tu nombre" required/></div>
-        <div class="form-group"><label>Empresa</label><input type="text" id="f-company" placeholder="Nombre de tu empresa"/></div>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <button type="button" class="modal-x" onclick="closeModal()" aria-label="Cerrar">×</button>
+
+    <div id="modal-form-view">
+      <h2 id="modal-title">Solicitar demo gratuita</h2>
+      <p id="modal-sub">Te contactamos en menos de 24 horas hábiles.</p>
+      <div class="plan-chip" id="modal-plan-chip" hidden></div>
+      <form id="contact-form" onsubmit="submitForm(event)" novalidate>
+        <div class="form-row">
+          <div class="form-group"><label for="f-name">Nombre y apellido *</label><input type="text" id="f-name" placeholder="Tu nombre" autocomplete="name" maxlength="120" required/></div>
+          <div class="form-group"><label for="f-company">Empresa o negocio</label><input type="text" id="f-company" placeholder="Nombre de tu empresa" autocomplete="organization" maxlength="120"/></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label for="f-email">Correo <span id="f-email-req">*</span></label><input type="email" id="f-email" placeholder="tu@empresa.com" autocomplete="email" maxlength="160"/></div>
+          <div class="form-group"><label for="f-phone">WhatsApp o teléfono <span id="f-phone-req"></span></label><input type="tel" id="f-phone" placeholder="0981 000 000" autocomplete="tel" inputmode="tel" maxlength="30"/></div>
+        </div>
+        <div class="form-row" id="row-plan-ruc">
+          <div class="form-group" id="grp-plan"><label for="f-plan">Plan que te interesa</label><select id="f-plan"><option value="">Todavía no sé</option></select></div>
+          <div class="form-group"><label for="f-ruc">RUC <span class="opc">(opcional)</span></label><input type="text" id="f-ruc" placeholder="80012345-6" inputmode="numeric" maxlength="14"/></div>
+        </div>
+        <div class="form-group"><label for="f-msg" id="f-msg-label">¿Qué necesitás resolver?</label><textarea id="f-msg" placeholder="Contanos brevemente..." maxlength="2000"></textarea></div>
+        <div class="hp" aria-hidden="true"><label>No completar <input type="text" id="f-website" tabindex="-1" autocomplete="off"/></label></div>
+        <label class="acepta" id="grp-acepta" hidden><input type="checkbox" id="f-acepta"/> <span>Leí y acepto los <a href="/terminos" target="_blank" rel="noopener">términos del servicio</a> y la <a href="/privacidad" target="_blank" rel="noopener">política de privacidad</a>.</span></label>
+        <p class="aviso-priv" id="aviso-priv">Usamos tus datos solo para responderte. <a href="/privacidad" target="_blank" rel="noopener">Política de privacidad</a>.</p>
+        <div class="form-msg" id="form-msg" role="alert"></div>
+        <div class="modal-footer-btns">
+          <button type="button" class="btn-cancel" onclick="closeModal()">Cancelar</button>
+          <button type="submit" class="btn-primary" id="submit-btn">Enviar solicitud</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="modal-ok-view" hidden>
+      <div class="ok-icon" aria-hidden="true">✓</div>
+      <h2 id="ok-title">¡Recibimos tu solicitud!</h2>
+      <p id="ok-text">Te contactamos en menos de 24 horas hábiles.</p>
+      <div id="ok-pago" hidden>
+        <ol class="pasos" aria-label="Pasos para contratar"><li class="hecho">1. Pedido ✓</li><li class="ahora">2. Pago del primer mes</li><li>3. Alta de tu sistema</li></ol>
+        <div class="pago-box">
+          <div class="pago-plan" id="ok-pago-plan"></div>
+          <a class="btn-primary pago-btn" id="ok-pago-link" href="#" target="_blank" rel="noopener">Pagar ahora con tPago</a>
+          <p class="pago-nota">Se abre tPago en otra pestaña. También te mandamos este link por correo. Cuando confirmamos el pago damos de alta tu sistema y te llega otro correo con tu usuario y contraseña. Si preferís pagar por transferencia o QR, te escribimos con los datos.</p>
+        </div>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label>Email</label><input type="email" id="f-email" placeholder="tu@empresa.com"/></div>
-        <div class="form-group"><label>Teléfono</label><input type="tel" id="f-phone" placeholder="0981 000 000"/></div>
-      </div>
-      <div class="form-group"><label>¿Qué necesitás resolver?</label><textarea id="f-msg" placeholder="Contanos brevemente..."></textarea></div>
-      <div class="form-msg" id="form-msg"></div>
-      <div class="modal-footer-btns">
-        <button type="button" class="btn-cancel" onclick="closeModal()">Cancelar</button>
-        <button type="submit" class="btn-primary" id="submit-btn">Enviar solicitud</button>
-      </div>
-    </form>
+      <div class="modal-footer-btns" style="justify-content:flex-end"><button type="button" class="btn-cancel" onclick="closeModal()">Cerrar</button></div>
+    </div>
   </div>
 </div>
 
@@ -675,7 +723,11 @@ function renderServices(services) {
   `).join('');
 }
 
+let PLANES = [];
 function renderPlans(plans) {
+  PLANES = plans;
+  const sel = document.getElementById('f-plan');
+  if (sel) sel.innerHTML = '<option value="">Todavía no sé</option>' + plans.map(p => `<option value="${escH(p.slug)}">${escH(p.name)}${p.price_label ? ' — ' + escH(p.price_label) : ''}</option>`).join('');
   if (!plans.length) {
     document.getElementById('plans-grid').innerHTML = '';
     return;
@@ -689,57 +741,119 @@ function renderPlans(plans) {
         <div class="plan-price">${String(p.price_label || '—').replace(/\s*\/\s*(mes|año)\s*$/i, ' <small>/ $1</small>')}</div>
         <div class="plan-desc">${p.description || ''}</div>
         <ul class="plan-features">${features.map(f => `<li>${f}</li>`).join('')}</ul>
-        <button class="plan-cta" onclick="openModal()">Solicitar este plan</button>
+        <button class="plan-cta" onclick="openModal('${String(p.slug).replace(/[^a-z0-9_-]/gi,'')}')">${Number(p.price) > 0 ? 'Contratar este plan' : 'Consultar por este plan'}</button>
       </div>
     `;
   }).join('');
 }
 
 // ── Modal ──────────────────────────────────────────────────
-function openModal() {
-  document.getElementById('modal-overlay').classList.add('open');
+// Dos usos. openModal() = consulta o demo. openModal('slug') desde la tarjeta de un plan con precio = contratar
+// ese plan: pide correo y teléfono, la aceptación de los términos y, al enviar, muestra el botón de pago del plan
+// (el link se carga en Admin → Planes).
+const escH = (t) => String(t ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let MODO = 'consulta', PLAN_ELEGIDO = null;
+const $m = (id) => document.getElementById(id);
+
+function openModal(slug) {
+  const plan = slug ? PLANES.find(p => p.slug === slug) : null;
+  PLAN_ELEGIDO = plan || null;
+  MODO = plan && Number(plan.price) > 0 ? 'contratar' : 'consulta';
+  const contratar = MODO === 'contratar';
+  $m('modal-title').textContent = contratar ? `Contratar ${plan.name}` : (plan ? `Consultar por ${plan.name}` : 'Solicitar demo gratuita');
+  $m('modal-sub').textContent = contratar ? 'Completá tus datos y pagá el primer mes para que demos de alta tu sistema.' : 'Te contactamos en menos de 24 horas hábiles.';
+  const chip = $m('modal-plan-chip');
+  chip.hidden = !contratar;
+  if (contratar) chip.innerHTML = `<span><strong>${escH(plan.name)}</strong></span><span>${escH(plan.price_label || '')} · IVA incluido</span>`;
+  $m('grp-plan').style.display = contratar ? 'none' : '';
+  $m('row-plan-ruc').style.gridTemplateColumns = contratar ? '1fr' : '';
+  $m('f-plan').value = plan && !contratar ? plan.slug : '';
+  $m('f-phone-req').textContent = contratar ? '*' : '';
+  $m('f-msg-label').textContent = contratar ? '¿Algo que tengamos que saber? (opcional)' : '¿Qué necesitás resolver?';
+  $m('grp-acepta').hidden = !contratar;
+  $m('aviso-priv').style.display = contratar ? 'none' : '';
+  $m('submit-btn').textContent = contratar ? 'Enviar y continuar al pago' : 'Enviar solicitud';
+  $m('form-msg').className = 'form-msg';
+  document.querySelectorAll('#contact-form .mal').forEach(el => el.classList.remove('mal'));
+  $m('modal-form-view').hidden = false;
+  $m('modal-ok-view').hidden = true;
+  $m('modal-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
+  setTimeout(() => $m('f-name').focus(), 50);
 }
 function closeModal() {
-  document.getElementById('modal-overlay').classList.remove('open');
+  $m('modal-overlay').classList.remove('open');
   document.body.style.overflow = '';
 }
 function closeModalOutside(e) {
-  if (e.target === document.getElementById('modal-overlay')) closeModal();
+  if (e.target === $m('modal-overlay')) closeModal();
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
+function validarForm() {
+  const v = (id) => $m(id).value.trim();
+  const mal = (id, msg) => { $m(id).classList.add('mal'); $m(id).focus(); return msg; };
+  document.querySelectorAll('#contact-form .mal').forEach(el => el.classList.remove('mal'));
+  const contratar = MODO === 'contratar';
+  if (v('f-name').length < 3) return mal('f-name', 'Escribí tu nombre y apellido.');
+  if (!v('f-email') && (contratar || !v('f-phone'))) return mal('f-email', contratar ? 'Necesitamos tu correo: ahí te llegan el usuario y la contraseña.' : 'Dejanos un correo o un teléfono para responderte.');
+  if (v('f-email') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v('f-email'))) return mal('f-email', 'Revisá el correo: no parece válido.');
+  if (contratar && !v('f-phone')) return mal('f-phone', 'Necesitamos un WhatsApp o teléfono para coordinar la puesta en marcha.');
+  if (v('f-phone') && v('f-phone').replace(/\D/g, '').length < 6) return mal('f-phone', 'Revisá el teléfono: faltan números.');
+  if (v('f-ruc') && !/^[0-9]{3,10}(-[0-9])?$/.test(v('f-ruc'))) return mal('f-ruc', 'Revisá el RUC: va con números y, si tiene, guion y dígito verificador (80012345-6).');
+  if (contratar && !$m('f-acepta').checked) return 'Para contratar tenés que aceptar los términos del servicio y la política de privacidad.';
+  return '';
+}
+
 async function submitForm(e) {
   e.preventDefault();
-  const btn = document.getElementById('submit-btn');
-  const msg = document.getElementById('form-msg');
-  btn.disabled = true; btn.textContent = 'Enviando...';
+  const btn = $m('submit-btn');
+  const msg = $m('form-msg');
+  const textoBtn = btn.textContent;
   msg.className = 'form-msg';
+  const problema = validarForm();
+  if (problema) { msg.className = 'form-msg error'; msg.textContent = problema; return; }
+  btn.disabled = true; btn.textContent = 'Enviando...';
   try {
+    const contratar = MODO === 'contratar';
     const res = await fetch('/api/leads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        full_name:    document.getElementById('f-name').value.trim(),
-        email:        document.getElementById('f-email').value.trim(),
-        phone:        document.getElementById('f-phone').value.trim(),
-        company_name: document.getElementById('f-company').value.trim(),
-        message:      document.getElementById('f-msg').value.trim(),
+        full_name:    $m('f-name').value.trim(),
+        email:        $m('f-email').value.trim(),
+        phone:        $m('f-phone').value.trim(),
+        company_name: $m('f-company').value.trim(),
+        ruc:          $m('f-ruc').value.trim(),
+        message:      $m('f-msg').value.trim(),
+        plan_slug:    contratar ? PLAN_ELEGIDO.slug : $m('f-plan').value,
+        intent:       MODO,
+        acepta_terminos: contratar ? $m('f-acepta').checked : undefined,
+        website:      $m('f-website').value,
         source:       'website',
       }),
     });
-    const data = await res.json();
-    if (data.success) {
-      msg.className = 'form-msg success';
-      msg.textContent = '¡Recibido! Te contactamos en breve.';
-      document.getElementById('contact-form').reset();
-      setTimeout(closeModal, 2500);
-    } else throw new Error(data.error || 'Error desconocido');
+    const data = await res.json().catch(() => ({ success: false, error: res.status === 429 ? 'Recibimos varios pedidos seguidos desde tu conexión. Probá de nuevo en un rato o escribinos por WhatsApp.' : 'Error al enviar. Intentá de nuevo.' }));
+    if (!data.success) throw new Error(data.error || 'Error desconocido');
+    $m('contact-form').reset();
+    const pago = data.data && data.data.pago;
+    $m('ok-title').textContent = contratar ? '¡Listo! Ya tenemos tu pedido' : '¡Recibimos tu solicitud!';
+    $m('ok-text').textContent = contratar
+      ? (pago && pago.link ? 'Falta un paso: el pago del primer mes.' : 'Te escribimos en menos de 24 horas hábiles con los datos para pagar el primer mes y coordinar la puesta en marcha.')
+      : 'Te contactamos en menos de 24 horas hábiles.';
+    const conPago = !!(pago && pago.link && /^https:\/\//i.test(pago.link));
+    $m('ok-pago').hidden = !conPago;
+    if (conPago) {
+      $m('ok-pago-plan').textContent = `${pago.plan}${pago.precio ? ' · ' + pago.precio : ''}`;
+      $m('ok-pago-link').href = pago.link;
+    }
+    $m('modal-form-view').hidden = true;
+    $m('modal-ok-view').hidden = false;
   } catch(err) {
     msg.className = 'form-msg error';
     msg.textContent = err.message || 'Error al enviar. Intentá de nuevo.';
   } finally {
-    btn.disabled = false; btn.textContent = 'Enviar solicitud';
+    btn.disabled = false; btn.textContent = textoBtn;
   }
 }
 

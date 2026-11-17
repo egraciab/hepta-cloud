@@ -109,22 +109,41 @@ router.post('/upload/logo', async (req, res) => {
 });
 
 // ── Plans ────────────────────────────────────────────────────
+// El link de pago de cada plan vive en site_config como tpago_link_<slug> (lo usan el sitio y el portal).
+// Se edita desde el modal del plan; acá se lee y se guarda junto con el plan.
+const LINK_OK = /^https:\/\/[^\s"'<>]+$/i;
+async function guardarLinkDePago(slug, link) {
+  if (link === undefined || !slug) return null;
+  const v = String(link || '').trim();
+  if (v && !LINK_OK.test(v)) return 'El link de pago tiene que empezar con https:// y no llevar espacios.';
+  await pool.query(
+    `INSERT INTO site_config (key, value, updated_at) VALUES ($1,$2,NOW())
+     ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=NOW()`, [`tpago_link_${slug}`, v]);
+  return null;
+}
+
 router.get('/plans', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM plans ORDER BY sort_order ASC');
+    const { rows } = await pool.query(
+      `SELECT p.*, COALESCE(c.value, '') AS payment_link
+         FROM plans p LEFT JOIN site_config c ON c.key = 'tpago_link_' || p.slug
+        ORDER BY p.sort_order ASC`);
     res.json({ success: true, data: rows });
   } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
 });
 
 router.post('/plans', async (req, res) => {
-  const { name, slug, price, price_label, description, features, is_featured, sort_order, badge_text } = req.body;
+  const { name, slug, price, price_label, description, features, is_featured, sort_order, badge_text, payment_link } = req.body;
   if (!name || !slug) return res.status(400).json({ success: false, error: 'Nombre y slug requeridos' });
+  if (!/^[a-z0-9_-]{1,60}$/.test(slug)) return res.status(400).json({ success: false, error: 'El slug va en minúsculas, sin espacios (letras, números, guion).' });
+  if (payment_link && !LINK_OK.test(String(payment_link).trim())) return res.status(400).json({ success: false, error: 'El link de pago tiene que empezar con https:// y no llevar espacios.' });
   try {
     const { rows } = await pool.query(
       `INSERT INTO plans (name,slug,price,price_label,description,features,is_featured,sort_order,badge_text)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
       [name,slug,price||0,price_label||'',description||'',JSON.stringify(features||[]),is_featured||false,sort_order||0,badge_text||null]
     );
+    await guardarLinkDePago(rows[0].slug, payment_link);
     res.json({ success: true, data: rows[0] });
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ success: false, error: 'Slug ya existe' });
@@ -133,7 +152,8 @@ router.post('/plans', async (req, res) => {
 });
 
 router.put('/plans/:id', async (req, res) => {
-  const { name, price, price_label, description, features, is_featured, is_active, sort_order, badge_text } = req.body;
+  const { name, price, price_label, description, features, is_featured, is_active, sort_order, badge_text, payment_link } = req.body;
+  if (payment_link && !LINK_OK.test(String(payment_link).trim())) return res.status(400).json({ success: false, error: 'El link de pago tiene que empezar con https:// y no llevar espacios.' });
   try {
     const { rows } = await pool.query(
       `UPDATE plans SET name=$1,price=$2,price_label=$3,description=$4,
@@ -146,6 +166,7 @@ router.put('/plans/:id', async (req, res) => {
        is_featured??null,is_active??null,sort_order,badge_text||null,req.params.id]
     );
     if (!rows[0]) return res.status(404).json({ success: false, error: 'Plan no encontrado' });
+    await guardarLinkDePago(rows[0].slug, payment_link);
     res.json({ success: true, data: rows[0] });
   } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
 });
@@ -365,14 +386,15 @@ router.get('/leads', async (req, res) => {
   try {
     const params = [];
     let where = '';
-    if (status) { params.push(status); where = `WHERE status=$1`; }
+    if (status) { params.push(status); where = `WHERE l.status=$1`; }
     params.push(parseInt(limit), parseInt(offset));
     const li = params.length-1, oi = params.length;
     const { rows } = await pool.query(
-      `SELECT * FROM leads ${where} ORDER BY created_at DESC LIMIT $${li} OFFSET $${oi}`, params
+      `SELECT l.*, p.name AS plan_name FROM leads l LEFT JOIN plans p ON p.slug = l.plan_slug
+        ${where} ORDER BY l.created_at DESC LIMIT $${li} OFFSET $${oi}`, params
     );
     const { rows: cnt } = await pool.query(
-      `SELECT COUNT(*) FROM leads ${where}`, status?[status]:[]
+      `SELECT COUNT(*) FROM leads l ${where}`, status?[status]:[]
     );
     res.json({ success: true, data: rows, total: parseInt(cnt[0].count) });
   } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
@@ -390,6 +412,18 @@ router.put('/leads/:id', async (req, res) => {
     if (!rows[0]) return res.status(404).json({ success: false, error: 'Lead no encontrado' });
     res.json({ success: true, data: rows[0] });
   } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
+});
+
+// Enviar (o reenviar) un lead al ERP como oportunidad. No duplica: si ya fue, devuelve el mismo id.
+router.post('/leads/:id/erp', async (req, res) => {
+  try {
+    const r = await require('../services/erp_leads').enviarLead(parseInt(req.params.id, 10), { forzar: true });
+    if (!r.ok) return res.json({ success: false, error: r.error });
+    res.json({ success: true, data: r });
+  } catch (err) {
+    console.error('[admin/leads erp]', err.message);
+    res.status(500).json({ success: false, error: 'Error interno' });
+  }
 });
 
 // ── Pages ────────────────────────────────────────────────

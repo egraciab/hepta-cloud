@@ -261,15 +261,15 @@
           </div>
         </div>
 
-        <!-- Links de pago Tpago -->
+        <!-- Pedidos del sitio al ERP -->
         <div class="card">
-          <div class="card-header"><div class="card-title">Links de pago Tpago</div></div>
+          <div class="card-header"><div class="card-title">Pedidos del sitio → ERP (CRM)</div></div>
           <div class="card-body">
-            <div class="form-hint" style="margin-bottom:12px">Estos links se usan en el modal de planes (sitio HC y portal RetoPA). Pegá el link o QR de Tpago de cada plan.</div>
+            <div class="form-hint" style="margin-bottom:12px">Cada consulta o pedido de contratación del sitio crea un contacto y una oportunidad en el CRM del ERP del grupo. Usa la credencial "Odoo ERP" de Credenciales. Si el ERP no responde, el pedido queda igual en Leads y se reenvía desde ahí.</div>
             <div class="grid-3">
-              <div class="form-group"><label class="form-label">Plan Despegue (starter)</label><input class="form-input" id="cfg-tpago_link_starter" placeholder="https://www.tpago.com.py/links?alias=..."/></div>
-              <div class="form-group"><label class="form-label">Plan Crecimiento (professional)</label><input class="form-input" id="cfg-tpago_link_professional" placeholder="https://www.tpago.com.py/links?alias=..."/></div>
-              <div class="form-group"><label class="form-label">Plan Empresa (enterprise)</label><input class="form-input" id="cfg-tpago_link_enterprise" placeholder="Vacío = mostrar contacto"/><div class="form-hint">Dejá vacío para que el plan derive a consulta por WhatsApp.</div></div>
+              <div class="form-group"><label class="form-label">Envío automático</label><select class="form-select" id="cfg-odoo_erp_crm_enabled"><option value="false">Apagado</option><option value="true">Encendido</option></select></div>
+              <div class="form-group"><label class="form-label">Compañía en el ERP (id)</label><input class="form-input" id="cfg-odoo_erp_crm_company_id" placeholder="5 = Hepta Cloud"/><div class="form-hint">Vacío = la compañía por defecto del usuario de integración.</div></div>
+              <div class="form-group"><label class="form-label">Equipo de ventas (id)</label><input class="form-input" id="cfg-odoo_erp_crm_team_id" placeholder="Opcional"/></div>
             </div>
           </div>
         </div>
@@ -501,6 +501,8 @@
 
       <!-- ═══ LEADS ═══ -->
       <div class="section" id="section-leads">
+        <div class="alert alert-success" id="leads-ok"></div>
+        <div class="alert alert-error" id="leads-err"></div>
         <div class="card">
           <div class="card-header">
             <div class="card-title">Leads del sitio</div>
@@ -508,8 +510,8 @@
               <option value="">Todos</option><option value="new">Nuevos</option><option value="contacted">Contactados</option><option value="qualified">Calificados</option><option value="lost">Perdidos</option>
             </select>
           </div>
-          <div class="table-wrap"><table><thead><tr><th>#</th><th>Nombre</th><th>Empresa</th><th>Contacto</th><th>Mensaje</th><th>Estado</th><th>Fecha</th></tr></thead>
-          <tbody id="leads-tbody"><tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">Cargando...</td></tr></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>#</th><th>Nombre</th><th>Empresa</th><th>Contacto</th><th>Pedido</th><th>Mensaje</th><th>Estado</th><th>ERP</th><th>Fecha</th></tr></thead>
+          <tbody id="leads-tbody"><tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px">Cargando...</td></tr></tbody></table></div>
         </div>
       </div>
 
@@ -844,6 +846,7 @@ El alta tarda <strong>de 2 a 8 minutos</strong> y sigue aunque cierres esta vent
       <div class="form-group"><label class="form-label">Badge</label><input class="form-input" id="plan-badge" placeholder="Más popular"/></div>
       <div class="form-group"><label class="form-label">Orden</label><input class="form-input" type="number" id="plan-order"/></div>
     </div>
+    <div class="form-group"><label class="form-label">Link de pago (tPago)</label><input class="form-input" id="plan-payment-link" placeholder="https://www.tpago.com.py/links?alias=..."/><div class="form-hint">Es el botón "Pagar ahora" que ve la persona apenas envía su pedido de contratación desde el sitio. Pegá el link de la suscripción de tPago de este plan. Vacío = sin botón de pago: el pedido llega igual y lo coordinás vos.</div></div>
     <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="plan-featured"/> Destacar este plan</label></div>
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closePlanModal()">Cancelar</button><button class="btn btn-primary" onclick="savePlan()">Guardar plan</button></div>
   </div>
@@ -1158,13 +1161,14 @@ const cfgKeys=[
   'retopa_label','retopa_text','retopa_pill_name','retopa_pill_sub','retopa_url','retopa_logo_url',
   'footer_link1_label','footer_link1_url','footer_link2_label','footer_link2_url',
   'footer_link3_label','footer_link3_url','footer_group_label','footer_group_url',
-  'hero_panel_image','btn_primary_url','dns_proxy_host','certbot_email','tpago_link_starter','tpago_link_professional','tpago_link_enterprise','wa_business_link'
+  'hero_panel_image','btn_primary_url','dns_proxy_host','certbot_email','wa_business_link','odoo_erp_crm_enabled','odoo_erp_crm_company_id','odoo_erp_crm_team_id'
 ];
 
 async function loadGeneral(){
   const data=await api('GET','/admin/config');
   if(!data.success) return;
   cfgKeys.forEach(k=>{const el=document.getElementById(`cfg-${k}`);if(el) el.value=data.data[k]||'';});
+  const erpSel=document.getElementById('cfg-odoo_erp_crm_enabled'); if(erpSel&&erpSel.value!=='true') erpSel.value='false';
   // checkbox retopa
   const retopa=document.getElementById('cfg-retopa_show_check');
   if(retopa) retopa.checked=data.data.retopa_show!=='false';
@@ -1283,13 +1287,14 @@ async function loadPlans(){
   c.innerHTML=data.data.map(p=>{
     const f=Array.isArray(p.features)?p.features:JSON.parse(p.features||'[]');
     return `<div class="plan-card ${p.is_featured?'featured':''}">
-      ${p.badge_text?`<div class="plan-badge-tag">${p.badge_text}</div>`:''}
-      <div class="plan-name">${p.name}</div><div class="plan-price">${p.price_label||'—'}</div>
-      <div class="plan-desc">${p.description||''}</div>
-      <ul class="plan-features-list">${f.map(i=>`<li>${i}</li>`).join('')}</ul>
+      ${p.badge_text?`<div class="plan-badge-tag">${esc(p.badge_text)}</div>`:''}
+      <div class="plan-name">${esc(p.name)}</div><div class="plan-price">${esc(p.price_label||'—')}</div>
+      <div class="plan-desc">${esc(p.description||'')}</div>
+      <ul class="plan-features-list">${f.map(i=>`<li>${esc(i)}</li>`).join('')}</ul>
       <div class="plan-actions">
         <button class="btn btn-secondary btn-sm" onclick='openPlanModal(${jsAttr(p)})'>Editar</button>
         <span class="badge ${p.is_active?'badge-green':'badge-gray'}">${p.is_active?'Activo':'Inactivo'}</span>
+        <span class="badge ${p.payment_link?'badge-green':'badge-gray'}" title="${p.payment_link?'Tiene link de pago cargado':'Sin link de pago: el sitio no muestra el botón Pagar ahora'}">${p.payment_link?'Con link de pago':'Sin link de pago'}</span>
         ${currentUser&&currentUser.role==='godmode'?`<button class="btn btn-danger btn-sm" onclick="deletePlan(${p.id})">×</button>`:''}
       </div>
     </div>`;
@@ -1307,6 +1312,7 @@ function openPlanModal(p){
   document.getElementById('plan-badge').value=p?.badge_text||'';
   document.getElementById('plan-order').value=p?.sort_order||'';
   document.getElementById('plan-featured').checked=p?.is_featured||false;
+  document.getElementById('plan-payment-link').value=p?.payment_link||'';
   const f=Array.isArray(p?.features)?p.features:JSON.parse(p?.features||'[]');
   document.getElementById('plan-features').value=f.join('\n');
   document.getElementById('plan-modal').classList.add('open');
@@ -1315,7 +1321,7 @@ function closePlanModal(){document.getElementById('plan-modal').classList.remove
 async function savePlan(){
   const id=document.getElementById('plan-id').value;
   const f=document.getElementById('plan-features').value.split('\n').map(x=>x.trim()).filter(Boolean);
-  const body={name:document.getElementById('plan-name').value,slug:document.getElementById('plan-slug').value,price:parseInt(document.getElementById('plan-price').value)||0,price_label:document.getElementById('plan-price-label').value,description:document.getElementById('plan-desc').value,badge_text:document.getElementById('plan-badge').value,sort_order:parseInt(document.getElementById('plan-order').value)||0,is_featured:document.getElementById('plan-featured').checked,features:f};
+  const body={name:document.getElementById('plan-name').value,slug:document.getElementById('plan-slug').value,price:parseInt(document.getElementById('plan-price').value)||0,price_label:document.getElementById('plan-price-label').value,description:document.getElementById('plan-desc').value,badge_text:document.getElementById('plan-badge').value,payment_link:document.getElementById('plan-payment-link').value.trim(),sort_order:parseInt(document.getElementById('plan-order').value)||0,is_featured:document.getElementById('plan-featured').checked,features:f};
   const data=id?await api('PUT',`/admin/plans/${id}`,body):await api('POST','/admin/plans',body);
   if(data.success){closePlanModal();loadPlans();showAlert('plans-ok','success');}
   else showAlert('plans-err','error',data.error);
@@ -1406,14 +1412,15 @@ async function loadLeads(){
   const data=await api('GET',status?`/admin/leads?status=${status}`:'/admin/leads');
   if(!data.success) return;
   const tbody=document.getElementById('leads-tbody');
-  if(!data.data.length){tbody.innerHTML='<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">Sin leads.</td></tr>';return;}
+  if(!data.data.length){tbody.innerHTML='<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px">Sin leads.</td></tr>';return;}
   tbody.innerHTML=data.data.map(l=>`
     <tr>
       <td>${l.id}</td>
       <td><strong>${esc(l.full_name)}</strong></td>
-      <td>${esc(l.company_name||'—')}</td>
+      <td>${esc(l.company_name||'—')}${l.ruc?`<div class="text-muted text-sm">RUC ${esc(l.ruc)}</div>`:''}</td>
       <td>${l.email?`<div>${esc(l.email)}</div>`:''}${l.phone?`<div class="text-muted">${esc(l.phone)}</div>`:''}</td>
-      <td class="text-muted text-sm" style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(l.message||'—')}</td>
+      <td>${l.intent==='contratar'?'<span class="badge badge-green">Contratar</span>':'<span class="badge badge-gray">Consulta</span>'}${l.plan_slug?`<div class="text-muted text-sm">${esc(l.plan_name||l.plan_slug)}</div>`:''}</td>
+      <td class="text-muted text-sm" style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(l.message||'')}">${esc(l.message||'—')}</td>
       <td>
         <select class="status-select" onchange="updateLeadStatus(${l.id},this.value)">
           <option value="new" ${l.status==='new'?'selected':''}>Nuevo</option>
@@ -1422,8 +1429,19 @@ async function loadLeads(){
           <option value="lost" ${l.status==='lost'?'selected':''}>Perdido</option>
         </select>
       </td>
+      <td>${l.odoo_lead_id
+            ? `<span class="badge badge-green" title="Oportunidad ${l.odoo_lead_id} en el ERP">Enviado</span>`
+            : `${l.erp_sync_state==='error'?`<div class="text-sm" style="color:#DC2626;max-width:180px" title="${esc(l.erp_last_error||'')}">No se pudo</div>`:''}<button class="btn btn-secondary btn-sm" onclick="enviarLeadErp(${l.id},this)">${l.erp_sync_state==='error'?'Reintentar':'Enviar al ERP'}</button>`}</td>
       <td class="text-muted text-sm">${new Date(l.created_at).toLocaleDateString('es-PY')}</td>
     </tr>`).join('');
+}
+// Crea el contacto y la oportunidad en el ERP. No duplica: si ya se envió, no hace nada.
+async function enviarLeadErp(id,btn){
+  btn.disabled=true; btn.textContent='Enviando…';
+  const r=await api('POST',`/admin/leads/${id}/erp`);
+  if(!r.success) showAlert('leads-err','error','No se pudo enviar al ERP: '+(r.error||'error desconocido'));
+  else showAlert('leads-ok','success','Enviado al ERP: contacto y oportunidad creados.');
+  loadLeads();
 }
 async function updateLeadStatus(id,status){await api('PUT',`/admin/leads/${id}`,{status});}
 
