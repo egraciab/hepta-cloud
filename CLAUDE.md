@@ -84,6 +84,8 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
 - [ ] TLS entre HEPTA Cloud y las dos APIs del puerto 8888: la contraseña inicial del cliente viaja sin cifrar
       dentro de la red interna. (El filtro por IP ya está: `ALLOWED_IPS` en el `.env` de cada API.)
 - [ ] RetoPA: la ficha del cliente se crea solo con un botón del Admin; enganchar al alta si se ofrece en el plan.
+- [ ] Credenciales: la clave de la API de RetoPA vive en `site_config` (`retopa_api_url`, `retopa_api_key`), no en Admin →
+      Credenciales como las de Odoo. Pasarla al módulo de credenciales (cifrada, con vencimiento y "Probar").
 - [ ] Entorno de prueba (no existe) y pasar los JS en línea de los HTML a archivos.
 - [ ] Portal, después del lanzamiento: contratar y cambiar de plan desde el portal (la ruta `POST /api/portal/payment-request`
       existe pero ninguna pantalla la usa) y vincular al cliente con el ERP del grupo en el alta (`users.tenant_partner_id`):
