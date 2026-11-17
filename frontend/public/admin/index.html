@@ -271,6 +271,9 @@
               <div class="form-group"><label class="form-label">Compañía en el ERP (id)</label><input class="form-input" id="cfg-odoo_erp_crm_company_id" placeholder="5 = Hepta Cloud"/><div class="form-hint">Vacío = la compañía por defecto del usuario de integración.</div></div>
               <div class="form-group"><label class="form-label">Equipo de ventas (id)</label><input class="form-input" id="cfg-odoo_erp_crm_team_id" placeholder="Opcional"/></div>
             </div>
+            <div class="grid-3">
+              <div class="form-group"><label class="form-label">Vendedor asignado (id de usuario)</label><input class="form-input" id="cfg-odoo_erp_crm_user_id" placeholder="Opcional"/><div class="form-hint">A quién le llega cada oportunidad. Vacío = sin vendedor (si el equipo reparte, la asigna él).</div></div>
+            </div>
           </div>
         </div>
 
@@ -1161,7 +1164,7 @@ const cfgKeys=[
   'retopa_label','retopa_text','retopa_pill_name','retopa_pill_sub','retopa_url','retopa_logo_url',
   'footer_link1_label','footer_link1_url','footer_link2_label','footer_link2_url',
   'footer_link3_label','footer_link3_url','footer_group_label','footer_group_url',
-  'hero_panel_image','btn_primary_url','dns_proxy_host','certbot_email','wa_business_link','odoo_erp_crm_enabled','odoo_erp_crm_company_id','odoo_erp_crm_team_id'
+  'hero_panel_image','btn_primary_url','dns_proxy_host','certbot_email','wa_business_link','odoo_erp_crm_enabled','odoo_erp_crm_company_id','odoo_erp_crm_team_id','odoo_erp_crm_user_id'
 ];
 
 async function loadGeneral(){

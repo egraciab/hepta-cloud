@@ -17,7 +17,7 @@ async function config() {
   const { rows } = await pool.query("SELECT key, value FROM site_config WHERE key LIKE 'odoo_erp_crm_%'");
   const c = Object.fromEntries(rows.map(r => [r.key.replace('odoo_erp_crm_', ''), (r.value || '').trim()]));
   const entero = v => (/^\d+$/.test(v || '') ? parseInt(v, 10) : null);
-  return { activo: c.enabled === 'true', company_id: entero(c.company_id), team_id: entero(c.team_id) };
+  return { activo: c.enabled === 'true', company_id: entero(c.company_id), team_id: entero(c.team_id), user_id: entero(c.user_id) };
 }
 
 const html = t => String(t == null ? '' : t).replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
@@ -78,6 +78,8 @@ async function enviarLead(leadId, { forzar = false } = {}) {
     };
     if (cfg.company_id) vals.company_id = cfg.company_id;
     if (cfg.team_id) vals.team_id = cfg.team_id;
+    // Sin esto Odoo asigna como vendedor al usuario de integración. Vacío = sin vendedor (lo reparte el equipo).
+    vals.user_id = cfg.user_id || false;
 
     const creado = await odoo.erp.ejecutar('crm.lead', 'create', [vals], ctx);
     const odooLeadId = Array.isArray(creado) ? creado[0] : creado;

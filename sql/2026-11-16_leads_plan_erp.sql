@@ -16,7 +16,8 @@ ALTER TABLE leads
 INSERT INTO site_config (key, value, updated_at) VALUES
   ('odoo_erp_crm_enabled',    'false', NOW()),
   ('odoo_erp_crm_company_id', '',      NOW()),
-  ('odoo_erp_crm_team_id',    '',      NOW())
+  ('odoo_erp_crm_team_id',    '',      NOW()),
+  ('odoo_erp_crm_user_id',    '',      NOW())
 ON CONFLICT (key) DO NOTHING;
 
 COMMIT;
