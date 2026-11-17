@@ -1,5 +1,6 @@
 const router     = require('express').Router();
 const rateLimit  = require('express-rate-limit');
+const { isIP }   = require('net');
 const nodemailer = require('nodemailer');
 const pool       = require('../config/db');
 const erpLeads   = require('../services/erp_leads');
@@ -132,7 +133,7 @@ router.post('/', limiter, async (req, res) => {
       if (b.acepta_terminos !== true) return error('Para contratar tenés que aceptar los términos del servicio y la política de privacidad.');
     }
 
-    const ip = /^[0-9a-f.:]{3,45}$/i.test(ipCliente(req)) ? ipCliente(req) : null;
+    const ip = isIP(ipCliente(req)) ? ipCliente(req) : null;   // solo informativa: si no es una IP válida, no se guarda
     const { rows } = await pool.query(
       `INSERT INTO leads (full_name, email, phone, company_name, message, source, ip_address, plan_slug, intent, ruc, acepta_terminos_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, CASE WHEN $11 THEN NOW() END) RETURNING *`,
