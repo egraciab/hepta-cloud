@@ -1,7 +1,7 @@
 -- Política de privacidad de Hepta Cloud, versión 1.0. Reemplaza el texto de 01/2026.
--- Texto fuente y pendientes: doc del Project "politica-privacidad-hepta-cloud.md" (2026-11-16).
--- ANTES de aplicar: confirmación de Steve (6 puntos), tipografías servidas desde el propio sitio (el texto lo afirma)
--- y respaldo (pg_dump de heptacloud). No lleva credenciales. El texto anterior queda en el respaldo y en sql/migrate_s6.sql.
+-- Texto fuente: doc del Project "politica-privacidad-hepta-cloud.md" (confirmado por Steve el 2026-11-16).
+-- ANTES de aplicar: git pull (el texto afirma que las tipografías se sirven desde el propio sitio) y respaldo
+-- (pg_dump de heptacloud). No lleva credenciales. El texto anterior queda en el respaldo y en sql/migrate_s6.sql.
 BEGIN;
 UPDATE pages SET title = 'Política de Privacidad', updated_at = NOW(), content = $privacidad$
 <h1>Política de Privacidad — Hepta Cloud</h1>
@@ -79,11 +79,13 @@ UPDATE pages SET title = 'Política de Privacidad', updated_at = NOW(), content 
 <p>Escribinos a <a href="mailto:soporte@hepta.com.py">soporte@hepta.com.py</a> desde el correo registrado en tu cuenta, o indicando datos que nos permitan confirmar que sos vos. Es gratis. Te respondemos dentro de los <strong>10 días hábiles</strong>.</p>
 <p>Hay datos que no podemos borrar aunque lo pidas, como las facturas, porque la ley nos obliga a conservarlos.</p>
 <p>Si considerás que no respetamos tus derechos, podés reclamar ante la Agencia Nacional de Protección de Datos Personales.</p>
-<h2>10. Cookies y servicios de terceros en el sitio</h2>
+<h2>10. Cookies y servicios de terceros</h2>
 <ul>
-<li>El sitio no usa cookies de publicidad ni herramientas de seguimiento.</li>
-<li>El portal de clientes guarda en tu navegador un dato técnico para mantener tu sesión abierta. Se borra al cerrar sesión.</li>
-<li>Las tipografías del sitio se cargan desde nuestro propio servidor.</li>
+<li><strong>El sitio cloud.hepta.com.py no usa cookies:</strong> ni propias, ni de publicidad, ni de medición o seguimiento. Por eso no vas a ver un aviso de cookies.</li>
+<li><strong>El portal de clientes</strong> guarda en tu navegador un dato técnico para mantener tu sesión abierta. No es una cookie, no sirve para seguirte y se borra al cerrar sesión.</li>
+<li><strong>Tu sistema de gestión</strong> usa una cookie técnica de sesión, necesaria para que sigas conectado mientras trabajás. No se usa para otra cosa.</li>
+<li><strong>Sin terceros:</strong> las tipografías, las imágenes y los videos del sitio se sirven desde nuestros propios servidores. Al visitarlo, tu navegador no se conecta con otras empresas.</li>
+<li>Si tenés un sitio web o una tienda dentro de tu sistema, las cookies de ese sitio y el aviso a tus visitantes son tu responsabilidad; el sistema trae una opción para mostrar ese aviso.</li>
 </ul>
 <h2>11. Menores de edad</h2>
 <p>Hepta Cloud es un servicio para empresas y profesionales. No está dirigido a menores de 18 años y no recopilamos sus datos a sabiendas.</p>
