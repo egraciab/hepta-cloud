@@ -91,6 +91,9 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
 - [ ] Credenciales: la clave de la API de RetoPA vive en `site_config` (`retopa_api_url`, `retopa_api_key`), no en Admin →
       Credenciales como las de Odoo. Pasarla al módulo de credenciales (cifrada, con vencimiento y "Probar").
 - [ ] Entorno de prueba (no existe) y pasar los JS en línea de los HTML a archivos.
+- [ ] Módulos adicionales que se superponen: no ofrecer uno si la instancia ya tiene otro incompatible (ej.: con
+      Boutique instalado no se puede instalar Belleza y SPA, y al revés). Columna de exclusiones en `addons` y control en
+      `services/adicionales.js` y en la API (pedido de Steve, 2026-11-18).
 - [ ] Portal, después del lanzamiento: contratar y cambiar de plan desde el portal (la ruta `POST /api/portal/payment-request`
       existe pero ninguna pantalla la usa) y vincular al cliente con el ERP del grupo en el alta (`users.tenant_partner_id`):
       hasta entonces Facturas no se muestra y Soporte es un formulario que llega por correo.
