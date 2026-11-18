@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const retopa = (() => { try { return require('./retopa'); } catch(e) { return null; } })();
 const pool   = require('../config/db');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireAdmin, requireGodmode } = require('../middleware/auth');
 const alta   = require('../services/alta');
 
 router.use(requireAuth, requireAdmin);
@@ -107,6 +107,37 @@ router.post('/reactivate/:id', async (req, res) => {
   }
 });
 
+// ── POST /api/admin/provision/admin-password/:id (solo godmode) ─
+// Genera una contraseña nueva al azar para `admin` (la cuenta de HEPTA en el tenant) y la
+// devuelve UNA vez para mostrarla en pantalla. No se guarda en la base, ni en admin_logs, ni en
+// la consola: quien la pidió la copia a KeePass. La anterior deja de servir.
+router.post('/admin-password/:id', requireGodmode, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const { rows } = await pool.query(
+      'SELECT db_name, status, instance_url FROM instances WHERE id=$1', [req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ success: false, error: 'Instancia no encontrada' });
+    if (rows[0].status !== 'active')
+      return res.status(409).json({ success: false, error: 'Solo en instancias activas: reactivala antes' });
+
+    const db  = rows[0].db_name;
+    const cfg = await getConfig();
+    // Odoo tarda unos segundos en levantar el shell del tenant
+    const data = await callApi(cfg.provision_api_url, cfg.provision_api_key, 'POST', '/admin-password', { db }, 200000);
+
+    await logAction(req, 'admin_password_tenant', `instance:${req.params.id}`, { db });
+    res.json({ success: true, data: {
+      login: data.login || 'admin',
+      password: data.password,
+      url: rows[0].instance_url || `https://${db}`,
+    } });
+  } catch (err) {
+    console.error('[admin-password]', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ── Helpers ───────────────────────────────────────────────────
 async function getConfig() {
   const { rows } = await pool.query(
@@ -117,12 +148,12 @@ async function getConfig() {
   return cfg;
 }
 
-async function callApi(url, key, method, path, body) {
+async function callApi(url, key, method, path, body, timeoutMs = 10000) {
   const res = await fetch(`${url}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', 'X-API-Key': key||'' },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const data = await res.json();
   if (!res.ok || !data.success) throw new Error(data.detail||data.error||`Error en ${path}`);

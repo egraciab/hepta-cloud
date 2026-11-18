@@ -830,6 +830,24 @@ El alta tarda <strong>de 2 a 8 minutos</strong> y sigue aunque cierres esta vent
   </div>
 </div>
 
+<!-- MODAL CLAVE ADMIN DEL TENANT -->
+<div class="modal-overlay" id="admin-pass-modal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-title">Clave nueva de admin</div>
+    <p class="text-sm text-muted" style="margin:0 0 12px"><strong id="admpw-tenant"></strong> · <a id="admpw-url" target="_blank" rel="noopener" style="color:var(--blue)"></a></p>
+    <div class="form-group"><label class="form-label">Usuario</label><input class="form-input" id="admpw-login" readonly/></div>
+    <div class="form-group"><label class="form-label">Contraseña</label>
+      <div style="display:flex;gap:8px">
+        <input class="form-input" id="admpw-pass" readonly autocomplete="off" spellcheck="false" style="flex:1;font-family:monospace"/>
+        <button class="btn btn-primary btn-sm" onclick="copyAdminPass()">Copiar</button>
+      </div>
+      <div class="form-hint" id="admpw-copied" style="color:var(--teal)"></div>
+    </div>
+    <div class="form-hint" style="margin-bottom:14px">Se muestra <strong>una sola vez</strong> y no se guarda en HEPTA Cloud. Guardala en KeePass antes de cerrar. Si se pierde, se genera otra.</div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeAdminPass()">Listo, ya la guardé</button></div>
+  </div>
+</div>
+
 <!-- MODAL PLAN -->
 <div class="modal-overlay" id="plan-modal">
   <div class="modal">
@@ -1943,6 +1961,7 @@ async function loadInstances(){
       <td style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick='openInstEditModal(${jsAttr(i)})'>Editar</button>
         ${i.status==='active'?`<button class="btn btn-sm" style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D" onclick="suspendInstance(${i.id})">Suspender</button>`:''}        ${i.status==='suspended'||i.status==='cancelled'?`<button class="btn btn-sm" style="background:var(--teal-pale);color:var(--teal);border:1px solid var(--teal)" onclick="reactivateInstance(${i.id})">Reactivar</button>`:''}
+        ${i.status==='active'&&currentUser&&currentUser.role==='godmode'?`<button class="btn btn-secondary btn-sm" title="Genera una contraseña nueva para el usuario admin de HEPTA en este tenant" onclick="adminPassword(${i.id},'${esc((i.label||i.db_name||'').replace(/['\\]/g,''))}')">Clave admin</button>`:''}
         ${i.status==='cancelled'||i.status==='provisioning'?'':`<button class="btn btn-sm" style="background:var(--red-pale);color:var(--red);border:1px solid #FCA5A5;margin-left:4px" onclick="deleteInstance(${i.id},'${esc((i.label||i.db_name||'').replace(/['\\]/g,''))}')">Dar de baja</button>`}
       </td>
     </tr>`).join('');
@@ -2182,6 +2201,32 @@ async function reactivateInstance(id){
   const data=await api('POST',`/admin/provision/reactivate/${id}`);
   if(data.success){showAlert('inst-ok','success','Instancia reactivada.');loadInstances();}
   else showAlert('inst-err','error',data.error);
+}
+
+// ── Clave del admin de HEPTA en un tenant (solo godmode) ──
+async function adminPassword(id,label){
+  if(!confirm(`¿Generar una contraseña nueva para "admin" en ${label}?\n\nLa actual deja de servir. La nueva se muestra una sola vez: copiala a KeePass.`)) return;
+  showAlert('inst-ok','success','Generando la contraseña… (tarda unos segundos)',0);
+  const r=await api('POST',`/admin/provision/admin-password/${id}`);
+  document.getElementById('inst-ok').style.display='none';
+  if(!r.success){showAlert('inst-err','error',r.error||'No se pudo cambiar la contraseña',0);return;}
+  document.getElementById('admpw-tenant').textContent=label;
+  const url=document.getElementById('admpw-url'); url.href=r.data.url; url.textContent=r.data.url;
+  document.getElementById('admpw-login').value=r.data.login;
+  document.getElementById('admpw-pass').value=r.data.password;
+  document.getElementById('admpw-copied').textContent='';
+  document.getElementById('admin-pass-modal').classList.add('open');
+}
+async function copyAdminPass(){
+  const v=document.getElementById('admpw-pass').value;
+  try{await navigator.clipboard.writeText(v);}catch(e){const el=document.getElementById('admpw-pass');el.select();document.execCommand('copy');}
+  document.getElementById('admpw-copied').textContent='Copiada. Pegala en KeePass.';
+}
+function closeAdminPass(){
+  // Que no quede en pantalla ni en el DOM
+  document.getElementById('admpw-pass').value='';
+  document.getElementById('admpw-login').value='';
+  document.getElementById('admin-pass-modal').classList.remove('open');
 }
 
 async function openInstEditModal(inst){

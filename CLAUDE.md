@@ -55,6 +55,9 @@ En el `.env`: `DB_*`, `JWT_SECRET`, `HEPTA_SECRET_KEY` (cifra las credenciales d
   `INSERT INTO site_config`, verificar que no lleve valores reales.
 - **Contraseña inicial del cliente:** la genera la API de alta y llega una sola vez. Va al correo de
   bienvenida y a ningún otro lado: ni base, ni `admin_logs`, ni `console.log`, ni respuesta al navegador.
+- **Clave de `admin` de un tenant** (la cuenta de HEPTA): Admin → Instancias → *Clave admin* (solo godmode) la genera
+  al azar en la API de alta (`POST /admin-password`) y la muestra **una vez** para copiarla a KeePass. No se guarda en
+  la base ni en `admin_logs` (solo queda que se pidió), ni en la consola, ni en el log de la API.
 - **`/api/site-config` es público.** Solo entrega claves que no son sensibles según
   `backend/config/site_config_publico.js`. Una clave nueva con una credencial tiene que terminar en `_key`,
   `_token`, `_pass`, `_password` o `_secret`, o empezar con un prefijo interno (`smtp_`, `provision_`,
@@ -120,3 +123,5 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
   verificación de volcados) corre cada 6 h en `hepta-cloud`, `retopa-core`, `HGSVRLNX104` y `HGSVRLNX111`;
   `hepta-backup-retirar.sh` en `hcsvrnd01` los lleva al NAS con histórico y control de vida. Detalle y pendientes en el
   runbook `runbook-ha-backups.md` del Project. En esta VM el respaldo queda en `/var/backups/hepta/`.
+- 2026-11-18 — Admin → Instancias → **Clave admin** (solo godmode): contraseña nueva al azar para `admin` del tenant,
+  mostrada una sola vez. Necesita la API de alta 1.2.0 (`odoo-tenants-addons`, `tools/tenants/provision_api/main.py`).
