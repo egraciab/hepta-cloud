@@ -29,6 +29,7 @@ backend/config/              # db, odoo (XML-RPC), credenciales, secretos (AES-2
 infra/                       # copia de la API perimetral y dónde vive lo demás (API y script de alta)
 backend/services/alta.js     # alta de un tenant en segundo plano (trabajos en memoria) y correo de bienvenida;
                              # la usan el alta manual (provision.routes) y la confirmación de pago (payments.routes)
+backend/services/adicionales.js  # instalar un módulo adicional (rubro) en una instancia, en segundo plano
 backend/services/mailcow/    # cliente de mailcow, DNS y Cloudflare para el servicio de correo
 infra/backup/                # respaldos por VM: hepta-backup.sh, configuración de cada VM y retiro al NAS
 backend/scripts/             # import_mail, provision_mail, avisar_credenciales (se corren a mano)
@@ -125,3 +126,7 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
   runbook `runbook-ha-backups.md` del Project. En esta VM el respaldo queda en `/var/backups/hepta/`.
 - 2026-11-18 — Admin → Instancias → **Clave admin** (solo godmode): contraseña nueva al azar para `admin` del tenant,
   mostrada una sola vez. Necesita la API de alta 1.2.0 (`odoo-tenants-addons`, `tools/tenants/provision_api/main.py`).
+- 2026-11-18 — **Módulos adicionales** (rubros sobre un plan): tablas `addons` e `instance_addons`
+  (`sql/2026-11-18_modulos_adicionales.sql`, con Boutique y Belleza y SPA a precio "A definir"), lista y edición en
+  Admin → Planes, botón **Módulos** en cada instancia (instala en segundo plano con la API de alta 1.3.0,
+  `POST /install-module`, solo `hepta_rubro_*` y plan Crecimiento o superior).

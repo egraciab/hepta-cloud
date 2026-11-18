@@ -444,6 +444,11 @@
         <div class="alert alert-error" id="plans-err"></div>
         <div class="plan-cards" id="plans-container"><div class="text-muted">Cargando...</div></div>
         <div class="mt-4"><button class="btn btn-secondary" onclick="openPlanModal(null)">+ Agregar plan</button></div>
+        <h3 style="margin:32px 0 6px;font-size:16px">Módulos adicionales</h3>
+        <p class="text-sm text-muted" style="margin:0 0 12px">Rubros que se suman a un plan (se instalan desde Instancias → <strong>Módulos</strong>). Un rubro nuevo llega con su código; acá se edita el nombre, el precio y si se ofrece.</p>
+        <div class="alert alert-success" id="addons-ok">Módulo guardado.</div>
+        <div class="alert alert-error" id="addons-err"></div>
+        <div class="plan-cards" id="addons-container"><div class="text-muted">Cargando...</div></div>
       </div>
 
       <!-- ═══ SMTP ═══ -->
@@ -827,6 +832,32 @@ El alta tarda <strong>de 2 a 8 minutos</strong> y sigue aunque cierres esta vent
       <button class="btn btn-secondary" onclick="closeInstEditModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="saveInstEdit()">Guardar</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL MÓDULO ADICIONAL -->
+<div class="modal-overlay" id="addon-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">Editar módulo adicional</div>
+    <input type="hidden" id="addon-id"/>
+    <div class="form-group"><label class="form-label">Nombre</label><input class="form-input" id="addon-name"/></div>
+    <div class="form-row" style="display:flex;gap:12px">
+      <div class="form-group" style="flex:1"><label class="form-label">Precio por mes (Gs)</label><input class="form-input" id="addon-price" type="number" min="0" placeholder="0 = a definir"/></div>
+      <div class="form-group" style="flex:1"><label class="form-label">Texto del precio</label><input class="form-input" id="addon-price-label" placeholder="+ Gs 99.000/mes"/></div>
+    </div>
+    <div class="form-group"><label class="form-label">Descripción</label><textarea class="form-input" id="addon-desc" rows="3"></textarea></div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="addon-active"/> Se ofrece (aparece para instalar)</label>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeAddonModal()">Cancelar</button><button class="btn btn-primary" onclick="saveAddon()">Guardar</button></div>
+  </div>
+</div>
+
+<!-- MODAL MÓDULOS DE UNA INSTANCIA -->
+<div class="modal-overlay" id="inst-addons-modal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-title">Módulos adicionales · <span id="ia-tenant"></span></div>
+    <div class="alert" id="ia-msg" style="display:none"></div>
+    <div id="ia-list"><div class="text-muted">Cargando...</div></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeInstAddons()">Cerrar</button></div>
   </div>
 </div>
 
@@ -1301,6 +1332,7 @@ async function deleteSvc(id){if(!confirm('¿Eliminar?'))return;await api('DELETE
 
 // ── PLANS ──────────────────────────────────────────────────
 async function loadPlans(){
+  loadAddons();
   const data=await api('GET','/admin/plans');
   if(!data.success) return;
   const c=document.getElementById('plans-container');
@@ -1348,6 +1380,89 @@ async function savePlan(){
   else showAlert('plans-err','error',data.error);
 }
 async function deletePlan(id){if(!confirm('¿Eliminar?'))return;await api('DELETE',`/admin/plans/${id}`);loadPlans();}
+
+// ── MÓDULOS ADICIONALES ─────────────────────────────────────
+const gsFmt=n=>'Gs '+Number(n||0).toLocaleString('es-PY');
+async function loadAddons(){
+  const data=await api('GET','/admin/addons');
+  const c=document.getElementById('addons-container');
+  if(!c) return;
+  if(!data.success){c.innerHTML='<div class="text-muted">No se pudieron cargar.</div>';return;}
+  if(!data.data.length){c.innerHTML='<div class="text-muted">Sin módulos adicionales.</div>';return;}
+  c.innerHTML=data.data.map(a=>`<div class="plan-card">
+      <div class="plan-name">${esc(a.name)}</div>
+      <div class="plan-price">${esc(a.price_label||(a.price?gsFmt(a.price)+'/mes':'A definir'))}</div>
+      <div class="plan-desc">${esc(a.description||'')}</div>
+      <div class="text-sm text-muted" style="margin:8px 0">Módulo <code>${esc(a.odoo_module)}</code> · plan mínimo ${a.min_plan==='professional'?'Crecimiento':esc(a.min_plan)} · instalado en ${a.instalados} ${a.instalados===1?'instancia':'instancias'}</div>
+      <div class="plan-actions">
+        <button class="btn btn-secondary btn-sm" onclick='openAddonModal(${jsAttr(a)})'>Editar</button>
+        <span class="badge ${a.is_active?'badge-green':'badge-gray'}">${a.is_active?'Se ofrece':'No se ofrece'}</span>
+      </div>
+    </div>`).join('');
+}
+function openAddonModal(a){
+  document.getElementById('addon-id').value=a.id;
+  document.getElementById('addon-name').value=a.name||'';
+  document.getElementById('addon-price').value=a.price||'';
+  document.getElementById('addon-price-label').value=a.price_label||'';
+  document.getElementById('addon-desc').value=a.description||'';
+  document.getElementById('addon-active').checked=!!a.is_active;
+  document.getElementById('addon-modal').classList.add('open');
+}
+function closeAddonModal(){document.getElementById('addon-modal').classList.remove('open');}
+async function saveAddon(){
+  const id=document.getElementById('addon-id').value;
+  const body={name:document.getElementById('addon-name').value.trim(),price:parseInt(document.getElementById('addon-price').value)||0,price_label:document.getElementById('addon-price-label').value.trim(),description:document.getElementById('addon-desc').value,is_active:document.getElementById('addon-active').checked};
+  const r=await api('PUT',`/admin/addons/${id}`,body);
+  if(r.success){closeAddonModal();loadAddons();showAlert('addons-ok','success');}
+  else showAlert('addons-err','error',r.error);
+}
+
+// Módulos de una instancia
+let _instAddons={id:null,label:'',plan:'',timer:null};
+async function openInstAddons(id,label,plan){
+  _instAddons={id,label,plan,timer:null};
+  document.getElementById('ia-tenant').textContent=label;
+  document.getElementById('ia-msg').style.display='none';
+  document.getElementById('inst-addons-modal').classList.add('open');
+  await loadInstAddons();
+}
+function closeInstAddons(){clearTimeout(_instAddons.timer);document.getElementById('inst-addons-modal').classList.remove('open');}
+async function loadInstAddons(){
+  const r=await api('GET',`/admin/provision/addons/${_instAddons.id}`);
+  const c=document.getElementById('ia-list');
+  if(!r.success){c.innerHTML=`<div class="text-muted">${esc(r.error||'No se pudieron cargar')}</div>`;return;}
+  const planOk=_instAddons.plan==='professional'||_instAddons.plan==='enterprise';
+  const estado={installed:['badge-green','Instalado'],installing:['badge-yellow','Instalando…'],failed:['badge-red','Falló']};
+  c.innerHTML=r.data.map(a=>{
+    const [cls,txt]=estado[a.status]||['badge-gray','No instalado'];
+    const boton=a.status==='installed'||a.status==='installing'?'':
+      (planOk?`<button class="btn btn-primary btn-sm" onclick="installAddon(${a.id},'${esc(a.name.replace(/['\\]/g,''))}')">${a.status==='failed'?'Reintentar':'Instalar'}</button>`
+             :`<span class="text-sm text-muted">Necesita plan Crecimiento</span>`);
+    return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--gray-200)">
+      <div><strong>${esc(a.name)}</strong> <span class="badge ${cls}">${txt}</span>
+        <div class="text-sm text-muted" style="margin-top:2px">${esc(a.description||'')}</div>
+        <div class="text-sm" style="margin-top:2px">${esc(a.price_label||(a.price?gsFmt(a.price)+'/mes':'Precio a definir'))}${a.installed_at?' · desde '+new Date(a.installed_at).toLocaleDateString('es-PY'):''}</div>
+        ${a.status==='failed'&&a.error?`<div style="margin-top:6px;background:var(--red-pale);color:var(--red);border-radius:var(--radius);padding:6px 8px;font-size:12px;white-space:pre-wrap">${esc(a.error)}</div>`:''}
+      </div><div style="flex-shrink:0">${boton}</div></div>`;
+  }).join('')||'<div class="text-muted">No hay módulos adicionales.</div>';
+}
+async function installAddon(addonId,nombre){
+  if(!confirm(`¿Instalar «${nombre}» en ${_instAddons.label}?\n\nTarda de 1 a 4 minutos. El cliente puede seguir usando su sistema mientras tanto.`)) return;
+  const r=await api('POST',`/admin/provision/addons/${_instAddons.id}`,{addon_id:addonId});
+  const msg=document.getElementById('ia-msg');
+  if(!r.success){msg.className='alert alert-error';msg.textContent=r.error;msg.style.display='block';return;}
+  msg.className='alert alert-success';msg.textContent=`Instalando «${nombre}»…`;msg.style.display='block';
+  await loadInstAddons();
+  const seguir=async()=>{
+    const j=await api('GET',`/admin/provision/addon-jobs/${r.data.job.id}`);
+    if(j.success&&j.data.estado==='en_curso'){msg.textContent=`Instalando «${nombre}»… (${j.data.segundos} s)`;_instAddons.timer=setTimeout(seguir,6000);return;}
+    if(j.success&&j.data.estado==='ok'){msg.className='alert alert-success';msg.textContent=`«${nombre}» quedó instalado en ${j.data.segundos} s.`+(j.data.actualizados.length?` También se actualizaron: ${j.data.actualizados.join(', ')}.`:'');}
+    else{msg.className='alert alert-error';msg.textContent=j.data?.error||j.error||'La instalación falló';}
+    loadInstAddons();
+  };
+  _instAddons.timer=setTimeout(seguir,6000);
+}
 
 // ── SMTP ───────────────────────────────────────────────────
 async function loadSMTP(){
@@ -1961,6 +2076,7 @@ async function loadInstances(){
       <td style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="btn btn-secondary btn-sm" onclick='openInstEditModal(${jsAttr(i)})'>Editar</button>
         ${i.status==='active'?`<button class="btn btn-sm" style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D" onclick="suspendInstance(${i.id})">Suspender</button>`:''}        ${i.status==='suspended'||i.status==='cancelled'?`<button class="btn btn-sm" style="background:var(--teal-pale);color:var(--teal);border:1px solid var(--teal)" onclick="reactivateInstance(${i.id})">Reactivar</button>`:''}
+        ${i.status==='active'?`<button class="btn btn-secondary btn-sm" title="Módulos adicionales (rubros) de esta instancia" onclick="openInstAddons(${i.id},'${esc((i.label||i.db_name||'').replace(/['\\]/g,''))}','${esc(i.plan||'')}')">Módulos</button>`:''}
         ${i.status==='active'&&currentUser&&currentUser.role==='godmode'?`<button class="btn btn-secondary btn-sm" title="Genera una contraseña nueva para el usuario admin de HEPTA en este tenant" onclick="adminPassword(${i.id},'${esc((i.label||i.db_name||'').replace(/['\\]/g,''))}')">Clave admin</button>`:''}
         ${i.status==='cancelled'||i.status==='provisioning'?'':`<button class="btn btn-sm" style="background:var(--red-pale);color:var(--red);border:1px solid #FCA5A5;margin-left:4px" onclick="deleteInstance(${i.id},'${esc((i.label||i.db_name||'').replace(/['\\]/g,''))}')">Dar de baja</button>`}
       </td>

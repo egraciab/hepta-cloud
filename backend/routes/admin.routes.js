@@ -171,6 +171,30 @@ router.put('/plans/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
 });
 
+// ── Módulos adicionales (rubros) ───────────────────────────────
+router.get('/addons', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT a.*, (SELECT count(*) FROM instance_addons ia WHERE ia.addon_id=a.id AND ia.status='installed')::int AS instalados
+         FROM addons a ORDER BY a.sort_order, a.id`);
+    res.json({ success: true, data: rows });
+  } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
+});
+
+router.put('/addons/:id', async (req, res) => {
+  const { name, description, price, price_label, is_active, sort_order } = req.body;
+  if (!name) return res.status(400).json({ success: false, error: 'El nombre es obligatorio' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE addons SET name=$1, description=$2, price=$3, price_label=$4,
+              is_active=COALESCE($5,is_active), sort_order=COALESCE($6,sort_order), updated_at=NOW()
+        WHERE id=$7 RETURNING *`,
+      [name, description || '', price || 0, price_label || '', is_active ?? null, sort_order ?? null, req.params.id]);
+    if (!rows[0]) return res.status(404).json({ success: false, error: 'Módulo no encontrado' });
+    res.json({ success: true, data: rows[0] });
+  } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
+});
+
 router.delete('/plans/:id', requireGodmode, async (req, res) => {
   try {
     await pool.query('DELETE FROM plans WHERE id=$1', [req.params.id]);

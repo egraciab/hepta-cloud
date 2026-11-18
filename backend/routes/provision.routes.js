@@ -3,6 +3,7 @@ const retopa = (() => { try { return require('./retopa'); } catch(e) { return nu
 const pool   = require('../config/db');
 const { requireAuth, requireAdmin, requireGodmode } = require('../middleware/auth');
 const alta   = require('../services/alta');
+const adicionales = require('../services/adicionales');
 
 router.use(requireAuth, requireAdmin);
 
@@ -136,6 +137,38 @@ router.post('/admin-password/:id', requireGodmode, async (req, res) => {
     console.error('[admin-password]', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
+});
+
+// ── Módulos adicionales (rubros) de una instancia ─────────────
+// GET  /api/admin/provision/addons/:id   → los adicionales activos y su estado en la instancia
+// POST /api/admin/provision/addons/:id   → instala uno (202 con un trabajo; tarda 1 a 4 minutos)
+// GET  /api/admin/provision/addon-jobs/:jobId
+router.get('/addons/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT a.id, a.slug, a.name, a.description, a.min_plan, a.price, a.price_label,
+              ia.status, ia.error, ia.installed_at
+         FROM addons a LEFT JOIN instance_addons ia ON ia.addon_id = a.id AND ia.instance_id = $1
+        WHERE a.is_active OR ia.id IS NOT NULL
+        ORDER BY a.sort_order, a.id`, [req.params.id]);
+    res.json({ success: true, data: rows });
+  } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
+});
+
+router.post('/addons/:id', async (req, res) => {
+  try {
+    const job = await adicionales.iniciar({ instanceId: req.params.id, addonId: req.body.addon_id, actorId: req.user.id });
+    res.status(202).json({ success: true, data: { job } });
+  } catch (err) {
+    if (!(err instanceof alta.ErrorAlta)) console.error('[adicional]', err.message);
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/addon-jobs/:jobId', (req, res) => {
+  const job = adicionales.ver(req.params.jobId);
+  if (!job) return res.status(404).json({ success: false, error: 'No hay registro de esa instalación (¿se reinició el servidor?). Mirá el estado en la instancia.' });
+  res.json({ success: true, data: job });
 });
 
 // ── Helpers ───────────────────────────────────────────────────

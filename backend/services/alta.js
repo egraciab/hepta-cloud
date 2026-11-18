@@ -290,4 +290,4 @@ async function correoBienvenida({ to, nombre, instancia_url, plan, cred, portal 
   }
 }
 
-module.exports = { iniciarAlta, verAlta, listarAltas, ErrorAlta, PLANES, _correoBienvenida: correoBienvenida };
+module.exports = { iniciarAlta, verAlta, listarAltas, ErrorAlta, PLANES, postJson, config, _correoBienvenida: correoBienvenida };
