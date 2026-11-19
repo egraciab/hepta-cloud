@@ -10,6 +10,8 @@
 #     dañado no se copia encima de la réplica buena.
 #   - Cada archivo nuevo se comprueba en el NAS: en un repositorio de restic el nombre de cada archivo es la suma
 #     sha256 de su contenido, así que se verifica sin conocer la contraseña.
+#   - Se compara por nombre y tamaño, no por fecha: en restic cada archivo es inmutable y su nombre es la suma de
+#     su contenido, y el NAS (SMB) no guarda las fechas con la misma precisión que el original.
 #   - La réplica queda igual al original (lo que la depuración borró, se borra), pero nunca se borra contra un
 #     origen vacío o sin montar.
 #   - Avisa también si en la VM hay un cliente con Nextcloud y sin respaldo configurado.
@@ -65,11 +67,11 @@ for c in $CLIENTES; do
   if ! en "$SERVIDOR" test -s "$RAIZ/$c/config"; then alerta "$c: el repositorio no tiene archivo config. No se replica."; continue; fi
 
   if [ "$SOLO_VER" = 1 ]; then
-    rsync -rtn --delete --stats -e "$PUENTE" "x:$RAIZ/$c/" "$DESTINO/$c/" 2>&1 | grep -E "Number of (regular )?files transferred|Number of deleted|Total transferred" | sed 's/^/   /'
+    rsync -rtn --size-only --delete --stats -e "$PUENTE" "x:$RAIZ/$c/" "$DESTINO/$c/" 2>&1 | grep -E "Number of (regular )?files transferred|Number of deleted|Total transferred" | sed 's/^/   /'
     continue
   fi
   mkdir -p "$DESTINO/$c"
-  if ! rsync -rt --delete --out-format='%n' -e "$PUENTE" "x:$RAIZ/$c/" "$DESTINO/$c/" > "$LISTA" 2>"$DESTINO/.$c.err"; then
+  if ! rsync -rt --size-only --delete --out-format='%n' -e "$PUENTE" "x:$RAIZ/$c/" "$DESTINO/$c/" > "$LISTA" 2>"$DESTINO/.$c.err"; then
     alerta "$c: la copia al NAS falló: $(tail -c 240 "$DESTINO/.$c.err" | tr '\n' ' ')"; continue
   fi
   # Verificación: nombre del archivo = sha256 de su contenido (todo menos "config")
@@ -82,8 +84,10 @@ for c in $CLIENTES; do
   done < "$LISTA"
   if [ "$malos" -gt 0 ]; then alerta "$c: $malos archivo/s copiados al NAS no coinciden con su suma"; continue; fi
   # Segunda pasada en seco: no tiene que quedar nada por copiar ni por borrar
-  if [ -n "$(rsync -rtn --delete --out-format='%n' -e "$PUENTE" "x:$RAIZ/$c/" "$DESTINO/$c/" 2>/dev/null | grep -v '/$' | grep -v '^locks/')" ]; then
-    alerta "$c: la réplica del NAS no quedó igual al original"; continue
+  RESTO="$(rsync -rtn --size-only --delete --out-format='%i %n' -e "$PUENTE" "x:$RAIZ/$c/" "$DESTINO/$c/" 2>&1 | grep -v '/$' | grep -v ' locks/')"
+  if [ -n "$RESTO" ]; then
+    aviso "   Diferencias que quedaron ($(wc -l <<<"$RESTO")):"; head -5 <<<"$RESTO" | sed 's/^/     /'
+    alerta "$c: la réplica del NAS no quedó igual al original ($(wc -l <<<"$RESTO") diferencia/s; la primera: $(head -1 <<<"$RESTO" | cut -c1-80))"; continue
   fi
   echo "$est" > "$DESTINO/$c.estado.json"
   aviso "   OK: $nuevos archivo/s nuevos verificados · $(campo "$est" copias) copia/s · $(du -sh "$DESTINO/$c" | cut -f1) en el NAS"
