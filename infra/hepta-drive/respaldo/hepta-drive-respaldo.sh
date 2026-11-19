@@ -16,7 +16,7 @@
 # Uso:  hepta-drive-respaldo.sh                 todos los clientes dados de alta en el respaldo
 #       hepta-drive-respaldo.sh <cliente>       uno solo
 #       hepta-drive-respaldo.sh --solo-ver      qué respaldaría, sin escribir
-#       hepta-drive-respaldo.sh --alta <cliente>      pide las dos contraseñas (no se muestran) y guarda el acceso
+#       hepta-drive-respaldo --alta <cliente>      pide las dos contraseñas (no se muestran) y guarda el acceso
 #       hepta-drive-respaldo.sh --copias <cliente>    lista las copias que hay en el servidor
 # Config: /etc/hepta-drive-respaldo/servidor.conf  (SERVIDOR=https://<ip>:8000 · CACERT=<certificado del servidor>)
 #         /etc/hepta-drive-respaldo/<cliente>.env  (600: REST_CLAVE y RESTIC_PASSWORD; las dos nacen en KeePass)
@@ -100,7 +100,7 @@ if [ "$SOLO_VER" = 1 ]; then
   for c in $(clientes con); do
     echo "  - $c: $(du -sh --exclude=db "$DATOS/$c" 2>/dev/null | cut -f1) sin la base en vivo · último bueno: $(cat "$ESTADO/$c.ultimo-ok" 2>/dev/null || echo nunca)"
   done
-  for c in $(clientes sin); do echo "  - $c: ¡SIN RESPALDO! Falta: $0 --alta $c"; done
+  for c in $(clientes sin); do echo "  - $c: ¡SIN RESPALDO! Falta: hepta-drive-respaldo --alta $c"; done
   exit 0
 fi
 
@@ -164,14 +164,14 @@ respaldar() {
 
 LISTA="$(clientes con)"
 if [ -n "$SOLO" ]; then
-  grep -qx "$SOLO" <<<"$LISTA" || { echo "ERROR: '$SOLO' no está dado de alta en el respaldo ($0 --alta $SOLO)" >&2; exit 2; }
+  grep -qx "$SOLO" <<<"$LISTA" || { echo "ERROR: '$SOLO' no está dado de alta en el respaldo (hepta-drive-respaldo --alta $SOLO)" >&2; exit 2; }
   LISTA="$SOLO"
 fi
 for c in $LISTA; do respaldar "$c"; done
 # Un cliente con Nextcloud y sin respaldo es una falla, no un detalle
 if [ -z "$SOLO" ]; then
   clientes sin > "$ESTADO/sin-respaldo.txt"
-  for c in $(clientes sin); do FALLARON=$((FALLARON + 1)); aviso "ERROR: el cliente $c no tiene respaldo configurado ($0 --alta $c)"; done
+  for c in $(clientes sin); do FALLARON=$((FALLARON + 1)); aviso "ERROR: el cliente $c no tiene respaldo configurado (hepta-drive-respaldo --alta $c)"; done
 fi
 [ "$FALLARON" -eq 0 ] || { aviso "Terminó CON $FALLARON falla/s."; exit 1; }
 [ -n "$SOLO" ] || date -Is > "$ESTADO/ultimo-ok"

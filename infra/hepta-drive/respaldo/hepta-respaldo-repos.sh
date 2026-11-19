@@ -55,10 +55,12 @@ alta() {
   printf '%s\n' "$k1" | htpasswd -B -i "$CONF/htpasswd" "$c" >/dev/null || { echo "ERROR: no pude crear el usuario" >&2; exit 1; }
   ( umask 077; printf '%s\n' "$k2" > "$CONF/claves/$c" )
   unset k1 k2
+  # rest-server vuelve a leer los usuarios al recibir la señal (si no corre con systemd, no pasa nada)
+  systemctl kill -s HUP hepta-rest-server 2>/dev/null || true
   install -d -m 700 -o "$USUARIO" -g "$USUARIO" "$RAIZ/$c" "$RAIZ/_cache"
   if restic_de "$c" init >/dev/null; then
     aviso "Repositorio de $c creado en $RAIZ/$c. Usuario de acceso: $c."
-    echo "Falta, en la VM hepta-drive: hepta-drive-respaldo.sh --alta $c   (con las mismas dos contraseñas)"
+    echo "Falta, en la VM hepta-drive: hepta-drive-respaldo --alta $c   (con las mismas dos contraseñas)"
   else
     echo "ERROR: restic init falló; revisá permisos de $RAIZ" >&2; exit 1
   fi

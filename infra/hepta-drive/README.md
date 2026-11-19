@@ -15,6 +15,8 @@ un cliente vive en `/srv/nextcloud/<cliente>/` (`html/`, `data/`, `db/`), en el 
 | `cliente/` | `/opt/hepta-drive/clientes/<cliente>/` | Plantilla de un cliente: `db`, `redis`, `app`, `cron` |
 | `respaldo/hepta-drive-respaldo.sh` | VM `hepta-drive` | Volcado de la base y copia con restic, por cliente |
 | `respaldo/hepta-respaldo-repos.sh` | servidor de respaldos | Alta de repositorios, depuración, verificación y estado |
+| `respaldo/instalar-servidor.sh` | contenedor `hepta-respaldo` | Instala restic, rest-server (versión fijada), certificado, servicio y cron |
+| `respaldo/instalar-vm.sh` | VM `hepta-drive` | Instala el script, el certificado del servidor y prueba que llegue |
 | `../backup/conf/hepta-drive.conf` | `/etc/hepta-backup.conf` de la VM | Configuración y volcados cada 6 h, como las demás VM |
 
 Los `.env` no se versionan: `env.ejemplo` tiene solo los nombres. Los valores nacen en KeePass.
@@ -34,7 +36,9 @@ Los `.env` no se versionan: `env.ejemplo` tiene solo los nombres. Los valores na
 - **Un repositorio por cliente**, con dos contraseñas propias en KeePass: la de acceso al servidor y la del
   repositorio (la que cifra). Sin la segunda, la copia no se puede leer.
 - **Retención:** 14 diarios, 8 semanales, 6 mensuales. La depuración y la verificación corren en el servidor.
-- **El servidor va en la red interna**, no en la DMZ, con una regla puntual `10.10.50.220` → servidor, puerto 8000.
+- **El servidor** es el contenedor `hepta-respaldo`, `10.10.10.20` en la red de administración (`br10`), con los
+  repositorios en el volumen `hepta-respaldo-repos` del pool `ceph-hdd` (3,5 TiB útiles con réplica 3). Regla puntual en
+  el MikroTik: `10.10.50.220` → `10.10.10.20`, tcp/8000. Habla TLS con certificado propio; la VM lo tiene fijado.
 - **Bases:** `pg_dump -Fc` verificado antes de cada copia; `db/` en crudo no se respalda. Tampoco las vistas previas.
 - `ceph-hdd` tiene sus tres discos en `hcsvrnd04` y está en la misma sala: es la copia rápida. Las que cuentan ante
   un desastre son el NAS y Drive, y solo se replican después de una verificación buena.
