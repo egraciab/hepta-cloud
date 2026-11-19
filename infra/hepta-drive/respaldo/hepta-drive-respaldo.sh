@@ -127,6 +127,15 @@ respaldar() {
   else
     mv "$dump.parcial" "$dump"; aviso "   base: $(du -h "$dump" | cut -f1), verificada"
   fi
+  # Roles y permisos: Nextcloud crea su propio usuario de base (oc_...) y el volcado de la base no lo trae.
+  # Sin esto la base no se puede restaurar tal cual en un Postgres nuevo.
+  if $DOCKER exec "$c-db-1" pg_dumpall -U "$PG_USUARIO" --globals-only > "$raiz/dumps/globales.sql.parcial" 2>"$dump.err" \
+     && grep -q 'ROLE' "$raiz/dumps/globales.sql.parcial"; then
+    mv "$raiz/dumps/globales.sql.parcial" "$raiz/dumps/globales.sql"
+  else
+    errores+=("no se pudieron volcar los roles de la base: $(head -c 200 "$dump.err" | tr '\n' ' ')")
+  fi
+  [ -e "$raiz/dumps/globales.sql.parcial" ] && unlink "$raiz/dumps/globales.sql.parcial"
   : > "$dump.err"; unlink "$dump.err"; [ -e "$dump.parcial" ] && unlink "$dump.parcial"
 
   # 2. Archivos, configuración y volcado al repositorio del cliente.

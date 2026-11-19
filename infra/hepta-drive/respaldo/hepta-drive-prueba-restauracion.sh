@@ -109,13 +109,29 @@ else
     for _ in $(seq 1 60); do $DOCKER exec "$PG" pg_isready -U nextcloud -d nextcloud >/dev/null 2>&1 && break; sleep 1; done
     sleep 2   # la imagen reinicia Postgres una vez al terminar de inicializar
     for _ in $(seq 1 30); do $DOCKER exec "$PG" psql -U nextcloud -d nextcloud -Atc 'select 1' >/dev/null 2>&1 && break; sleep 1; done
-    if $DOCKER exec -i "$PG" pg_restore -U nextcloud -d nextcloud --no-owner --exit-on-error < "$DUMP" >"$DEST/pg_restore.log" 2>&1; then
+    # Primero los roles (el usuario oc_... que crea Nextcloud). "ya existe" para el rol nextcloud es esperable.
+    OPC_RESTORE=(--exit-on-error)
+    if [ -s "$REST/dumps/globales.sql" ]; then
+      $DOCKER exec -i "$PG" psql -U nextcloud -d postgres -q < "$REST/dumps/globales.sql" >"$DEST/globales.log" 2>&1
+      ROLES="$($DOCKER exec "$PG" psql -U nextcloud -d postgres -Atc "select string_agg(rolname, ', ' order by rolname) from pg_roles where rolname !~ '^pg_'" 2>/dev/null)"
+      linea "   roles restaurados: $ROLES"
+    else
+      linea "   AVISO: esta copia no trae los roles (globales.sql); se restaura sin dueños ni permisos."
+      OPC_RESTORE+=(--no-owner --no-acl)
+    fi
+    if $DOCKER exec -i "$PG" pg_restore -U nextcloud -d nextcloud "${OPC_RESTORE[@]}" < "$DUMP" >"$DEST/pg_restore.log" 2>&1; then
       contar() { $DOCKER exec "$1" psql -U nextcloud -d nextcloud -Atc "$2" 2>/dev/null | tr -d ' \r'; }
       for q in "tablas|select count(*) from information_schema.tables where table_schema='public'" \
                "usuarios|select count(*) from oc_users" "archivos en el índice|select count(*) from oc_filecache"; do
         linea "   ${q%%|*}: restaurada $(contar "$PG" "${q#*|}") · producción $(contar "$C-db-1" "${q#*|}")"
       done
       [ "$(contar "$PG" "select count(*) from oc_filecache")" -gt 0 ] 2>/dev/null || falla "la base restaurada no tiene archivos en el índice"
+      # El usuario con el que Nextcloud entra a la base (config.php) tiene que existir en la base restaurada
+      DBUSER="$(grep -o "'dbuser' *=> *'[^']*'" "$REST/html/config/config.php" 2>/dev/null | cut -d"'" -f4)"
+      if [ -n "$DBUSER" ]; then
+        if [ "$(contar "$PG" "select count(*) from pg_roles where rolname='$DBUSER'")" = 1 ]; then linea "   OK: existe el usuario de base que usa Nextcloud ($DBUSER)."
+        else falla "falta el usuario de base que usa Nextcloud ($DBUSER)"; fi
+      fi
       BYTES="$($DOCKER exec "$PG" pg_dump -U nextcloud -Fc nextcloud 2>"$DEST/pg_dump.err" | wc -c)"
       if [ "${BYTES:-0}" -gt 1000 ] && [ ! -s "$DEST/pg_dump.err" ]; then
         linea "   OK: la base restaurada se pudo volver a volcar ($(numfmt --to=iec "$BYTES"); el original pesa $(numfmt --to=iec "$(stat -c %s "$DUMP")"))."
