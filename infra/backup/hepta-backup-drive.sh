@@ -7,6 +7,9 @@
 #   hepta-backup-drive.sh datos     respaldos de datos (/mnt/nas/hepta-backups): UNA corrida por día y por VM
 #                                   (la última de cada día que el NAS conserva) y los paquetes de carpetas
 #   hepta-backup-drive.sh exports   export semanal de las VM completas: los lotes marcados como completos
+#   hepta-backup-drive.sh repos     repositorios de restic de HEPTA Drive (/mnt/nas/hepta-drive-repos): tal cual
+#                                   están en el NAS. Ya van cifrados por restic; en Drive quedan cifrados dos veces.
+#                                   No sube si la última réplica al NAS terminó con alerta.
 #   ... --solo-ver                  muestra qué subiría y qué borraría, sin tocar Drive
 #
 # Drive queda igual a esa selección: lo que el NAS ya depuró se borra también de Drive (va a la papelera de
@@ -21,7 +24,7 @@ REMOTO="${HEPTA_DRIVE_REMOTO:-gdrive-crypt}"
 LIMITE="${HEPTA_DRIVE_LIMITE:-}"           # tope de subida, por ejemplo 20M (megabytes por segundo); vacío = sin tope
 MODO="${1:-}"; SOLO_VER=0; [ "${2:-}" = "--solo-ver" ] && SOLO_VER=1
 
-case "$MODO" in datos|exports) ;; *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2;; esac
+case "$MODO" in datos|exports|repos) ;; *) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 2;; esac
 aviso() { echo "[$(date '+%F %H:%M:%S')] $*"; }
 command -v rclone >/dev/null || { echo "ERROR: falta rclone" >&2; exit 2; }
 [ -n "${HEPTA_SIN_MONTAJE:-}" ] || mountpoint -q "$MONTAJE" || { echo "ERROR: $MONTAJE no está montado" >&2; exit 2; }
@@ -39,6 +42,15 @@ if [ "$MODO" = datos ]; then
     echo "+ /$vm/archivos/archivos-*.tar.zst"
     echo "+ /$vm/estado.json"; echo "+ /$vm/historial.jsonl"
   done > "$FILTRO"
+elif [ "$MODO" = repos ]; then
+  ORIGEN="${HEPTA_DRIVE_REPOS:-$MONTAJE/hepta-drive-repos}"; DESTINO="$REMOTO:hepta-drive-repos"
+  [ -f "$ORIGEN/ultimo-replica-ok" ] || { aviso "Todavía no hay una réplica buena en $ORIGEN; no subo nada."; exit 0; }
+  if [ -f "$ORIGEN/ALERTA-replica.txt" ]; then
+    echo "$(date -Is) repos: la réplica al NAS tiene una alerta abierta; no se sube" > "$NAS/ultimo-drive-repos-fallo"
+    aviso "La réplica al NAS tiene una alerta abierta: no subo para no pisar la copia buena de Drive."; exit 1
+  fi
+  for d in "$ORIGEN"/*/; do [ -s "$d/config" ] && echo "+ /$(basename "$d")/**"; done > "$FILTRO"
+  echo "+ /*.estado.json" >> "$FILTRO"
 else
   ORIGEN="$EXPORTS"; DESTINO="$REMOTO:lxd-exports"
   for d in "$EXPORTS"/[0-9]*_[0-9]*/; do

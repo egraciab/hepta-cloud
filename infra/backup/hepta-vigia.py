@@ -39,6 +39,8 @@ CHEQUEOS = [
     ('http', 'Tenants Odoo (clientes)', 'https://demo.erp.hepta.com.py/web/health'),
     ('http', 'ERP del grupo', 'https://group.hepta.com.py/web/health'),
     ('http', 'Centro de Mando', 'https://mando.hepta.com.py/login.php'),
+    ('http', 'HEPTA Drive (Nextcloud)', 'https://drive.hepta.com.py/status.php'),
+    ('http', 'HEPTA Drive: editor de documentos', 'https://office.hepta.com.py/healthcheck'),
     ('http', 'Correo: webmail', 'https://mail.hepta.com.py/'),
     ('tcp', 'Correo: envío (465)', 'mail.hepta.com.py:465'),
     ('tcp', 'Correo: envío (587)', 'mail.hepta.com.py:587'),

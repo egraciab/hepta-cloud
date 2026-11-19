@@ -18,7 +18,9 @@ NAS_ROOT="${EXPORT_NAS_ROOT:-$NAS_MOUNT/lxd-exports}"
 GDRIVE_REMOTE="gdrive-crypt:lxd-exports"       # remote rclone tipo crypt (ver runbook)
 LXD_BACKUPS_DIR="/var/snap/lxd/common/lxd/backups"
 MIN_FREE_FACTOR=130                              # % del uso de disco de la VM que debe estar libre (margen)
-CRITICAS=(dkr-hgsvrlnx003 HGSVRLNX111 HGSVRLNX104 hepta-cloud retopa-core v-HGSVRLNX004)
+# hepta-drive y hepta-respaldo: el export trae el sistema y la configuración, NO sus volúmenes de datos
+# (hepta-drive-data y hepta-respaldo-repos); esos datos van por restic (infra/hepta-drive/respaldo/).
+CRITICAS=(dkr-hgsvrlnx003 HGSVRLNX111 HGSVRLNX104 hepta-cloud retopa-core v-HGSVRLNX004 hepta-drive hepta-respaldo)
 LOTES_SEMANALES=4
 
 DRIVE=0

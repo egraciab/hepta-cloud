@@ -19,7 +19,7 @@ MONTAJE = os.environ.get('HEPTA_NAS_MONTAJE', '/mnt/nas')
 NAS = os.environ.get('HEPTA_NAS', MONTAJE + '/hepta-backups')
 EXPORTS = os.environ.get('HEPTA_EXPORTS', MONTAJE + '/lxd-exports')
 CONF = os.environ.get('HEPTA_CORREO_CONF', '/etc/hepta-backup-correo.conf')
-VMS = os.environ.get('HEPTA_VMS', 'hepta-cloud retopa-core HGSVRLNX104 HGSVRLNX111 dkr-hgsvrlnx003 v-HGSVRLNX004').split()
+VMS = os.environ.get('HEPTA_VMS', 'hepta-cloud retopa-core HGSVRLNX104 HGSVRLNX111 dkr-hgsvrlnx003 v-HGSVRLNX004 hepta-drive').split()
 NOMBRES = {'hepta-cloud': 'Hepta Cloud', 'retopa-core': 'RetoPA', 'HGSVRLNX104': 'Tenants Odoo', 'HGSVRLNX111': 'ERP del grupo',
            'dkr-hgsvrlnx003': 'Nginx perimetral', 'v-HGSVRLNX004': 'Correo (mailcow)'}
 PY = timezone(timedelta(hours=-3))          # hora de Paraguay
@@ -207,6 +207,7 @@ def evaluar_drive(ahora):
     """Copia cifrada a Google Drive (hepta-backup-drive.sh): datos una vez por día, exports una vez por semana."""
     filas = []
     for modo, titulo, max_h, cada in (('datos', 'Respaldos de datos a Drive (diario)', 30, 'corre todas las noches'),
+                                      ('repos', 'Archivos de HEPTA Drive a Drive (diario)', 30, 'corre todas las mañanas'),
                                       ('exports', 'Export de VMs a Drive (semanal)', 8 * 24, 'corre los domingos')):
         r = {'titulo': titulo, 'estado': OK, 'notas': [], 'detalle': ''}
         try:

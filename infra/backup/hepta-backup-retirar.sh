@@ -14,7 +14,7 @@
 set -uo pipefail
 
 PROYECTO="${HEPTA_PROYECTO:-HEPTA}"
-VMS="${HEPTA_VMS:-hepta-cloud retopa-core HGSVRLNX104 HGSVRLNX111 dkr-hgsvrlnx003 v-HGSVRLNX004}"
+VMS="${HEPTA_VMS:-hepta-cloud retopa-core HGSVRLNX104 HGSVRLNX111 dkr-hgsvrlnx003 v-HGSVRLNX004 hepta-drive}"
 MONTAJE="${HEPTA_NAS_MONTAJE:-/mnt/nas}"
 NAS="${HEPTA_NAS:-$MONTAJE/hepta-backups}"
 ORIGEN=/var/backups/hepta
@@ -100,6 +100,16 @@ if [ -f "$EXPORTS/ultimo-lote-fallo" ]; then alerta "export semanal de VMs: $(cu
 if [ -f "$EXPORTS/ultimo-lote-ok" ]; then
   dias=$(( (AHORA - $(date -d "$(cat "$EXPORTS/ultimo-lote-ok")" +%s)) / 86400 ))
   [ "$dias" -ge 8 ] && alerta "export semanal de VMs: el último lote completo es de hace $dias días"
+fi
+
+# ── Control de vida de la réplica de los repositorios de HEPTA Drive (hepta-drive-replicar.sh) ──
+REPOS="${HEPTA_DRIVE_REPOS:-$MONTAJE/hepta-drive-repos}"
+if [ -d "$REPOS" ]; then
+  [ -f "$REPOS/ALERTA-replica.txt" ] && alerta "HEPTA Drive: $(tail -n +2 "$REPOS/ALERTA-replica.txt" | tr '\n' ' ' | cut -c1-300)"
+  if [ -f "$REPOS/ultimo-replica-ok" ]; then
+    horas=$(( (AHORA - $(date -d "$(cat "$REPOS/ultimo-replica-ok")" +%s)) / 3600 ))
+    [ "$horas" -ge 30 ] && alerta "HEPTA Drive: la última réplica buena de los repositorios al NAS es de hace $horas h"
+  fi
 fi
 
 # Historial de pasadas (para los informes)
