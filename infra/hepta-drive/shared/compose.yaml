@@ -1,0 +1,21 @@
+services:
+  onlyoffice:
+    image: onlyoffice/documentserver:${OO_TAG}
+    restart: unless-stopped
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${OO_JWT_SECRET}
+      ALLOW_PRIVATE_IP_ADDRESS: "true"
+    ports:
+      - "10.10.50.220:8000:80"
+    networks: [shared]
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    volumes:
+      - /srv/nextcloud/_shared/clamav:/var/lib/clamav
+    networks: [shared]
+networks:
+  shared:
+    external: true
+    name: hd-shared
