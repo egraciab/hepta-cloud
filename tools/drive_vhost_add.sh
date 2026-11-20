@@ -90,7 +90,7 @@ if "$NGINX" -t >/dev/null 2>&1; then
   echo "OK: https://$FQDN → $UPSTREAM:$PUERTO"
   echo "Probar: curl -sI https://$FQDN/status.php | head -1    (tiene que dar 200; si no resuelve, falta el DNS)"
 else
-  "$NGINX" -t 2>&1 | tail -3
+  "$NGINX" -t 2>&1 | tail -3 || true
   if [ -n "$PREVIO" ]; then cp -p "$PREVIO" "$CONF"; else unlink "$ENLACE"; unlink "$CONF"; fi
   echo "ERROR: nginx -t falló. Dejé todo como estaba." >&2; exit 1
 fi
