@@ -476,7 +476,19 @@ dominio_propio() {
   puerto="$(de_env "$DIR/.env" APP_PORT)"; fq="$(de_env "$DIR/.env" FQDN)"
   actual="$(cat "$DIR/dominio" 2>/dev/null || true)"
   exec 9>"$VAR/clientes/$c.candado"; flock -n 9 || morir "ya hay una operación en curso sobre $c"
-  responde() { [ "$(curl -s -o /dev/null -m 10 -w '%{http_code}' -H "Host: $1" -H "X-Forwarded-Proto: https" "http://$IP_VM:$puerto/status.php")" = 200 ]; }
+  # Después de reiniciar, el contenedor tarda en volver a atender aunque occ ya conteste: se le da hasta 2 minutos
+  CODIGO=""
+  responde() {
+    local n
+    for n in $(seq 1 40); do
+      CODIGO="$(curl -s -o /dev/null -m 10 -w '%{http_code}' -H "Host: $1" -H "X-Forwarded-Proto: https" "http://$IP_VM:$puerto/status.php" || true)"
+      [ "$CODIGO" = 200 ] && return 0
+      # 400 es la respuesta de Nextcloud a un nombre que no acepta: esperar no lo arregla
+      [ "$CODIGO" = 400 ] && return 1
+      sleep 3
+    done
+    return 1
+  }
   levantar() {
     ( cd "$DIR" && $DOCKER compose up -d ) >>"$VAR/clientes/$c.log" 2>&1 || return 1
     for i in $(seq 1 60); do grep -q 'installed: true' <<<"$(occ "$c" status 2>/dev/null)" && return 0; sleep 2; done
@@ -515,7 +527,10 @@ dominio_propio() {
     [ -z "$(occ "$c" config:system:get overwritehost 2>/dev/null)" ] || { deshacer; morir "no pude dejar de fijar la dirección de la instancia; volví a la configuración anterior"; }
   fi
   occ "$c" config:system:set overwrite.cli.url --value "https://$DOMINIO" >/dev/null || true
-  if ! responde "$DOMINIO" || ! responde "$fq"; then deshacer; morir "la instancia no responde por los dos nombres; volví a la configuración anterior"; fi
+  local falla=""
+  responde "$DOMINIO" || falla="$DOMINIO (respuesta ${CODIGO:-ninguna})"
+  [ -n "$falla" ] || responde "$fq" || falla="$fq (respuesta ${CODIGO:-ninguna})"
+  if [ -n "$falla" ]; then deshacer; morir "la instancia no respondió por $falla después del cambio; volví a la configuración anterior"; fi
   aviso "DOMINIO OK: $c responde por https://$DOMINIO y por https://$fq; los correos usan $DOMINIO"
 }
 
