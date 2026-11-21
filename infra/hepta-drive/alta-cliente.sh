@@ -176,9 +176,9 @@ crear() {
         "$FQDN" "$puerto" "$(de_env "$BASE/clientes/hepta/.env" NC_TAG || echo 34-apache)" "$RAIZ" "$ADMIN_TECNICO" "$k_admin" "$k_db" "$k_redis" > "$DIR/.env"
       # Copia para KeePass (formato CSV de KeePass: Grupo,Título,Usuario,Contraseña,URL,Notas)
       { echo '"Group","Title","Username","Password","URL","Notes"'
-        printf '"Clientes Hepta Cloud/%s","Drive · admin Nextcloud","%s","%s","https://%s","Administrador técnico de HEPTA. El cliente no lo usa."\n' "$c" "$ADMIN_TECNICO" "$k_admin" "$FQDN"
-        printf '"Clientes Hepta Cloud/%s","Drive · Postgres","nextcloud","%s","",""\n' "$c" "$k_db"
-        printf '"Clientes Hepta Cloud/%s","Drive · Redis","","%s","",""\n' "$c" "$k_redis"
+        printf '"Vault/Hepta Drive/%s","hepta-drive / %s / admin Nextcloud","%s","%s","https://%s","Administrador técnico de HEPTA. El cliente no lo usa."\n' "$c" "$c" "$ADMIN_TECNICO" "$k_admin" "$FQDN"
+        printf '"Vault/Hepta Drive/%s","hepta-drive / %s / Postgres","nextcloud","%s","",""\n' "$c" "$c" "$k_db"
+        printf '"Vault/Hepta Drive/%s","hepta-drive / %s / Redis","","%s","",""\n' "$c" "$c" "$k_redis"
       } > "$VAR/secretos/$c.csv" )
     unset k_admin k_db k_redis
   else
@@ -257,7 +257,7 @@ crear() {
         local k_u; k_u="$(clave 20)"
         $DOCKER exec -u www-data -e OC_PASS="$k_u" "$c-app-1" php occ user:add --password-from-env --email "$uid" \
           --display-name "${U_NOMBRE[i]}" --group "$c" "$uid" >>"$VAR/clientes/$c.log" 2>&1 || morir "no pude crear el usuario $uid"
-        ( umask 077; printf '"Clientes Hepta Cloud/%s","Drive · usuario %s","%s","%s","https://%s","Contraseña inicial: el usuario debe cambiarla."\n' "$c" "$uid" "$uid" "$k_u" "$FQDN" >> "$VAR/secretos/$c.csv" )
+        ( umask 077; printf '"Vault/Hepta Drive/%s","hepta-drive / %s / usuario %s","%s","%s","https://%s","Contraseña inicial: el usuario debe cambiarla."\n' "$c" "$c" "$uid" "$uid" "$k_u" "$FQDN" >> "$VAR/secretos/$c.csv" )
         unset k_u
       fi
       creados=$((creados + 1))
@@ -289,8 +289,8 @@ crear() {
     install -d -m 700 "$CONF_RESPALDO" "$VAR/respaldo-pendiente"
     ( umask 077
       printf "REST_CLAVE='%s'\nRESTIC_PASSWORD='%s'\n" "$k1" "$k2" > "$CONF_RESPALDO/$c.env"
-      printf '"Clientes Hepta Cloud/%s","Drive · respaldo, acceso","%s","%s","","Usuario del servidor de respaldos (10.10.10.20)."\n' "$c" "$c" "$k1" >> "$VAR/secretos/$c.csv"
-      printf '"Clientes Hepta Cloud/%s","Drive · respaldo, repositorio (CRÍTICA)","","%s","","CRÍTICA: sin esta contraseña las copias de este cliente no se pueden leer."\n' "$c" "$k2" >> "$VAR/secretos/$c.csv" )
+      printf '"Vault/Hepta Drive/%s","HEPTA Drive respaldo – %s – acceso","%s","%s","","Usuario del servidor de respaldos (10.10.10.20)."\n' "$c" "$c" "$c" "$k1" >> "$VAR/secretos/$c.csv"
+      printf '"Vault/Hepta Drive/%s","HEPTA Drive respaldo – %s – repositorio","","%s","","CRÍTICA: sin esta contraseña las copias de este cliente no se pueden leer."\n' "$c" "$c" "$k2" >> "$VAR/secretos/$c.csv" )
     unset k1 k2
     date -Is > "$VAR/respaldo-pendiente/$c"
   fi
