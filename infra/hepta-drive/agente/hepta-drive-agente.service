@@ -1,0 +1,20 @@
+[Unit]
+Description=HEPTA Drive — agente de alta (puerta del Admin de HEPTA Cloud)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/hepta-drive-agente/agente.env
+WorkingDirectory=/opt/hepta-drive/agente
+# Un solo proceso: los trabajos en curso viven en memoria
+ExecStart=/usr/bin/python3 -m uvicorn main:app --host 10.10.50.220 --port 8888 --no-access-log \
+  --ssl-keyfile /etc/hepta-drive-agente/clave.pem --ssl-certfile /etc/hepta-drive-agente/cert.pem
+Restart=on-failure
+RestartSec=5
+# El alta de un cliente no tiene que morir si se reinicia el agente a mano
+KillMode=process
+PrivateTmp=true
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

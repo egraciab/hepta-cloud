@@ -8,6 +8,7 @@
 #   hepta-drive-alta verificar <slug>               comprueba que la instancia responde
 #   hepta-drive-alta estado   [slug]                qué hay hoy (JSON, una línea por cliente)
 #   hepta-drive-alta aplicar-plantilla [slug]       lleva un cambio de la plantilla a las instancias existentes
+#   hepta-drive-alta marca    <slug> [--logo ARCH]  aplica la marca (nombre, color y logo) a una instancia que ya existe
 #   hepta-drive-alta secretos <slug>                entrega los secretos del alta (CSV para KeePass)
 #   hepta-drive-alta secretos <slug> --guardado     los borra de la VM, cuando ya están en KeePass
 #   hepta-drive-alta baja     <slug> --confirmar <slug>   apaga y archiva en /srv/nextcloud/_bajas (no borra datos)
@@ -17,6 +18,11 @@
 #   --cuota-gb N           cuota por usuario si la línea no trae una (por defecto 5)
 #   --equipo-gb N          carpeta de equipo compartida con esa cuota (por defecto 0 = sin carpeta de equipo)
 #   --fqdn NOMBRE          por defecto <slug>.drive.hepta.com.py
+#   --logo ARCHIVO         logo del cliente (PNG o JPG, hasta 1 MB). Sin esto va el de Hepta Cloud
+#
+# Marca: toda instancia nace como "Hepta Cloud" (nombre, color, logo y correo de invitación), sin los archivos de
+# ejemplo ni la presentación de Nextcloud. El logo por defecto está en /opt/hepta-drive/plantilla/marca/logo.png y
+# los textos se pueden cambiar en /opt/hepta-drive/plantilla/marca/marca.conf (NOMBRE, LEMA, COLOR, URL).
 #
 # Usuarios: el identificador es su correo. No circula contraseña inicial: Nextcloud les manda una invitación para
 # que pongan la suya. Si el cliente también tiene correo con HEPTA, primero se crean las casillas.
@@ -54,7 +60,7 @@ occ_s() { occ "$@" >/dev/null 2>&1; }
 # ── Argumentos ──
 ACCION="${1:-}"; SLUG="${2:-}"
 [ $# -ge 1 ] && shift; [ $# -ge 1 ] && shift
-USUARIOS=""; CUOTA_GB=5; EQUIPO_GB=0; FQDN=""; CONFIRMAR=""; GUARDADO=0
+USUARIOS=""; CUOTA_GB=5; EQUIPO_GB=0; FQDN=""; CONFIRMAR=""; GUARDADO=0; LOGO=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --usuarios) USUARIOS="${2:-}"; shift 2 ;;
@@ -63,6 +69,7 @@ while [ $# -gt 0 ]; do
     --fqdn) FQDN="${2:-}"; shift 2 ;;
     --confirmar) CONFIRMAR="${2:-}"; shift 2 ;;
     --guardado) GUARDADO=1; shift ;;
+    --logo) LOGO="${2:-}"; shift 2 ;;
     *) morir "opción desconocida: $1" ;;
   esac
 done
@@ -107,10 +114,54 @@ puerto_libre() {
   return 1
 }
 
+# ── Marca ──
+logo_ok() {   # logo_ok <archivo> → imprime la extensión (png|jpg) si sirve
+  [ -r "$1" ] || return 1
+  [ "$(stat -c %s "$1")" -le 1048576 ] || return 1
+  case "$(head -c 8 "$1" | od -An -tx1 | tr -d ' \n')" in
+    89504e470d0a1a0a) echo png ;;
+    ffd8ff*) echo jpg ;;
+    *) return 1 ;;
+  esac
+}
+# Aplica nombre, lema, color y logo. Si el cliente tiene logo propio ($DIR/logo.*), va ese; si no, el de Hepta Cloud.
+# No corta el alta: si algo no se pudo aplicar, avisa y sigue.
+marca() {
+  local c="$1" NOMBRE="Hepta Cloud" LEMA="Tu nube privada" COLOR="#1254A4" URL="https://cloud.hepta.com.py" f ext fallas=0
+  # shellcheck disable=SC1091
+  [ -r "$BASE/plantilla/marca/marca.conf" ] && . "$BASE/plantilla/marca/marca.conf"
+  occ "$c" theming:config name "$NOMBRE" >/dev/null 2>&1 || fallas=$((fallas + 1))
+  occ "$c" theming:config slogan "$LEMA" >/dev/null 2>&1 || fallas=$((fallas + 1))
+  occ "$c" theming:config url "$URL" >/dev/null 2>&1 || fallas=$((fallas + 1))
+  occ "$c" theming:config primary_color "$COLOR" >/dev/null 2>&1 || occ "$c" theming:config color "$COLOR" >/dev/null 2>&1 || fallas=$((fallas + 1))
+  f=""; for ext in png jpg; do [ -f "$BASE/clientes/$c/logo.$ext" ] && { f="$BASE/clientes/$c/logo.$ext"; break; }; done
+  [ -n "$f" ] || for ext in png jpg; do [ -f "$BASE/plantilla/marca/logo.$ext" ] && { f="$BASE/plantilla/marca/logo.$ext"; break; }; done
+  if [ -n "$f" ]; then
+    ext="${f##*.}"
+    if $DOCKER cp "$f" "$c-app-1:/tmp/marca-logo.$ext" >/dev/null 2>&1 && $DOCKER exec "$c-app-1" chmod 644 "/tmp/marca-logo.$ext"; then
+      occ "$c" theming:config logo "/tmp/marca-logo.$ext" >/dev/null 2>&1 || fallas=$((fallas + 1))
+      $DOCKER exec "$c-app-1" unlink "/tmp/marca-logo.$ext" 2>/dev/null
+    else fallas=$((fallas + 1)); fi
+  else
+    aviso "  AVISO: no hay logo en $BASE/plantilla/marca/ (queda el de Nextcloud)"
+  fi
+  # Sin la presentación de Nextcloud al primer ingreso
+  occ "$c" app:disable firstrunwizard >/dev/null 2>&1
+  if [ "$fallas" -gt 0 ]; then aviso "  AVISO: $fallas ajuste/s de marca no se pudieron aplicar (ver: occ theming:config)"; return 1; fi
+  aviso "  marca: $NOMBRE, logo $([ "${f#"$BASE/clientes/"}" != "$f" ] && echo 'del cliente' || echo 'de Hepta Cloud')"
+}
+guardar_logo() {   # copia el logo del pedido a la carpeta del cliente
+  [ -n "$LOGO" ] || return 0
+  local ext; ext="$(logo_ok "$LOGO")" || morir "--logo: tiene que ser un PNG o JPG de hasta 1 MB"
+  for f in "$DIR"/logo.png "$DIR"/logo.jpg; do [ -e "$f" ] && unlink "$f"; done
+  install -m 644 "$LOGO" "$DIR/logo.$ext"
+}
+
 # ── validar ──
 validar() {
   local errores=() avisos=() total=0 i libre_gb vendido_gb ram
   [ -f "$BASE/plantilla/compose.yaml" ] || errores+=("falta la plantilla: corré antes 'hepta-drive-alta preparar'")
+  [ -z "$LOGO" ] || logo_ok "$LOGO" >/dev/null || errores+=("el logo tiene que ser un PNG o JPG de hasta 1 MB")
   for v in SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD SMTP_FROM SMTP_DOMAIN OO_JWT_SECRET; do
     [ -n "$(de_env "$BASE/shared/.env" "$v")" ] || errores+=("falta $v en $BASE/shared/.env (corré 'hepta-drive-alta preparar')")
   done
@@ -163,6 +214,8 @@ crear() {
   validar >/dev/null || { validar; exit 1; }
   install -d -m 700 "$VAR" "$VAR/secretos" "$VAR/clientes"
   exec 9>"$VAR/clientes/$SLUG.candado"; flock -n 9 || morir "ya hay un alta de $SLUG en curso"
+  # Un alta a la vez en toda la VM (dos a la par podrían elegir el mismo puerto)
+  exec 8>"$VAR/alta.candado"; flock -n 8 || morir "ya hay otra alta en curso en esta VM; probá cuando termine"
   local nuevo=0 puerto c="$SLUG" i
 
   paso "Carpetas y configuración"
@@ -214,6 +267,13 @@ crear() {
   occ "$c" config:app:set core shareapi_expire_after_n_days --value 30 >/dev/null
   occ "$c" config:app:set core shareapi_enforce_expire_date --value yes >/dev/null
   occ "$c" twofactorauth:enforce --on >/dev/null || morir "no pude dejar el doble factor obligatorio"
+  # Carpeta del usuario limpia: sin los archivos de ejemplo ni la carpeta de plantillas de Nextcloud
+  occ "$c" config:system:set skeletondirectory --value "" >/dev/null || morir "no pude quitar los archivos de ejemplo"
+  occ "$c" config:system:set templatedirectory --value "" >/dev/null
+
+  paso "Marca"
+  guardar_logo
+  marca "$c" || true
 
   paso "Correo saliente"
   local se="$BASE/shared/.env"
@@ -387,9 +447,10 @@ case "$ACCION" in
   validar)  necesita_slug; leer_usuarios; validar ;;
   crear)    necesita_slug; leer_usuarios; crear ;;
   verificar) necesita_slug; verificar && echo "OK: $SLUG responde y tiene el doble factor obligatorio" ;;
+  marca)    necesita_slug; [ -f "$DIR/.env" ] || morir "no existe el cliente $SLUG"; guardar_logo; marca "$SLUG" ;;
   aplicar-plantilla) [ -z "$SLUG" ] || slug_ok "$SLUG" || morir "nombre inválido"; aplicar_plantilla ;;
   estado)   [ -z "$SLUG" ] || slug_ok "$SLUG" || morir "nombre inválido"; estado ;;
   secretos) necesita_slug; secretos ;;
   baja)     necesita_slug; baja ;;
-  *) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

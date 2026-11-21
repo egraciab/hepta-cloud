@@ -21,6 +21,8 @@ un cliente vive en `/srv/nextcloud/<cliente>/` (`html/`, `data/`, `db/`), en el 
 | `respaldo/hepta-drive-replicar.sh` | `hcsvrnd01` | Copia los repositorios verificados al NAS (`/mnt/nas/hepta-drive-repos`) y comprueba cada archivo |
 | `respaldo/hepta-drive-enrolar.sh` | `hcsvrnd01` | Cada 10 min: crea en el servidor de respaldos el repositorio de un cliente nuevo, hace la primera copia y la verifica |
 | `alta-cliente.sh` | VM `hepta-drive` (`hepta-drive-alta`) | Alta, verificación, estado y baja de un cliente |
+| `agente/` | VM `hepta-drive` (`/opt/hepta-drive/agente`, servicio `hepta-drive-agente`) | Puerta del Admin de HEPTA Cloud: `10.10.50.220:8888`, TLS con certificado propio, clave y filtro de origen. Valida, crea en segundo plano, informa y entrega los secretos. Todo termina en `hepta-drive-alta` |
+| `marca/logo.png` | `/opt/hepta-drive/plantilla/marca/` | Logo de Hepta Cloud: el que lleva una instancia si el cliente no trae el suyo (`--logo`) |
 | `../../tools/drive_vhost_add.sh` | NGINX perimetral | Vhost `<cliente>.drive.hepta.com.py` |
 | `../backup/conf/hepta-drive.conf` | `/etc/hepta-backup.conf` de la VM | Configuración y volcados cada 6 h, como las demás VM |
 
@@ -76,5 +78,6 @@ Los `.env` no se versionan: `env.ejemplo` tiene solo los nombres. Los valores na
 - [x] Copia, mantenimiento y réplicas vistos correr solos (2026-11-20).
 - [x] `alta-cliente.sh` y vhost, probados con un cliente de prueba (2026-11-20).
 - [ ] `hepta-drive-enrolar`: instalar en `hcsvrnd01` y verlo dar de alta solo a un cliente de prueba.
+- [ ] Agente de alta: instalar y probar un alta completa disparada por la API.
 - [ ] Probar la baja. Runbook de alta.
 - [ ] Medir con la carga real del primer cliente (200 GB): primera copia, incremental y réplica.
