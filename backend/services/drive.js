@@ -281,6 +281,44 @@ async function agregarUsuarios(slug, cuerpo, actorId) {
   return { trabajo: j[0].id, slug: s, usuarios: lista.length };
 }
 
+// Corta o devuelve el acceso de un usuario. Sus archivos no se tocan.
+async function estadoUsuario(slug, cuerpo) {
+  const s = slugValido(slug);
+  const usuario = String((cuerpo || {}).usuario || '').trim().toLowerCase();
+  if (!CORREO.test(usuario)) throw new ErrorDrive(422, 'Usuario inválido');
+  if (typeof (cuerpo || {}).activo !== 'boolean') throw new ErrorDrive(422, 'Falta indicar si queda habilitado');
+  const r = await pedir('POST', `/clientes/${s}/usuarios/estado`, { usuario, activo: cuerpo.activo }, { timeoutMs: 70000 });
+  if (!r.ok) throw new ErrorDrive([404, 409, 422].includes(r.status) ? r.status : 502, detalle(r));
+  return { usuario, activo: cuerpo.activo };
+}
+
+// Borra a un usuario. Con transferir_a, antes pasa sus archivos a otro usuario; sin eso, se borran con él.
+async function eliminarUsuario(slug, cuerpo, actorId) {
+  const s = slugValido(slug);
+  const usuario = String((cuerpo || {}).usuario || '').trim().toLowerCase();
+  const transferir_a = String((cuerpo || {}).transferir_a || '').trim().toLowerCase() || null;
+  if (!CORREO.test(usuario)) throw new ErrorDrive(422, 'Usuario inválido');
+  if (transferir_a && (!CORREO.test(transferir_a) || transferir_a === usuario)) throw new ErrorDrive(422, 'El destino de los archivos tiene que ser otro usuario');
+  // Sin destino los archivos se pierden: se pide escribir el correo, para que no sea un clic de más
+  if (!transferir_a && String((cuerpo || {}).confirmar || '').trim().toLowerCase() !== usuario)
+    throw new ErrorDrive(422, 'Para borrar a un usuario junto con sus archivos hay que escribir su correo como confirmación');
+  const { rows: abiertos } = await pool.query("SELECT 1 FROM provisioning_jobs WHERE status = 'running' LIMIT 1");
+  if (abiertos.length) throw new ErrorDrive(409, 'Hay otro trabajo en curso. Esperá a que termine.');
+  const r = await pedir('POST', `/clientes/${s}/usuarios/eliminar`, { usuario, transferir_a }, { timeoutMs: 30000 });
+  if (r.status !== 202 || !r.json || !r.json.trabajo)
+    throw new ErrorDrive([404, 409, 422].includes(r.status) ? r.status : 502, detalle(r));
+  const { rows: cs } = await pool.query(
+    `INSERT INTO client_services (service, slug, fqdn, status, created_by)
+     VALUES ('drive', $1, NULL, 'active', $2)
+     ON CONFLICT (service, slug) DO UPDATE SET updated_at = NOW() RETURNING id`, [s, actorId || null]);
+  const { rows: j } = await pool.query(
+    `INSERT INTO provisioning_jobs (client_service_id, action, remote_job_id, status, step, actor_id)
+     VALUES ($1, 'delete_user', $2, 'running', 'En cola', $3) RETURNING id`,
+    [cs[0].id, r.json.trabajo, actorId || null]);
+  seguir(j[0].id);
+  return { trabajo: j[0].id, slug: s, usuario, transferir_a };
+}
+
 // ── Sobre una instancia ──────────────────────────────────────
 async function verificar(slug) {
   const s = slugValido(slug);
@@ -305,4 +343,4 @@ async function secretosGuardados(slug) {
   return true;
 }
 
-module.exports = { ErrorDrive, salud, listar, validar, crear, verTrabajo, verificar, usuarios, agregarUsuarios, secretos, secretosGuardados, reanudar };
+module.exports = { ErrorDrive, salud, listar, validar, crear, verTrabajo, verificar, usuarios, agregarUsuarios, estadoUsuario, eliminarUsuario, secretos, secretosGuardados, reanudar };

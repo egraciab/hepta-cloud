@@ -14,6 +14,8 @@ cuenta: cada pedido termina en /usr/local/sbin/hepta-drive-alta, el mismo script
   POST /clientes/{slug}/verificar      comprueba que la instancia responde
   GET  /clientes/{slug}/usuarios       usuarios de la instancia
   POST /clientes/{slug}/usuarios       suma usuarios en segundo plano → 202 con un trabajo
+  POST /clientes/{slug}/usuarios/estado     habilita o deshabilita a un usuario
+  POST /clientes/{slug}/usuarios/eliminar   borra a un usuario (pasando antes sus archivos a otro, si se pide) → 202
   GET  /clientes/{slug}/secretos       paquete para KeePass (CSV). No se borra al leerlo
   POST /clientes/{slug}/secretos/guardado   lo borra de la VM, cuando ya está en KeePass
 
@@ -36,7 +38,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import APIKeyHeader
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 API_KEY = os.getenv("DRIVE_API_KEY", "")
 ALLOWED_IPS = {ip.strip() for ip in os.getenv("ALLOWED_IPS", "").split(",") if ip.strip()}
 ALTA = os.getenv("HD_ALTA", "/usr/local/sbin/hepta-drive-alta")
@@ -294,6 +296,63 @@ async def crear(request: Request):
     return lanzar("alta", slug, ["crear", slug] + args, texto)
 
 
+UNIDADES = {"B": 1, "KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3, "TB": 1024 ** 4}
+
+
+def bytes_de(cuota):
+    """'5 GB' → bytes. Sin límite o ilegible → None."""
+    m = re.match(r"^\s*([0-9]+(?:[.,][0-9]+)?)\s*([KMGT]?B)\s*$", str(cuota or ""), re.I)
+    if not m:
+        return None
+    return int(float(m.group(1).replace(",", ".")) * UNIDADES[m.group(2).upper()])
+
+
+def uid_valido(valor, nombre="usuario"):
+    uid = str(valor or "").strip().lower()
+    if not CORREO_RE.match(uid):
+        raise HTTPException(status_code=422, detail=f"{nombre}: tiene que ser el correo del usuario")
+    return uid
+
+
+def salida_de_error(error, salida):
+    lineas = [x for x in (error + "\n" + salida).splitlines() if "ERROR" in x]
+    return (lineas[-1] if lineas else (error.strip() or "no se pudo completar"))[-300:].replace("ERROR: ", "")
+
+
+@app.post("/clientes/{slug}/usuarios/estado", dependencies=[Depends(con_clave)])
+async def estado_usuario(slug: str, request: Request):
+    slug_valido(slug)
+    cuerpo = await cuerpo_json(request)
+    if not isinstance(cuerpo, dict) or not isinstance(cuerpo.get("activo"), bool):
+        raise HTTPException(status_code=422, detail="falta 'activo' (true o false)")
+    uid = uid_valido(cuerpo.get("usuario"))
+    verbo = "usuario-habilitar" if cuerpo["activo"] else "usuario-deshabilitar"
+    codigo, salida, error = correr([verbo, slug, "--usuario", uid], timeout=60)
+    if codigo != 0:
+        raise HTTPException(status_code=409, detail=salida_de_error(error, salida))
+    log.info("%s en %s: %s", verbo, slug, uid)
+    return {"ok": True, "usuario": uid, "activo": cuerpo["activo"]}
+
+
+@app.post("/clientes/{slug}/usuarios/eliminar", dependencies=[Depends(con_clave)], status_code=202)
+async def eliminar_usuario(slug: str, request: Request):
+    slug_valido(slug)
+    cuerpo = await cuerpo_json(request)
+    if not isinstance(cuerpo, dict):
+        raise HTTPException(status_code=422, detail="el pedido tiene que ser un objeto JSON")
+    uid = uid_valido(cuerpo.get("usuario"))
+    args = ["usuario-eliminar", slug, "--usuario", uid]
+    if cuerpo.get("transferir_a"):
+        destino = uid_valido(cuerpo.get("transferir_a"), "transferir_a")
+        if destino == uid:
+            raise HTTPException(status_code=422, detail="los archivos no se pueden pasar al mismo usuario que se borra")
+        args += ["--transferir-a", destino]
+    codigo, salida, _ = correr(["estado", slug])
+    if codigo != 0 or not lineas_json(salida):
+        raise HTTPException(status_code=404, detail="no existe ese cliente")
+    return lanzar("baja de usuario", slug, args, "")
+
+
 @app.get("/clientes/{slug}/usuarios", dependencies=[Depends(con_clave)])
 def usuarios_de(slug: str):
     slug_valido(slug)
@@ -304,12 +363,21 @@ def usuarios_de(slug: str):
         datos = json.loads(salida)
     except ValueError:
         raise HTTPException(status_code=500, detail="Nextcloud no devolvió la lista de usuarios")
+    # Espacio usado: si no se puede leer, la lista sale igual, sin ese dato
+    usado = {}
+    c2, salida2, _ = correr(["uso", slug], timeout=30)
+    if c2 == 0:
+        for linea in salida2.splitlines():
+            uid, _, n = linea.rpartition("|")
+            if uid and n.isdigit():
+                usado[uid] = int(n)
     lista = []
     for uid, u in (datos.items() if isinstance(datos, dict) else []):
         u = u if isinstance(u, dict) else {}
         grupos = u.get("groups") or []
         lista.append({"uid": uid, "nombre": u.get("display_name") or uid, "correo": u.get("email") or "",
                       "activo": u.get("enabled", True) is not False, "cuota": u.get("quota") or "",
+                      "cuota_bytes": bytes_de(u.get("quota")), "usado_bytes": usado.get(uid),
                       "ultimo_ingreso": u.get("last_seen") or "", "admin": "admin" in grupos})
     return {"usuarios": lista}
 

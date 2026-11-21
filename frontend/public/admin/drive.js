@@ -111,15 +111,17 @@
   modalU.className = 'modal-overlay';
   modalU.id = 'drive-u-modal';
   modalU.innerHTML = `
-    <div class="modal" style="max-width:680px">
+    <div class="modal" style="max-width:820px">
       <div class="modal-title" id="drive-u-title">Usuarios</div>
       <div class="alert alert-error" id="drive-u-err"></div>
-      <div class="table-wrap" style="max-height:260px;overflow-y:auto;margin-bottom:16px">
+      <div class="alert alert-success" id="drive-u-ok"></div>
+      <div class="table-wrap" style="max-height:300px;overflow-y:auto;margin-bottom:12px">
         <table>
-          <thead><tr><th>Usuario</th><th>Cuota</th><th>Último ingreso</th></tr></thead>
+          <thead><tr><th>Usuario</th><th style="min-width:170px">Espacio usado</th><th>Último ingreso</th><th></th></tr></thead>
           <tbody id="drive-u-tbody"></tbody>
         </table>
       </div>
+      <div id="drive-u-baja" style="display:none;border:1px solid #FCA5A5;background:#FEF2F2;border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px"></div>
       <div class="form-group">
         <label class="form-label">Agregar usuarios <span style="font-weight:400;color:var(--gray-400)">(uno por línea)</span></label>
         <textarea class="form-textarea" id="drive-u-nuevos" rows="4" style="font-family:ui-monospace,Menlo,monospace;font-size:12px" placeholder="carla@cliente.com.py, Carla Ruiz&#10;dario@cliente.com.py, Darío Sosa, 50"></textarea>
@@ -143,20 +145,85 @@
     });
   }
 
+  const tam = b => { if (b == null) return '—'; const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0, n = Number(b); while (n >= 1024 && i < 4) { n /= 1024; i++; } return `${n >= 10 || i === 0 ? Math.round(n) : n.toFixed(1)} ${u[i]}`; };
+  function barraUso(u) {
+    if (u.usado_bytes == null) return `<span class="text-muted">${esc(u.cuota === 'none' ? 'sin límite' : (u.cuota || '—'))}</span>`;
+    if (!u.cuota_bytes) return `${esc(tam(u.usado_bytes))} <span class="text-muted">· sin límite</span>`;
+    const pct = Math.min(100, Math.round(u.usado_bytes * 100 / u.cuota_bytes));
+    const color = pct >= 90 ? 'var(--red)' : pct >= 75 ? '#D97706' : '#1254A4';
+    return `<div style="height:8px;background:var(--gray-200);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.max(pct, 1)}%;background:${color}"></div></div>
+      <div class="text-sm" style="margin-top:3px">${esc(tam(u.usado_bytes))} de ${esc(tam(u.cuota_bytes))} <span class="text-muted">· ${pct}%</span></div>`;
+  }
+  let usuariosVistos = [];
+
+  async function cargarUsuarios() {
+    const slug = slugUsuarios;
+    const r = await api('GET', `/admin/drive/${encodeURIComponent(slug)}/usuarios`);
+    if (!r || !r.success) { $('drive-u-tbody').innerHTML = `<tr><td colspan="4" style="color:var(--red);padding:16px">${esc((r && r.error) || 'No se pudo cargar')}</td></tr>`; return; }
+    usuariosVistos = r.data;
+    const ingreso = u => { const t = Date.parse(u.ultimo_ingreso); return (!t || t < 86400000) ? 'nunca' : fecha(u.ultimo_ingreso); };
+    $('drive-u-tbody').innerHTML = r.data.map((u, n) => `<tr${u.activo ? '' : ' style="opacity:.6"'}>
+      <td><strong>${esc(u.nombre)}</strong>${u.admin ? ' <span class="badge badge-blue">administrador de HEPTA</span>' : ''}${u.activo ? '' : ' <span class="badge badge-red">sin acceso</span>'}
+        <div class="text-muted text-sm">${esc(u.correo || u.uid)}</div></td>
+      <td>${barraUso(u)}</td><td>${esc(ingreso(u))}</td>
+      <td style="white-space:nowrap;text-align:right">${u.admin ? '' : `
+        <button class="btn btn-secondary btn-sm" onclick="driveEstadoUsuario(${n},this)">${u.activo ? 'Quitar acceso' : 'Devolver acceso'}</button>
+        ${esGod() ? `<button class="btn btn-danger btn-sm" onclick="driveBajaUsuario(${n})">Eliminar</button>` : ''}`}</td></tr>`).join('')
+      || '<tr><td colspan="4" class="text-muted" style="padding:16px">Sin usuarios.</td></tr>';
+  }
+
   window.driveUsuarios = async function (slug) {
     slugUsuarios = slug;
     $('drive-u-title').textContent = `Usuarios de ${slug}`;
-    $('drive-u-err').className = 'alert alert-error'; $('drive-u-nuevos').value = ''; $('drive-u-cuota').value = 5;
-    $('drive-u-tbody').innerHTML = '<tr><td colspan="3" class="text-muted" style="text-align:center;padding:16px">Cargando…</td></tr>';
+    $('drive-u-err').className = 'alert alert-error'; $('drive-u-ok').className = 'alert alert-success';
+    $('drive-u-nuevos').value = ''; $('drive-u-cuota').value = 5; $('drive-u-baja').style.display = 'none';
+    $('drive-u-tbody').innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:16px">Cargando…</td></tr>';
     modalU.classList.add('open');
-    const r = await api('GET', `/admin/drive/${encodeURIComponent(slug)}/usuarios`);
-    if (!r || !r.success) { $('drive-u-tbody').innerHTML = `<tr><td colspan="3" style="color:var(--red);padding:16px">${esc((r && r.error) || 'No se pudo cargar')}</td></tr>`; return; }
-    const ingreso = u => { const t = Date.parse(u.ultimo_ingreso); return (!t || t < 86400000) ? 'nunca' : fecha(u.ultimo_ingreso); };
-    $('drive-u-tbody').innerHTML = r.data.map(u => `<tr>
-      <td><strong>${esc(u.nombre)}</strong>${u.admin ? ' <span class="badge badge-blue">administrador de HEPTA</span>' : ''}${u.activo ? '' : ' <span class="badge badge-red">deshabilitado</span>'}
-        <div class="text-muted text-sm">${esc(u.correo || u.uid)}</div></td>
-      <td>${esc(u.cuota === 'none' ? 'sin límite' : (u.cuota || '—'))}</td><td>${esc(ingreso(u))}</td></tr>`).join('')
-      || '<tr><td colspan="3" class="text-muted" style="padding:16px">Sin usuarios.</td></tr>';
+    await cargarUsuarios();
+  };
+
+  // Quitar el acceso es lo primero ante una salida de personal: es inmediato, se deshace y no toca archivos
+  window.driveEstadoUsuario = async function (n, btn) {
+    const u = usuariosVistos[n]; if (!u) return;
+    if (u.activo && !confirm(`¿Quitarle el acceso a ${u.nombre} (${u.uid})?\n\nNo va a poder entrar, pero sus archivos quedan. Se puede devolver cuando quieras.`)) return;
+    btn.disabled = true;
+    const r = await api('POST', `/admin/drive/${encodeURIComponent(slugUsuarios)}/usuarios/estado`, { usuario: u.uid, activo: !u.activo });
+    if (!r.success) { showAlert('drive-u-err', 'error', r.error, 0); btn.disabled = false; return; }
+    showAlert('drive-u-ok', 'success', u.activo ? `${u.uid} ya no puede entrar. Sus archivos siguen ahí.` : `${u.uid} puede volver a entrar.`, 5000);
+    cargarUsuarios();
+  };
+
+  window.driveBajaUsuario = function (n) {
+    const u = usuariosVistos[n]; if (!u) return;
+    const destinos = usuariosVistos.filter(x => x.uid !== u.uid && x.activo && !x.admin);
+    const caja = $('drive-u-baja');
+    caja.dataset.uid = u.uid;
+    caja.innerHTML = `<div style="font-weight:600;color:#991B1B;margin-bottom:8px">Eliminar a ${esc(u.nombre)} (${esc(u.uid)})</div>
+      <div style="margin-bottom:8px">Esto no se deshace. ¿Qué hacemos con sus archivos${u.usado_bytes != null ? ` (${esc(tam(u.usado_bytes))})` : ''}?</div>
+      <label style="display:block;margin-bottom:6px"><input type="radio" name="drive-u-que" value="pasar" ${destinos.length ? 'checked' : 'disabled'} onchange="driveBajaOpcion()"/>
+        Pasarlos a otro usuario: <select class="form-select" id="drive-u-destino" style="display:inline-block;width:auto;padding:4px 8px">${destinos.map(d => `<option value="${esc(d.uid)}">${esc(d.nombre)} · ${esc(d.uid)}</option>`).join('') || '<option value="">no hay otro usuario activo</option>'}</select>
+        <span class="text-muted">(le aparecen en una carpeta nueva)</span></label>
+      <label style="display:block;margin-bottom:8px"><input type="radio" name="drive-u-que" value="borrar" ${destinos.length ? '' : 'checked'} onchange="driveBajaOpcion()"/> Borrarlos junto con el usuario</label>
+      <div id="drive-u-conf" style="display:${destinos.length ? 'none' : 'block'};margin-bottom:8px">Para confirmar, escribí su correo: <input class="form-input" id="drive-u-conf-in" style="display:inline-block;width:260px;padding:4px 8px" autocomplete="off"/></div>
+      <div style="display:flex;gap:8px"><button class="btn btn-danger btn-sm" id="drive-u-baja-btn" onclick="driveBajaConfirmar()">Eliminar usuario</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('drive-u-baja').style.display='none'">Cancelar</button></div>`;
+    caja.style.display = '';
+    caja.scrollIntoView({ block: 'nearest' });
+  };
+  window.driveBajaOpcion = function () {
+    $('drive-u-conf').style.display = document.querySelector('input[name="drive-u-que"]:checked').value === 'borrar' ? 'block' : 'none';
+  };
+  window.driveBajaConfirmar = async function () {
+    const uid = $('drive-u-baja').dataset.uid;
+    const pasar = document.querySelector('input[name="drive-u-que"]:checked').value === 'pasar';
+    const cuerpo = pasar ? { usuario: uid, transferir_a: $('drive-u-destino').value } : { usuario: uid, confirmar: $('drive-u-conf-in').value };
+    $('drive-u-baja-btn').disabled = true;
+    try {
+      const r = await api('POST', `/admin/drive/${encodeURIComponent(slugUsuarios)}/usuarios/eliminar`, cuerpo);
+      if (!r.success) { showAlert('drive-u-err', 'error', r.error, 0); return; }
+      modalU.classList.remove('open');
+      seguirTrabajo(r.data.trabajo);
+    } finally { $('drive-u-baja-btn').disabled = false; }
   };
 
   window.driveAgregarUsuarios = async function () {
@@ -230,6 +297,13 @@
     $('drive-job-card').style.display = '';
     const dir = `https://${t.fqdn || t.slug + '.drive.hepta.com.py'}`;
     const cerrar = `<div style="margin-top:10px"><button class="btn btn-secondary btn-sm" onclick="document.getElementById('drive-job-card').style.display='none'">Cerrar</button></div>`;
+    if (t.action === 'delete_user') {
+      $('drive-job-title').textContent = `Baja de un usuario de ${t.slug}`;
+      $('drive-job-body').innerHTML = t.status === 'running' ? `<div>Paso: <strong>${esc(t.step || 'En cola')}</strong></div><div class="text-muted text-sm" style="margin-top:6px">Si hay que pasar muchos archivos puede tardar unos minutos.</div>`
+        : t.status === 'done' ? `<div style="color:#047857"><strong>Listo.</strong> El usuario fue eliminado.</div>${cerrar}`
+        : `<div style="color:var(--red)"><strong>${esc(t.error || 'No se pudo eliminar')}</strong></div><div class="text-muted" style="margin-top:6px">El usuario quedó sin acceso pero no se borró nada más.</div>${cerrar}`;
+      return;
+    }
     if (t.action === 'add_users') {
       $('drive-job-title').textContent = `Usuarios de ${t.slug}`;
       $('drive-job-body').innerHTML = t.status === 'running' ? '<div>Creando los usuarios y enviando las invitaciones…</div>'

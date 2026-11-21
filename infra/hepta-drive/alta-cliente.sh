@@ -13,6 +13,12 @@
 #   hepta-drive-alta agregar-usuarios <slug> --usuarios ARCHIVO [--cuota-gb N]
 #                                                   suma usuarios a una instancia que ya existe (los invita por correo);
 #                                                   a los que ya existen solo les actualiza la cuota
+#   hepta-drive-alta uso <slug>                     espacio usado por usuario (uid|bytes)
+#   hepta-drive-alta usuario-deshabilitar <slug> --usuario CORREO     le corta el acceso; sus archivos quedan
+#   hepta-drive-alta usuario-habilitar    <slug> --usuario CORREO
+#   hepta-drive-alta usuario-eliminar     <slug> --usuario CORREO [--transferir-a CORREO]
+#                                                   lo borra. Con --transferir-a, antes pasa sus archivos a otro
+#                                                   usuario; sin eso, SUS ARCHIVOS SE BORRAN con él
 #   hepta-drive-alta secretos <slug>                entrega los secretos del alta (CSV para KeePass)
 #   hepta-drive-alta secretos <slug> --guardado     los borra de la VM, cuando ya están en KeePass
 #   hepta-drive-alta baja     <slug> --confirmar <slug>   apaga y archiva en /srv/nextcloud/_bajas (no borra datos)
@@ -64,7 +70,7 @@ occ_s() { occ "$@" >/dev/null 2>&1; }
 # ── Argumentos ──
 ACCION="${1:-}"; SLUG="${2:-}"
 [ $# -ge 1 ] && shift; [ $# -ge 1 ] && shift
-USUARIOS=""; CUOTA_GB=5; EQUIPO_GB=0; FQDN=""; CONFIRMAR=""; GUARDADO=0; LOGO=""
+USUARIOS=""; CUOTA_GB=5; EQUIPO_GB=0; FQDN=""; CONFIRMAR=""; GUARDADO=0; LOGO=""; USUARIO=""; TRANSFERIR=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --usuarios) USUARIOS="${2:-}"; shift 2 ;;
@@ -74,6 +80,8 @@ while [ $# -gt 0 ]; do
     --confirmar) CONFIRMAR="${2:-}"; shift 2 ;;
     --guardado) GUARDADO=1; shift ;;
     --logo) LOGO="${2:-}"; shift 2 ;;
+    --usuario) USUARIO="$(echo "${2:-}" | tr 'A-Z' 'a-z')"; shift 2 ;;
+    --transferir-a) TRANSFERIR="$(echo "${2:-}" | tr 'A-Z' 'a-z')"; shift 2 ;;
     *) morir "opción desconocida: $1" ;;
   esac
 done
@@ -410,6 +418,49 @@ aplicar_plantilla() {
   done
 }
 
+# ── Un usuario que ya existe: cortar el acceso, devolverlo o borrarlo ──
+uid_ok() { [[ "$1" =~ ^[a-z0-9._+-]{1,64}@[a-z0-9.-]{3,190}$ ]]; }
+info_usuario() { occ "$SLUG" user:info "$1" --output=json 2>/dev/null; }
+# Ante la duda (no se pudo leer la respuesta de Nextcloud) se lo trata como administrador y no se toca
+es_admin() { python3 -c 'import json, sys
+try:
+    sys.exit(0 if "admin" in (json.loads(sys.argv[1]).get("groups") or []) else 1)
+except Exception:
+    sys.exit(0)' "$1"; }
+habilitado() { python3 -c 'import json, sys
+try:
+    sys.exit(0 if json.loads(sys.argv[1]).get("enabled") is True else 1)
+except Exception:
+    sys.exit(1)' "$1"; }
+gestionar_usuario() {
+  local info destino
+  uid_ok "$USUARIO" || morir "falta --usuario CORREO (el usuario se identifica por su correo)"
+  info="$(info_usuario "$USUARIO")"; [ -n "$info" ] || morir "no existe el usuario $USUARIO en $SLUG"
+  # La cuenta técnica de HEPTA y cualquier administrador no se tocan por acá
+  es_admin "$info" && morir "$USUARIO es administrador de la instancia: no se gestiona por acá"
+  exec 9>"$VAR/clientes/$SLUG.candado"; flock -n 9 || morir "ya hay una operación en curso sobre $SLUG"
+  case "$ACCION" in
+    usuario-deshabilitar) occ "$SLUG" user:disable "$USUARIO" >/dev/null || morir "no pude deshabilitar a $USUARIO"
+                          aviso "USUARIO OK: $USUARIO deshabilitado en $SLUG (sus archivos quedan)" ;;
+    usuario-habilitar)    occ "$SLUG" user:enable "$USUARIO" >/dev/null || morir "no pude habilitar a $USUARIO"
+                          aviso "USUARIO OK: $USUARIO habilitado en $SLUG" ;;
+    usuario-eliminar)
+      # Primero se le corta el acceso: si algo falla más adelante, ya no puede entrar
+      occ "$SLUG" user:disable "$USUARIO" >/dev/null 2>&1 || true
+      if [ -n "$TRANSFERIR" ]; then
+        uid_ok "$TRANSFERIR" && [ "$TRANSFERIR" != "$USUARIO" ] || morir "--transferir-a tiene que ser el correo de otro usuario"
+        destino="$(info_usuario "$TRANSFERIR")"; [ -n "$destino" ] || morir "no existe el usuario $TRANSFERIR en $SLUG"
+        habilitado "$destino" || morir "$TRANSFERIR está deshabilitado: elegí otro destino"
+        aviso "· Pasando los archivos de $USUARIO a $TRANSFERIR"
+        occ "$SLUG" files:transfer-ownership "$USUARIO" "$TRANSFERIR" >>"$VAR/clientes/$SLUG.log" 2>&1 \
+          || morir "no se pudieron pasar los archivos a $TRANSFERIR; $USUARIO quedó deshabilitado y NO se borró (ver $VAR/clientes/$SLUG.log)"
+      fi
+      aviso "· Borrando el usuario"
+      occ "$SLUG" user:delete "$USUARIO" >>"$VAR/clientes/$SLUG.log" 2>&1 || morir "no pude borrar a $USUARIO (quedó deshabilitado)"
+      aviso "USUARIO OK: $USUARIO borrado de $SLUG$([ -n "$TRANSFERIR" ] && echo "; sus archivos quedaron en la cuenta de $TRANSFERIR" || echo ', con sus archivos')" ;;
+  esac
+}
+
 estado() {
   local d c puerto fq arriba usuarios paso resp
   for d in "$BASE"/clientes/*/; do
@@ -472,6 +523,12 @@ case "$ACCION" in
             exec 9>"$VAR/clientes/$SLUG.candado"; flock -n 9 || morir "ya hay una operación en curso sobre $SLUG"
             FQDN="$(de_env "$DIR/.env" FQDN)"
             aviso "· Usuarios"; alta_usuarios "$SLUG"; aviso "USUARIOS OK: $SLUG" ;;
+  uso)      necesita_slug; [ -f "$DIR/.env" ] || morir "no existe el cliente $SLUG"
+            # Lo que ocupa la carpeta de archivos de cada usuario, tal como lo lleva Nextcloud (solo lectura)
+            $DOCKER exec "$SLUG-db-1" psql -U nextcloud -d nextcloud -AtF'|' -c \
+              "SELECT substr(s.id, 7), GREATEST(f.size, 0) FROM oc_storages s JOIN oc_filecache f ON f.storage = s.numeric_id WHERE s.id LIKE 'home::%' AND f.path = 'files'" ;;
+  usuario-deshabilitar|usuario-habilitar|usuario-eliminar)
+            necesita_slug; [ -f "$DIR/.env" ] || morir "no existe el cliente $SLUG"; gestionar_usuario ;;
   baja)     necesita_slug; baja ;;
-  *) sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,43p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

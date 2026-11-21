@@ -80,6 +80,24 @@ router.post('/:slug/usuarios', async (req, res) => {
   } catch (err) { fail(res, err, 'admin/drive/usuarios POST'); }
 });
 
+// Cortar o devolver el acceso: reversible, no toca archivos
+router.post('/:slug/usuarios/estado', async (req, res) => {
+  try {
+    const data = await drive.estadoUsuario(req.params.slug, req.body);
+    await logAction(req, data.activo ? 'drive_user_enable' : 'drive_user_disable', req.params.slug, { usuario: data.usuario });
+    res.json({ success: true, data });
+  } catch (err) { fail(res, err, 'admin/drive/usuarios/estado'); }
+});
+
+// Borrar a un usuario no se deshace: solo godmode
+router.post('/:slug/usuarios/eliminar', requireGodmode, async (req, res) => {
+  try {
+    const data = await drive.eliminarUsuario(req.params.slug, req.body, req.user.id);
+    await logAction(req, 'drive_user_delete', data.slug, { trabajo: data.trabajo, usuario: data.usuario, archivos: data.transferir_a ? `pasados a ${data.transferir_a}` : 'borrados' });
+    res.status(202).json({ success: true, data });
+  } catch (err) { fail(res, err, 'admin/drive/usuarios/eliminar'); }
+});
+
 // ── Secretos del alta (solo godmode) ──
 router.get('/:slug/secretos', requireGodmode, async (req, res) => {
   try {
