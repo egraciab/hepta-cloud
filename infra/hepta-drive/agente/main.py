@@ -12,6 +12,8 @@ cuenta: cada pedido termina en /usr/local/sbin/hepta-drive-alta, el mismo script
   POST /crear                          alta en segundo plano → 202 con un trabajo
   GET  /trabajos/{id}                  cómo va el trabajo (paso actual y últimas líneas)
   POST /clientes/{slug}/verificar      comprueba que la instancia responde
+  GET  /clientes/{slug}/usuarios       usuarios de la instancia
+  POST /clientes/{slug}/usuarios       suma usuarios en segundo plano → 202 con un trabajo
   GET  /clientes/{slug}/secretos       paquete para KeePass (CSV). No se borra al leerlo
   POST /clientes/{slug}/secretos/guardado   lo borra de la VM, cuando ya está en KeePass
 
@@ -34,7 +36,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import APIKeyHeader
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 API_KEY = os.getenv("DRIVE_API_KEY", "")
 ALLOWED_IPS = {ip.strip() for ip in os.getenv("ALLOWED_IPS", "").split(",") if ip.strip()}
 ALTA = os.getenv("HD_ALTA", "/usr/local/sbin/hepta-drive-alta")
@@ -98,7 +100,12 @@ def pedido_valido(cuerpo):
     slug = slug_valido(cuerpo.get("slug"))
     cuota = entero(cuerpo.get("cuota_gb"), "cuota_gb", 1, 9999, 5)
     equipo = entero(cuerpo.get("equipo_gb"), "equipo_gb", 0, 99999, 0)
-    usuarios = cuerpo.get("usuarios") or []
+    return slug, ["--cuota-gb", str(cuota), "--equipo-gb", str(equipo)], usuarios_validos(cuerpo.get("usuarios"), cuota)
+
+
+def usuarios_validos(usuarios, cuota):
+    """Devuelve el texto del archivo de usuarios (correo|nombre|GB por línea)."""
+    usuarios = usuarios or []
     if not isinstance(usuarios, list) or len(usuarios) > MAX_USUARIOS:
         raise HTTPException(status_code=422, detail=f"usuarios tiene que ser una lista de hasta {MAX_USUARIOS}")
     lineas = []
@@ -113,7 +120,7 @@ def pedido_valido(cuerpo):
             raise HTTPException(status_code=422, detail=f"usuario {n}: falta el nombre o tiene caracteres no permitidos")
         gb = entero(u.get("cuota_gb"), f"usuario {n}: cuota_gb", 1, 9999, cuota)
         lineas.append(f"{correo}|{nombre}|{gb}")
-    return slug, ["--cuota-gb", str(cuota), "--equipo-gb", str(equipo)], "\n".join(lineas) + ("\n" if lineas else "")
+    return "\n".join(lineas) + ("\n" if lineas else "")
 
 
 async def cuerpo_json(request):
@@ -187,9 +194,9 @@ def cargar_trabajos():
 cargar_trabajos()
 
 
-def hacer_alta(t, args, usuarios):
+def hacer_trabajo(t, args, usuarios):
     try:
-        proc = subprocess.Popen([ALTA, "crear", t["slug"]] + args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        proc = subprocess.Popen([ALTA] + args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         for linea in proc.stdout:
             linea = linea.rstrip()
             with candado:
@@ -205,12 +212,12 @@ def hacer_alta(t, args, usuarios):
                 t["resultado"] = (lineas_json(salida) or [None])[0]
             else:
                 t["estado"] = "error"
-                t["error"] = next((x for x in reversed(t["salida"]) if "ERROR" in x), f"el alta terminó con código {codigo}")
-        log.info("Alta de %s: %s", t["slug"], t["estado"])
+                t["error"] = next((x for x in reversed(t["salida"]) if "ERROR" in x), f"terminó con código {codigo}")
+        log.info("%s de %s: %s", t["accion"], t["slug"], t["estado"])
     except Exception as e:  # noqa: BLE001 — cualquier cosa acá tiene que quedar en el trabajo, no perderse
         with candado:
             t.update(estado="error", error=f"falla interna del agente: {e}", fin=time.strftime("%Y-%m-%dT%H:%M:%S%z"))
-        log.exception("Alta de %s: falla interna", t["slug"])
+        log.exception("%s de %s: falla interna", t["accion"], t["slug"])
     finally:
         if usuarios and os.path.exists(usuarios):
             os.unlink(usuarios)
@@ -260,26 +267,67 @@ async def validar(request: Request):
     return datos[0]
 
 
-@app.post("/crear", dependencies=[Depends(con_clave)], status_code=202)
-async def crear(request: Request):
-    slug, args, texto = pedido_valido(await cuerpo_json(request))
+def lanzar(accion, slug, args, texto):
+    """Arranca un trabajo en segundo plano. Uno a la vez en toda la VM."""
     if not alta_en_curso.acquire(blocking=False):
-        raise HTTPException(status_code=409, detail="ya hay un alta en curso; probá cuando termine")
+        raise HTTPException(status_code=409, detail="ya hay un trabajo en curso; probá cuando termine")
     try:
         usuarios = archivo_usuarios(slug, texto)
         if usuarios:
-            args += ["--usuarios", usuarios]
-        t = {"id": uuid.uuid4().hex, "slug": slug, "estado": "en_curso", "paso": "En cola",
+            args = args + ["--usuarios", usuarios]
+        t = {"id": uuid.uuid4().hex, "accion": accion, "slug": slug, "estado": "en_curso", "paso": "En cola",
              "inicio": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "fin": None, "salida": [], "error": None, "resultado": None}
         with candado:
             trabajos[t["id"]] = t
             guardar(t)
-        threading.Thread(target=hacer_alta, args=(t, args, usuarios), daemon=True).start()
+        threading.Thread(target=hacer_trabajo, args=(t, args, usuarios), daemon=True).start()
     except Exception:
         alta_en_curso.release()
         raise
-    log.info("Alta de %s pedida (trabajo %s)", slug, t["id"])
+    log.info("%s de %s pedida (trabajo %s)", accion, slug, t["id"])
     return {"trabajo": t["id"], "slug": slug, "estado": "en_curso"}
+
+
+@app.post("/crear", dependencies=[Depends(con_clave)], status_code=202)
+async def crear(request: Request):
+    slug, args, texto = pedido_valido(await cuerpo_json(request))
+    return lanzar("alta", slug, ["crear", slug] + args, texto)
+
+
+@app.get("/clientes/{slug}/usuarios", dependencies=[Depends(con_clave)])
+def usuarios_de(slug: str):
+    slug_valido(slug)
+    codigo, salida, error = correr(["usuarios", slug], timeout=60)
+    if codigo != 0:
+        raise HTTPException(status_code=404 if "no existe" in error else 500, detail=error.strip()[-300:] or "no pude leer los usuarios")
+    try:
+        datos = json.loads(salida)
+    except ValueError:
+        raise HTTPException(status_code=500, detail="Nextcloud no devolvió la lista de usuarios")
+    lista = []
+    for uid, u in (datos.items() if isinstance(datos, dict) else []):
+        u = u if isinstance(u, dict) else {}
+        grupos = u.get("groups") or []
+        lista.append({"uid": uid, "nombre": u.get("display_name") or uid, "correo": u.get("email") or "",
+                      "activo": u.get("enabled", True) is not False, "cuota": u.get("quota") or "",
+                      "ultimo_ingreso": u.get("last_seen") or "", "admin": "admin" in grupos})
+    return {"usuarios": lista}
+
+
+@app.post("/clientes/{slug}/usuarios", dependencies=[Depends(con_clave)], status_code=202)
+async def agregar_usuarios(slug: str, request: Request):
+    slug_valido(slug)
+    cuerpo = await cuerpo_json(request)
+    if not isinstance(cuerpo, dict):
+        raise HTTPException(status_code=422, detail="el pedido tiene que ser un objeto JSON")
+    cuota = entero(cuerpo.get("cuota_gb"), "cuota_gb", 1, 9999, 5)
+    texto = usuarios_validos(cuerpo.get("usuarios"), cuota)
+    if not texto:
+        raise HTTPException(status_code=422, detail="falta al menos un usuario")
+    codigo, salida, _ = correr(["estado", slug])
+    if codigo != 0 or not lineas_json(salida):
+        raise HTTPException(status_code=404, detail="no existe ese cliente")
+    return lanzar("usuarios", slug, ["agregar-usuarios", slug, "--cuota-gb", str(cuota)], texto)
 
 
 @app.get("/trabajos/{tid}", dependencies=[Depends(con_clave)])

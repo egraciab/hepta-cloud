@@ -9,6 +9,10 @@
 #   hepta-drive-alta estado   [slug]                qué hay hoy (JSON, una línea por cliente)
 #   hepta-drive-alta aplicar-plantilla [slug]       lleva un cambio de la plantilla a las instancias existentes
 #   hepta-drive-alta marca    <slug> [--logo ARCH]  aplica la marca (nombre, color y logo) a una instancia que ya existe
+#   hepta-drive-alta usuarios <slug>                lista los usuarios de la instancia (JSON de Nextcloud)
+#   hepta-drive-alta agregar-usuarios <slug> --usuarios ARCHIVO [--cuota-gb N]
+#                                                   suma usuarios a una instancia que ya existe (los invita por correo);
+#                                                   a los que ya existen solo les actualiza la cuota
 #   hepta-drive-alta secretos <slug>                entrega los secretos del alta (CSV para KeePass)
 #   hepta-drive-alta secretos <slug> --guardado     los borra de la VM, cuando ya están en KeePass
 #   hepta-drive-alta baja     <slug> --confirmar <slug>   apaga y archiva en /srv/nextcloud/_bajas (no borra datos)
@@ -209,6 +213,34 @@ preparar() {
 }
 
 # ── crear ──
+# Crea los usuarios del pedido que todavía no existen (sin contraseña inicial: Nextcloud los invita por correo) y
+# deja a todos con su cuota. Nacen como usuarios comunes, en el grupo del cliente; nunca como administradores.
+alta_usuarios() {
+  local c="$1" i
+  local uid creados=0 invitar=""
+  grep -q -- '--generate-password' <<<"$(occ "$c" user:add --help 2>/dev/null)" && invitar=si
+  grep -q "^  - $c:" <<<"$(occ "$c" group:list 2>/dev/null)" || occ "$c" group:add "$c" >/dev/null
+  for i in "${!U_CORREO[@]}"; do
+    uid="${U_CORREO[i]}"
+    if ! occ "$c" user:info "$uid" >/dev/null 2>&1; then
+      if [ -n "$invitar" ]; then
+        # Sin contraseña inicial: Nextcloud le manda la invitación a su correo
+        occ "$c" user:add --generate-password --email "$uid" --display-name "${U_NOMBRE[i]}" --group "$c" "$uid" >>"$VAR/clientes/$c.log" 2>&1 \
+          || morir "no pude crear el usuario $uid (ver $VAR/clientes/$c.log)"
+      else
+        local k_u; k_u="$(clave 20)"
+        $DOCKER exec -u www-data -e OC_PASS="$k_u" "$c-app-1" php occ user:add --password-from-env --email "$uid" \
+          --display-name "${U_NOMBRE[i]}" --group "$c" "$uid" >>"$VAR/clientes/$c.log" 2>&1 || morir "no pude crear el usuario $uid"
+        ( umask 077; printf '"%s","hepta-drive / %s / usuario %s","%s","%s","https://%s","Contraseña inicial: el usuario debe cambiarla."\n' "$c" "$c" "$uid" "$uid" "$k_u" "$FQDN" >> "$VAR/secretos/$c.csv" )
+        unset k_u
+      fi
+      creados=$((creados + 1))
+    fi
+    occ "$c" user:setting "$uid" files quota "${U_CUOTA[i]} GB" >/dev/null
+  done
+  aviso "  $creados usuario/s nuevo/s de ${#U_CORREO[@]}$([ -n "$invitar" ] && echo ', invitados por correo' || echo ', con contraseña inicial en el paquete de secretos')"
+}
+
 paso() { aviso "· $*"; echo "$*" > "$VAR/clientes/$SLUG.paso"; }
 crear() {
   validar >/dev/null || { validar; exit 1; }
@@ -229,9 +261,9 @@ crear() {
         "$FQDN" "$puerto" "$(de_env "$BASE/clientes/hepta/.env" NC_TAG || echo 34-apache)" "$RAIZ" "$ADMIN_TECNICO" "$k_admin" "$k_db" "$k_redis" > "$DIR/.env"
       # Copia para KeePass (formato CSV de KeePass: Grupo,Título,Usuario,Contraseña,URL,Notas)
       { echo '"Group","Title","Username","Password","URL","Notes"'
-        printf '"Vault/Hepta Drive/%s","hepta-drive / %s / admin Nextcloud","%s","%s","https://%s","Administrador técnico de HEPTA. El cliente no lo usa."\n' "$c" "$c" "$ADMIN_TECNICO" "$k_admin" "$FQDN"
-        printf '"Vault/Hepta Drive/%s","hepta-drive / %s / Postgres","nextcloud","%s","",""\n' "$c" "$c" "$k_db"
-        printf '"Vault/Hepta Drive/%s","hepta-drive / %s / Redis","","%s","",""\n' "$c" "$c" "$k_redis"
+        printf '"%s","hepta-drive / %s / admin Nextcloud","%s","%s","https://%s","Administrador técnico de HEPTA. El cliente no lo usa."\n' "$c" "$c" "$ADMIN_TECNICO" "$k_admin" "$FQDN"
+        printf '"%s","hepta-drive / %s / Postgres","nextcloud","%s","",""\n' "$c" "$c" "$k_db"
+        printf '"%s","hepta-drive / %s / Redis","","%s","",""\n' "$c" "$c" "$k_redis"
       } > "$VAR/secretos/$c.csv" )
     unset k_admin k_db k_redis
   else
@@ -303,28 +335,7 @@ crear() {
   done
 
   paso "Usuarios"
-  local uid creados=0 invitar=""
-  grep -q -- '--generate-password' <<<"$(occ "$c" user:add --help 2>/dev/null)" && invitar=si
-  grep -q "^  - $c:" <<<"$(occ "$c" group:list 2>/dev/null)" || occ "$c" group:add "$c" >/dev/null
-  for i in "${!U_CORREO[@]}"; do
-    uid="${U_CORREO[i]}"
-    if ! occ "$c" user:info "$uid" >/dev/null 2>&1; then
-      if [ -n "$invitar" ]; then
-        # Sin contraseña inicial: Nextcloud le manda la invitación a su correo
-        occ "$c" user:add --generate-password --email "$uid" --display-name "${U_NOMBRE[i]}" --group "$c" "$uid" >>"$VAR/clientes/$c.log" 2>&1 \
-          || morir "no pude crear el usuario $uid (ver $VAR/clientes/$c.log)"
-      else
-        local k_u; k_u="$(clave 20)"
-        $DOCKER exec -u www-data -e OC_PASS="$k_u" "$c-app-1" php occ user:add --password-from-env --email "$uid" \
-          --display-name "${U_NOMBRE[i]}" --group "$c" "$uid" >>"$VAR/clientes/$c.log" 2>&1 || morir "no pude crear el usuario $uid"
-        ( umask 077; printf '"Vault/Hepta Drive/%s","hepta-drive / %s / usuario %s","%s","%s","https://%s","Contraseña inicial: el usuario debe cambiarla."\n' "$c" "$c" "$uid" "$uid" "$k_u" "$FQDN" >> "$VAR/secretos/$c.csv" )
-        unset k_u
-      fi
-      creados=$((creados + 1))
-    fi
-    occ "$c" user:setting "$uid" files quota "${U_CUOTA[i]} GB" >/dev/null
-  done
-  aviso "  $creados usuario/s nuevo/s de ${#U_CORREO[@]}$([ -n "$invitar" ] && echo ', invitados por correo' || echo ', con contraseña inicial en el paquete de secretos')"
+  alta_usuarios "$c"
 
   if [ "$EQUIPO_GB" -gt 0 ]; then
     paso "Carpeta de equipo ($EQUIPO_GB GB)"
@@ -349,8 +360,8 @@ crear() {
     install -d -m 700 "$CONF_RESPALDO" "$VAR/respaldo-pendiente"
     ( umask 077
       printf "REST_CLAVE='%s'\nRESTIC_PASSWORD='%s'\n" "$k1" "$k2" > "$CONF_RESPALDO/$c.env"
-      printf '"Vault/Hepta Drive/%s","HEPTA Drive respaldo – %s – acceso","%s","%s","","Usuario del servidor de respaldos (10.10.10.20)."\n' "$c" "$c" "$c" "$k1" >> "$VAR/secretos/$c.csv"
-      printf '"Vault/Hepta Drive/%s","HEPTA Drive respaldo – %s – repositorio","","%s","","CRÍTICA: sin esta contraseña las copias de este cliente no se pueden leer."\n' "$c" "$c" "$k2" >> "$VAR/secretos/$c.csv" )
+      printf '"%s","HEPTA Drive respaldo – %s – acceso","%s","%s","","Usuario del servidor de respaldos (10.10.10.20)."\n' "$c" "$c" "$c" "$k1" >> "$VAR/secretos/$c.csv"
+      printf '"%s","HEPTA Drive respaldo – %s – repositorio","","%s","","CRÍTICA: sin esta contraseña las copias de este cliente no se pueden leer."\n' "$c" "$c" "$k2" >> "$VAR/secretos/$c.csv" )
     unset k1 k2
     date -Is > "$VAR/respaldo-pendiente/$c"
   fi
@@ -451,6 +462,16 @@ case "$ACCION" in
   aplicar-plantilla) [ -z "$SLUG" ] || slug_ok "$SLUG" || morir "nombre inválido"; aplicar_plantilla ;;
   estado)   [ -z "$SLUG" ] || slug_ok "$SLUG" || morir "nombre inválido"; estado ;;
   secretos) necesita_slug; secretos ;;
+  usuarios) necesita_slug; [ -f "$DIR/.env" ] || morir "no existe el cliente $SLUG"
+            occ "$SLUG" user:list --output=json --info --limit 1000 ;;
+  agregar-usuarios)
+            necesita_slug; leer_usuarios
+            [ -f "$DIR/.env" ] || morir "no existe el cliente $SLUG"
+            [ "${#U_CORREO[@]}" -gt 0 ] || morir "falta --usuarios ARCHIVO con al menos un usuario"
+            [ ! -f "$VAR/clientes/$SLUG.paso" ] || [ "$(cat "$VAR/clientes/$SLUG.paso")" = listo ] || morir "el alta de $SLUG no terminó; primero hay que completarla con 'crear'"
+            exec 9>"$VAR/clientes/$SLUG.candado"; flock -n 9 || morir "ya hay una operación en curso sobre $SLUG"
+            FQDN="$(de_env "$DIR/.env" FQDN)"
+            aviso "· Usuarios"; alta_usuarios "$SLUG"; aviso "USUARIOS OK: $SLUG" ;;
   baja)     necesita_slug; baja ;;
-  *) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

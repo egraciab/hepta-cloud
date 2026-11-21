@@ -107,14 +107,73 @@
     </div>`;
   document.body.appendChild(modal);
 
-  /* ── pedido desde el formulario ── */
-  function pedido() {
-    const usuarios = $('drive-usuarios').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+  const modalU = document.createElement('div');
+  modalU.className = 'modal-overlay';
+  modalU.id = 'drive-u-modal';
+  modalU.innerHTML = `
+    <div class="modal" style="max-width:680px">
+      <div class="modal-title" id="drive-u-title">Usuarios</div>
+      <div class="alert alert-error" id="drive-u-err"></div>
+      <div class="table-wrap" style="max-height:260px;overflow-y:auto;margin-bottom:16px">
+        <table>
+          <thead><tr><th>Usuario</th><th>Cuota</th><th>Último ingreso</th></tr></thead>
+          <tbody id="drive-u-tbody"></tbody>
+        </table>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Agregar usuarios <span style="font-weight:400;color:var(--gray-400)">(uno por línea)</span></label>
+        <textarea class="form-textarea" id="drive-u-nuevos" rows="4" style="font-family:ui-monospace,Menlo,monospace;font-size:12px" placeholder="carla@cliente.com.py, Carla Ruiz&#10;dario@cliente.com.py, Darío Sosa, 50"></textarea>
+        <div class="form-hint">correo, nombre y, si no es la cuota por defecto, los GB. Nacen como usuarios comunes (no administradores) y reciben la invitación por correo. Si el correo ya existe, solo se le actualiza la cuota.</div>
+      </div>
+      <div class="form-group" style="max-width:220px"><label class="form-label">Cuota por defecto (GB)</label><input class="form-input" type="number" min="1" id="drive-u-cuota" value="5"/></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="document.getElementById('drive-u-modal').classList.remove('open')">Cerrar</button>
+        <button class="btn btn-primary" id="drive-u-btn" onclick="driveAgregarUsuarios()">Agregar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modalU);
+  let slugUsuarios = null;
+
+  function lineasUsuarios(texto) {
+    return texto.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
       const p = l.split(/[,;|\t]/).map(x => x.trim());
       const u = { correo: (p[0] || '').toLowerCase(), nombre: p[1] || '' };
       if (p[2]) u.cuota_gb = Number(p[2]);
       return u;
     });
+  }
+
+  window.driveUsuarios = async function (slug) {
+    slugUsuarios = slug;
+    $('drive-u-title').textContent = `Usuarios de ${slug}`;
+    $('drive-u-err').className = 'alert alert-error'; $('drive-u-nuevos').value = ''; $('drive-u-cuota').value = 5;
+    $('drive-u-tbody').innerHTML = '<tr><td colspan="3" class="text-muted" style="text-align:center;padding:16px">Cargando…</td></tr>';
+    modalU.classList.add('open');
+    const r = await api('GET', `/admin/drive/${encodeURIComponent(slug)}/usuarios`);
+    if (!r || !r.success) { $('drive-u-tbody').innerHTML = `<tr><td colspan="3" style="color:var(--red);padding:16px">${esc((r && r.error) || 'No se pudo cargar')}</td></tr>`; return; }
+    const ingreso = u => { const t = Date.parse(u.ultimo_ingreso); return (!t || t < 86400000) ? 'nunca' : fecha(u.ultimo_ingreso); };
+    $('drive-u-tbody').innerHTML = r.data.map(u => `<tr>
+      <td><strong>${esc(u.nombre)}</strong>${u.admin ? ' <span class="badge badge-blue">administrador de HEPTA</span>' : ''}${u.activo ? '' : ' <span class="badge badge-red">deshabilitado</span>'}
+        <div class="text-muted text-sm">${esc(u.correo || u.uid)}</div></td>
+      <td>${esc(u.cuota === 'none' ? 'sin límite' : (u.cuota || '—'))}</td><td>${esc(ingreso(u))}</td></tr>`).join('')
+      || '<tr><td colspan="3" class="text-muted" style="padding:16px">Sin usuarios.</td></tr>';
+  };
+
+  window.driveAgregarUsuarios = async function () {
+    const usuarios = lineasUsuarios($('drive-u-nuevos').value);
+    if (!usuarios.length) { showAlert('drive-u-err', 'error', 'Cargá al menos un usuario.', 4000); return; }
+    $('drive-u-btn').disabled = true;
+    try {
+      const r = await api('POST', `/admin/drive/${encodeURIComponent(slugUsuarios)}/usuarios`, { usuarios, cuota_gb: Number($('drive-u-cuota').value) || 5 });
+      if (!r.success) { showAlert('drive-u-err', 'error', r.error, 0); return; }
+      modalU.classList.remove('open');
+      seguirTrabajo(r.data.trabajo);
+    } finally { $('drive-u-btn').disabled = false; }
+  };
+
+  /* ── pedido desde el formulario ── */
+  function pedido() {
+    const usuarios = lineasUsuarios($('drive-usuarios').value);
     return {
       slug: $('drive-slug').value.trim().toLowerCase(),
       billing_customer_id: $('drive-cliente').value || null,
@@ -170,6 +229,14 @@
   function pintarTrabajo(t) {
     $('drive-job-card').style.display = '';
     const dir = `https://${t.fqdn || t.slug + '.drive.hepta.com.py'}`;
+    const cerrar = `<div style="margin-top:10px"><button class="btn btn-secondary btn-sm" onclick="document.getElementById('drive-job-card').style.display='none'">Cerrar</button></div>`;
+    if (t.action === 'add_users') {
+      $('drive-job-title').textContent = `Usuarios de ${t.slug}`;
+      $('drive-job-body').innerHTML = t.status === 'running' ? '<div>Creando los usuarios y enviando las invitaciones…</div>'
+        : t.status === 'done' ? `<div style="color:#047857"><strong>Listo.</strong> Los usuarios nuevos ya recibieron su invitación por correo.</div>${cerrar}`
+        : `<div style="color:var(--red)"><strong>${esc(t.error || 'No se pudieron agregar')}</strong></div><div class="text-muted" style="margin-top:6px">Se puede repetir con los mismos datos: los que ya se crearon no se duplican.</div>${cerrar}`;
+      return;
+    }
     if (t.status === 'running') {
       $('drive-job-title').textContent = `Alta en curso: ${t.slug}`;
       $('drive-job-body').innerHTML = `<div>Paso: <strong>${esc(t.step || 'En cola')}</strong></div>
@@ -222,7 +289,8 @@
       <td><strong>${esc(i.slug)}</strong>${caidos}<div class="text-sm"><a href="https://${esc(i.fqdn)}" target="_blank" rel="noopener">${esc(i.fqdn)}</a> · puerto ${esc(i.puerto)}</div></td>
       <td>${esc(reg.cliente || '—')}${reg.creado_por ? `<div class="text-muted text-sm">alta: ${esc(reg.creado_por)}</div>` : ''}</td>
       <td>${esc(i.usuarios)}</td><td>${esc(i.datos || '—')}</td><td>${resp}</td><td>${sec}</td>
-      <td><button class="btn btn-secondary btn-sm" onclick="driveVerificar('${esc(i.slug)}',this)">Verificar</button></td></tr>`;
+      <td style="white-space:nowrap"><button class="btn btn-secondary btn-sm" onclick="driveUsuarios('${esc(i.slug)}')">Usuarios</button>
+          <button class="btn btn-secondary btn-sm" onclick="driveVerificar('${esc(i.slug)}',this)">Verificar</button></td></tr>`;
   }
 
   async function cargarTabla() {
@@ -261,7 +329,7 @@
     a.href = url; a.download = `hepta-drive-${slug}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    showAlert('drive-ok', 'success', `Paquete de ${slug} descargado. Importalo en KeePass (File → Import → Generic CSV, separador de grupo "/"), borrá el archivo de la PC y marcá "Ya los guardé".`, 0);
+    showAlert('drive-ok', 'success', `Paquete de ${slug} descargado. Importalo en KeePass (File → Import → Generic CSV), arrastrá el grupo "${slug}" adentro de Vault → Hepta Drive, borrá el archivo de la PC y marcá "Ya los guardé".`, 0);
   };
 
   window.driveGuardados = async function (slug) {

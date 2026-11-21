@@ -2490,8 +2490,9 @@ if(TOKEN) showApp();
     const item = document.createElement('div');
     item.className = 'menu-item';
     item.setAttribute('onclick', "showSection('mail',this)");
-    item.innerHTML = ICON + 'Correo';
-    const smtp = menu.querySelector('[onclick*="smtp"]');
+    item.innerHTML = ICON + 'HEPTA Mail';
+    // Va con los demás servicios de clientes: Instancias, HEPTA Drive (drive.js se pone en el medio) y HEPTA Mail
+    const smtp = menu.querySelector('[onclick*="\'instances\'"]') || menu.querySelector('[onclick*="smtp"]');
     if (smtp) smtp.insertAdjacentElement('afterend', item);
     else menu.appendChild(item);
   }
@@ -3231,7 +3232,7 @@ if(TOKEN) showApp();
   };
 
   /* ── registro en la navegación ──────────────────────────────────────── */
-  try { sectionTitles.mail = 'Correo'; } catch (e) {}
+  try { sectionTitles.mail = 'HEPTA Mail'; } catch (e) {}
   try { sectionLoaders.mail = loadMail; } catch (e) {}
   window.loadMail = loadMail;
 })();
@@ -3239,6 +3240,6 @@ if(TOKEN) showApp();
 </script>
 <!-- HEPTA-CORREO-UI:fin -->
 <!-- HEPTA Drive: pantalla aparte, en su propio archivo -->
-<script src="/admin/drive.js?v=20261121"></script>
+<script src="/admin/drive.js?v=20261121b"></script>
 </body>
 </html>

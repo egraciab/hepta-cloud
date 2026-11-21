@@ -142,5 +142,7 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
   segundo plano, muestra el avance, baja el paquete de secretos a KeePass). Tablas `client_services` y `provisioning_jobs`
   (`sql/2026-11-21_hepta_drive.sql`). El trabajo lo hace el agente de la VM (`infra/hepta-drive/agente`), que termina en el
   script `hepta-drive-alta`; el respaldo del cliente nuevo lo enrola solo `hcsvrnd01`. La pantalla va en su propio
-  archivo (`frontend/public/admin/drive.js`). Falta: que el vhost lo cree el Admin (hoy es un comando), logo del
-  cliente desde la pantalla, baja y suspensión.
+  archivo (`frontend/public/admin/drive.js`). Botón **Usuarios**: lista y suma usuarios a una instancia (nacen como
+  usuarios comunes, invitados por correo). Correo pasó al grupo Portal como **HEPTA Mail**. Toda instancia nace con la marca
+  Hepta Cloud y en `<cliente>.drive.hepta.com.py`; el logo del cliente es solo a pedido y por consola (`--logo`).
+  Falta: que el vhost lo cree el Admin (hoy es un comando), pasar una instancia al dominio del cliente, baja y suspensión.

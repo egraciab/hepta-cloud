@@ -66,6 +66,20 @@ router.post('/:slug/verificar', async (req, res) => {
   catch (err) { fail(res, err, 'admin/drive/verificar'); }
 });
 
+// ── Usuarios de una instancia ──
+router.get('/:slug/usuarios', async (req, res) => {
+  try { res.json({ success: true, data: await drive.usuarios(req.params.slug) }); }
+  catch (err) { fail(res, err, 'admin/drive/usuarios GET'); }
+});
+
+router.post('/:slug/usuarios', async (req, res) => {
+  try {
+    const data = await drive.agregarUsuarios(req.params.slug, req.body, req.user.id);
+    await logAction(req, 'drive_add_users', data.slug, { trabajo: data.trabajo, usuarios: data.usuarios });
+    res.status(202).json({ success: true, data });
+  } catch (err) { fail(res, err, 'admin/drive/usuarios POST'); }
+});
+
 // ── Secretos del alta (solo godmode) ──
 router.get('/:slug/secretos', requireGodmode, async (req, res) => {
   try {

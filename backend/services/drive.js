@@ -85,10 +85,16 @@ function pedidoValido(b) {
   const slug = slugValido(b.slug);
   const cuota_gb  = entero(b.cuota_gb, 'La cuota por usuario', 1, 9999, 5);
   const equipo_gb = entero(b.equipo_gb, 'La carpeta de equipo', 0, 99999, 0);
-  if (!Array.isArray(b.usuarios) || !b.usuarios.length) throw new ErrorDrive(422, 'Cargá al menos un usuario');
-  if (b.usuarios.length > 200) throw new ErrorDrive(422, 'Hasta 200 usuarios por pedido');
+  const usuarios = usuariosValidos(b.usuarios, cuota_gb);
+  const cliente = b.billing_customer_id ? String(b.billing_customer_id) : null;
+  if (cliente && !UUID.test(cliente)) throw new ErrorDrive(422, 'Cliente inválido');
+  return { slug, cuota_gb, equipo_gb, usuarios, billing_customer_id: cliente };
+}
+function usuariosValidos(lista, cuota_gb) {
+  if (!Array.isArray(lista) || !lista.length) throw new ErrorDrive(422, 'Cargá al menos un usuario');
+  if (lista.length > 200) throw new ErrorDrive(422, 'Hasta 200 usuarios por pedido');
   const vistos = new Set();
-  const usuarios = b.usuarios.map((u, i) => {
+  return lista.map((u, i) => {
     const correo = String((u && u.correo) || '').trim().toLowerCase();
     const nombre = String((u && u.nombre) || '').trim();
     if (!CORREO.test(correo)) throw new ErrorDrive(422, `Usuario ${i + 1}: correo inválido`);
@@ -97,9 +103,6 @@ function pedidoValido(b) {
     vistos.add(correo);
     return { correo, nombre, cuota_gb: entero(u.cuota_gb, `Usuario ${i + 1}: la cuota`, 1, 9999, cuota_gb) };
   });
-  const cliente = b.billing_customer_id ? String(b.billing_customer_id) : null;
-  if (cliente && !UUID.test(cliente)) throw new ErrorDrive(422, 'Cliente inválido');
-  return { slug, cuota_gb, equipo_gb, usuarios, billing_customer_id: cliente };
 }
 const paraAgente = p => ({ slug: p.slug, cuota_gb: p.cuota_gb, equipo_gb: p.equipo_gb, usuarios: p.usuarios });
 
@@ -182,9 +185,9 @@ async function crear(cuerpo, actorId) {
 async function cerrar(jobId, ok, paso, error, resultado) {
   const { rows } = await pool.query(
     `UPDATE provisioning_jobs SET status = $2, step = COALESCE($3, step), error = $4, finished_at = NOW()
-      WHERE id = $1 AND status = 'running' RETURNING client_service_id`,
+      WHERE id = $1 AND status = 'running' RETURNING client_service_id, action`,
     [jobId, ok ? 'done' : 'failed', paso || null, error || null]);
-  if (!rows.length) return;
+  if (!rows.length || rows[0].action !== 'create') return;   // sumar usuarios no cambia el estado de la instancia
   await pool.query(
     `UPDATE client_services SET status = $2, port = COALESCE($3, port), fqdn = COALESCE($4, fqdn), updated_at = NOW() WHERE id = $1`,
     [rows[0].client_service_id, ok ? 'active' : 'failed', (resultado && resultado.puerto) || null, (resultado && resultado.fqdn) || null]);
@@ -203,7 +206,7 @@ async function actualizar(jobId) {
     return false;
   }
   if (t.estado === 'listo') await cerrar(jobId, true, 'Listo', null, t.resultado);
-  else await cerrar(jobId, false, String(t.paso || '').slice(0, 200), String(t.error || 'El alta no terminó bien').slice(0, 500));
+  else await cerrar(jobId, false, String(t.paso || '').slice(0, 200), String(t.error || 'No terminó bien').slice(0, 500));
   return true;
 }
 
@@ -222,7 +225,7 @@ function seguir(jobId) {
     }
     if (Date.now() - inicio > ESPERA_MS) {
       siguiendo.delete(jobId);
-      await cerrar(jobId, false, null, 'El alta tardó más de 30 minutos. Revisar la instancia en la VM.').catch(() => {});
+      await cerrar(jobId, false, null, 'Tardó más de 30 minutos. Revisar la instancia en la VM.').catch(() => {});
       return;
     }
     setTimeout(vuelta, CADA_MS).unref();
@@ -238,11 +241,44 @@ async function reanudar() {
 
 async function verTrabajo(jobId) {
   const { rows } = await pool.query(
-    `SELECT j.id, j.status, j.step, j.error, j.started_at, j.finished_at, cs.slug, cs.fqdn, cs.port
+    `SELECT j.id, j.action, j.status, j.step, j.error, j.started_at, j.finished_at, cs.slug, cs.fqdn, cs.port
        FROM provisioning_jobs j JOIN client_services cs ON cs.id = j.client_service_id WHERE j.id = $1`, [jobId]);
   if (!rows[0]) return null;
   if (rows[0].status === 'running') seguir(rows[0].id);
   return rows[0];
+}
+
+// ── Usuarios de una instancia ────────────────────────────────
+async function usuarios(slug) {
+  const s = slugValido(slug);
+  const r = await pedir('GET', `/clientes/${s}/usuarios`, undefined, { timeoutMs: 70000 });
+  if (r.status === 404) throw new ErrorDrive(404, 'No existe esa instancia');
+  if (!r.ok || !r.json) throw new ErrorDrive(502, detalle(r));
+  return r.json.usuarios || [];
+}
+
+// Suma usuarios a una instancia que ya existe. Nacen como usuarios comunes y reciben la invitación por correo.
+async function agregarUsuarios(slug, cuerpo, actorId) {
+  const s = slugValido(slug);
+  const cuota_gb = entero((cuerpo || {}).cuota_gb, 'La cuota por usuario', 1, 9999, 5);
+  const lista = usuariosValidos((cuerpo || {}).usuarios, cuota_gb);
+  const { rows: abiertos } = await pool.query("SELECT 1 FROM provisioning_jobs WHERE status = 'running' LIMIT 1");
+  if (abiertos.length) throw new ErrorDrive(409, 'Hay otro trabajo en curso. Esperá a que termine.');
+  const r = await pedir('POST', `/clientes/${s}/usuarios`, { cuota_gb, usuarios: lista }, { timeoutMs: 30000 });
+  if (r.status !== 202 || !r.json || !r.json.trabajo)
+    throw new ErrorDrive([404, 409, 422].includes(r.status) ? r.status : 502, detalle(r));
+  // Una instancia creada por consola todavía no tiene registro acá: se registra ahora
+  const { rows: cs } = await pool.query(
+    `INSERT INTO client_services (service, slug, fqdn, status, created_by)
+     VALUES ('drive', $1, $2, 'active', $3)
+     ON CONFLICT (service, slug) DO UPDATE SET updated_at = NOW() RETURNING id`,
+    [s, null, actorId || null]);
+  const { rows: j } = await pool.query(
+    `INSERT INTO provisioning_jobs (client_service_id, action, remote_job_id, status, step, actor_id)
+     VALUES ($1, 'add_users', $2, 'running', 'En cola', $3) RETURNING id`,
+    [cs[0].id, r.json.trabajo, actorId || null]);
+  seguir(j[0].id);
+  return { trabajo: j[0].id, slug: s, usuarios: lista.length };
 }
 
 // ── Sobre una instancia ──────────────────────────────────────
@@ -269,4 +305,4 @@ async function secretosGuardados(slug) {
   return true;
 }
 
-module.exports = { ErrorDrive, salud, listar, validar, crear, verTrabajo, verificar, secretos, secretosGuardados, reanudar };
+module.exports = { ErrorDrive, salud, listar, validar, crear, verTrabajo, verificar, usuarios, agregarUsuarios, secretos, secretosGuardados, reanudar };
