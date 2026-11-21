@@ -75,6 +75,15 @@ router.post('/:slug/publicar', async (req, res) => {
   } catch (err) { fail(res, err, 'admin/drive/publicar'); }
 });
 
+// Dominio propio del cliente (se suma al nombre de HEPTA). Trabajo en segundo plano.
+router.post('/:slug/dominio', async (req, res) => {
+  try {
+    const data = await drive.dominioPropio(req.params.slug, req.body, req.user.id);
+    await logAction(req, 'drive_custom_domain', data.slug, { trabajo: data.trabajo, dominio: data.dominio });
+    res.status(202).json({ success: true, data });
+  } catch (err) { fail(res, err, 'admin/drive/dominio'); }
+});
+
 // ── Usuarios de una instancia ──
 router.get('/:slug/usuarios', async (req, res) => {
   try { res.json({ success: true, data: await drive.usuarios(req.params.slug) }); }

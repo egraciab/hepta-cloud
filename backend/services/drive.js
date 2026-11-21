@@ -12,6 +12,7 @@
 // ============================================================
 const https = require('https');
 const http  = require('http');
+const dns   = require('dns').promises;
 const { URL } = require('url');
 const pool  = require('../config/db');
 
@@ -67,7 +68,7 @@ async function pedir(method, ruta, cuerpo, { timeoutMs = 20000 } = {}) {
 }
 
 // ── Dirección pública: el vhost lo crea la API del NGINX perimetral ──
-async function perimetral(method, ruta, cuerpo) {
+async function perimetral(method, ruta, cuerpo, esperaMs = 50000) {
   const { rows } = await pool.query("SELECT key, value FROM site_config WHERE key IN ('perimetral_api_url','perimetral_api_key')");
   const c = Object.fromEntries(rows.map(r => [r.key, r.value]));
   if (!c.perimetral_api_url || !c.perimetral_api_key) throw new ErrorDrive(503, 'La API del NGINX perimetral no está configurada');
@@ -88,7 +89,7 @@ async function perimetral(method, ruta, cuerpo) {
         resolve({ status: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, json });
       });
     });
-    req.setTimeout(50000, () => req.destroy(new Error('el NGINX perimetral no respondió a tiempo')));
+    req.setTimeout(esperaMs, () => req.destroy(new Error('el NGINX perimetral no respondió a tiempo')));
     req.on('error', e => reject(new ErrorDrive(502, `No se pudo hablar con el NGINX perimetral: ${e.message}`)));
     if (payload) req.write(payload);
     req.end();
@@ -259,6 +260,12 @@ async function cerrar(jobId, ok, paso, error, resultado) {
 async function actualizar(jobId) {
   const { rows } = await pool.query('SELECT remote_job_id, status, action FROM provisioning_jobs WHERE id = $1', [jobId]);
   if (!rows[0] || rows[0].status !== 'running') return true;
+  if (!rows[0].remote_job_id) {
+    // Un trabajo que corre entero acá (dominio propio). Si este proceso no lo tiene, quedó de antes de un reinicio.
+    if (locales.has(jobId)) return false;
+    await cerrar(jobId, false, null, 'Se interrumpió por un reinicio del servidor. Se puede repetir: sigue desde donde quedó.');
+    return true;
+  }
   const r = await pedir('GET', `/trabajos/${rows[0].remote_job_id}`);
   if (r.status === 404) { await cerrar(jobId, false, null, 'El agente ya no tiene este trabajo. Revisar el estado de la instancia en la VM.'); return true; }
   if (!r.ok || !r.json) throw new ErrorDrive(502, detalle(r));
@@ -391,6 +398,70 @@ async function eliminarUsuario(slug, cuerpo, actorId) {
   return { trabajo: j[0].id, slug: s, usuario, transferir_a };
 }
 
+// ── Dominio propio del cliente ───────────────────────────────
+// Se suma al nombre de HEPTA, que sigue andando. Cuatro pasos, todos repetibles: comprobar que el dominio ya apunta
+// acá, que la instancia lo acepte, certificado y vhost en el NGINX, y recién al final usarlo como dirección principal.
+const DOMINIO = /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
+const locales = new Set();            // trabajos que corren enteros en este proceso (no los sigue el agente)
+
+async function apuntaAca(dominio, destino) {
+  const limpio = h => String(h || '').toLowerCase().replace(/\.$/, '');
+  try { if ((await dns.resolveCname(dominio)).some(c => limpio(c) === destino)) return true; } catch (e) { /* sin CNAME directo */ }
+  let a = [], b = [];
+  try { a = await dns.resolve4(dominio); } catch (e) { return false; }
+  try { b = await dns.resolve4(destino); } catch (e) { throw new ErrorDrive(502, `No pude resolver ${destino} desde este servidor`); }
+  return a.length > 0 && a.every(ip => b.includes(ip));
+}
+
+async function dominioPropio(slug, cuerpo, actorId) {
+  const s = slugValido(slug);
+  const dominio = String((cuerpo || {}).dominio || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  if (dominio.length > 253 || !DOMINIO.test(dominio)) throw new ErrorDrive(422, 'Dominio inválido: va el nombre completo, por ejemplo drive.cliente.com.py');
+  if (dominio.endsWith('hepta.com.py')) throw new ErrorDrive(422, 'Ese nombre es de HEPTA: el dominio propio es el del cliente');
+  const { rows: abiertos } = await pool.query("SELECT 1 FROM provisioning_jobs WHERE status = 'running' LIMIT 1");
+  if (abiertos.length) throw new ErrorDrive(409, 'Hay otro trabajo en curso. Esperá a que termine.');
+  const r = await pedir('GET', `/clientes/${s}`, undefined, { timeoutMs: 30000 });
+  if (r.status === 404) throw new ErrorDrive(404, 'No existe esa instancia');
+  if (!r.ok || !r.json) throw new ErrorDrive(502, detalle(r));
+  const destino = `${s}.drive.hepta.com.py`;
+  if (r.json.fqdn !== destino) throw new ErrorDrive(409, 'Esta instancia no nació con una dirección de HEPTA Drive: su dominio se maneja aparte');
+  if (r.json.dominio && r.json.dominio !== dominio) throw new ErrorDrive(409, `Esta instancia ya tiene el dominio propio ${r.json.dominio}. Para cambiarlo, primero hay que quitarlo (por consola).`);
+  if (!(await apuntaAca(dominio, destino)))
+    throw new ErrorDrive(422, `${dominio} todavía no apunta a ${destino}. Hay que crear un registro CNAME y esperar a que se propague.`);
+
+  const { rows: cs } = await pool.query(
+    `INSERT INTO client_services (service, slug, fqdn, port, status, created_by) VALUES ('drive', $1, $2, $3, 'active', $4)
+     ON CONFLICT (service, slug) DO UPDATE SET updated_at = NOW() RETURNING id`, [s, destino, r.json.puerto || null, actorId || null]);
+  const { rows: j } = await pool.query(
+    `INSERT INTO provisioning_jobs (client_service_id, action, status, step, actor_id)
+     VALUES ($1, 'custom_domain', 'running', 'Preparando la instancia', $2) RETURNING id`, [cs[0].id, actorId || null]);
+  const id = j[0].id;
+  locales.add(id);
+  const paso = t => pool.query("UPDATE provisioning_jobs SET step = $2 WHERE id = $1 AND status = 'running'", [id, t]);
+  const agente = async fase => {
+    const x = await pedir('POST', `/clientes/${s}/dominio`, { dominio, fase }, { timeoutMs: 250000 });
+    if (!x.ok) throw new Error(detalle(x));
+  };
+  (async () => {
+    try {
+      await agente('aceptar');
+      await paso('Certificado y publicación en el NGINX');
+      const v = await perimetral('POST', '/drive-dominio', { slug: s, dominio }, 180000);
+      if (!v.ok) {
+        const d = v.json && v.json.detail;
+        throw new Error(v.status === 404 ? 'la API del NGINX todavía no tiene la función de dominio propio (falta actualizarla)' : (typeof d === 'string' ? d : `respuesta ${v.status} del NGINX perimetral`));
+      }
+      await paso('Cambiando la dirección principal');
+      await agente('principal');
+      await pool.query("UPDATE client_services SET params = jsonb_set(params, '{dominio}', to_jsonb($2::text)), updated_at = NOW() WHERE id = $1", [cs[0].id, dominio]);
+      await cerrar(id, true, 'Listo', null);
+    } catch (e) {
+      await cerrar(id, false, null, String(e.message || e).slice(0, 500)).catch(() => {});
+    } finally { locales.delete(id); }
+  })();
+  return { trabajo: id, slug: s, dominio };
+}
+
 // ── Sobre una instancia ──────────────────────────────────────
 async function verificar(slug) {
   const s = slugValido(slug);
@@ -415,4 +486,4 @@ async function secretosGuardados(slug) {
   return true;
 }
 
-module.exports = { ErrorDrive, salud, listar, validar, crear, verTrabajo, verificar, usuarios, agregarUsuarios, estadoUsuario, eliminarUsuario, publicar, secretos, secretosGuardados, reanudar };
+module.exports = { ErrorDrive, salud, listar, validar, crear, verTrabajo, verificar, usuarios, agregarUsuarios, estadoUsuario, eliminarUsuario, publicar, dominioPropio, secretos, secretosGuardados, reanudar };

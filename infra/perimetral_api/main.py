@@ -377,9 +377,9 @@ class DriveVhost(BaseModel):
             raise ValueError("el puerto tiene que estar entre 8081 y 8199")
         return v
 
-def correr_drive_vhost(args):
+def correr_drive_vhost(args, espera=40):
     try:
-        r = subprocess.run(["sudo", "-n", DRIVE_VHOST] + args, capture_output=True, text=True, timeout=40)
+        r = subprocess.run(["sudo", "-n", DRIVE_VHOST] + args, capture_output=True, text=True, timeout=espera)
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=504, detail="el script del vhost no respondió a tiempo")
     salida = (r.stdout + r.stderr).strip()
@@ -394,6 +394,43 @@ def crear_drive_vhost(req: DriveVhost):
     salida = correr_drive_vhost([req.slug, str(req.port)])
     log.info(f"[DRIVE] vhost de {req.slug} → puerto {req.port}")
     return {"success": True, "slug": req.slug, "port": req.port, "message": salida.splitlines()[0] if salida else ""}
+
+DRIVE_DOMINIO = re.compile(r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$")
+
+class DriveDominio(BaseModel):
+    slug: str
+    dominio: str
+
+    @field_validator("slug")
+    @classmethod
+    def validar_slug(cls, v):
+        if not DRIVE_SLUG.match(v) or "--" in v:
+            raise ValueError("slug inválido")
+        return v
+
+    @field_validator("dominio")
+    @classmethod
+    def validar_dominio(cls, v):
+        v = v.strip().lower()
+        if len(v) > 253 or not DRIVE_DOMINIO.match(v) or v.endswith("hepta.com.py"):
+            raise ValueError("dominio inválido")
+        return v
+
+@app.post("/drive-dominio", dependencies=[Depends(verify_api_key)])
+def crear_drive_dominio(req: DriveDominio):
+    """Suma el dominio propio del cliente a su drive: certificado por HTTP y vhost. El nombre de HEPTA sigue andando."""
+    salida = correr_drive_vhost([req.slug, "--dominio", req.dominio], espera=170)
+    log.info(f"[DRIVE] dominio propio de {req.slug}: {req.dominio}")
+    return {"success": True, "slug": req.slug, "dominio": req.dominio, "message": salida.splitlines()[-1] if salida else ""}
+
+@app.delete("/drive-dominio/{slug}/{dominio}", dependencies=[Depends(verify_api_key)])
+def quitar_drive_dominio(slug: str, dominio: str):
+    dominio = dominio.strip().lower()
+    if not DRIVE_SLUG.match(slug) or "--" in slug or len(dominio) > 253 or not DRIVE_DOMINIO.match(dominio):
+        raise HTTPException(status_code=422, detail="slug o dominio inválido")
+    salida = correr_drive_vhost([slug, "--quitar-dominio", dominio])
+    log.info(f"[DRIVE] dominio propio de {slug} quitado: {dominio}")
+    return {"success": True, "slug": slug, "dominio": dominio, "message": salida.splitlines()[-1] if salida else ""}
 
 @app.delete("/drive-vhost/{slug}", dependencies=[Depends(verify_api_key)])
 def quitar_drive_vhost(slug: str):

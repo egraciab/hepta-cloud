@@ -16,6 +16,7 @@ cuenta: cada pedido termina en /usr/local/sbin/hepta-drive-alta, el mismo script
   POST /clientes/{slug}/usuarios       suma usuarios en segundo plano → 202 con un trabajo
   POST /clientes/{slug}/usuarios/estado     habilita o deshabilita a un usuario
   POST /clientes/{slug}/usuarios/eliminar   borra a un usuario (pasando antes sus archivos a otro, si se pide) → 202
+  POST /clientes/{slug}/dominio        dominio propio del cliente: fase "aceptar" o "principal"
   GET  /clientes/{slug}/secretos       paquete para KeePass (CSV). No se borra al leerlo
   POST /clientes/{slug}/secretos/guardado   lo borra de la VM, cuando ya está en KeePass
 
@@ -38,7 +39,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import APIKeyHeader
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 API_KEY = os.getenv("DRIVE_API_KEY", "")
 ALLOWED_IPS = {ip.strip() for ip in os.getenv("ALLOWED_IPS", "").split(",") if ip.strip()}
 ALTA = os.getenv("HD_ALTA", "/usr/local/sbin/hepta-drive-alta")
@@ -351,6 +352,27 @@ async def eliminar_usuario(slug: str, request: Request):
     if codigo != 0 or not lineas_json(salida):
         raise HTTPException(status_code=404, detail="no existe ese cliente")
     return lanzar("baja de usuario", slug, args, "")
+
+
+DOMINIO_RE = re.compile(r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$")
+
+
+@app.post("/clientes/{slug}/dominio", dependencies=[Depends(con_clave)])
+async def dominio_propio(slug: str, request: Request):
+    """El vhost y el certificado van aparte, en el NGINX. Acá solo se prepara la instancia."""
+    slug_valido(slug)
+    cuerpo = await cuerpo_json(request)
+    if not isinstance(cuerpo, dict) or cuerpo.get("fase") not in ("aceptar", "principal"):
+        raise HTTPException(status_code=422, detail="falta 'fase': aceptar o principal")
+    dominio = str(cuerpo.get("dominio") or "").strip().lower()
+    if len(dominio) > 253 or not DOMINIO_RE.match(dominio) or dominio.endswith("hepta.com.py"):
+        raise HTTPException(status_code=422, detail="dominio inválido")
+    # 'principal' reinicia los contenedores de la instancia: puede tardar un par de minutos
+    codigo, salida, error = correr([f"dominio-{cuerpo['fase']}", slug, "--dominio", dominio], timeout=240)
+    if codigo != 0:
+        raise HTTPException(status_code=409, detail=salida_de_error(error, salida))
+    log.info("dominio-%s en %s: %s", cuerpo["fase"], slug, dominio)
+    return {"ok": True, "slug": slug, "dominio": dominio, "fase": cuerpo["fase"]}
 
 
 @app.get("/clientes/{slug}/usuarios", dependencies=[Depends(con_clave)])

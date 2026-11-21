@@ -238,6 +238,53 @@
     } finally { $('drive-u-btn').disabled = false; }
   };
 
+  /* ── dominio propio ── */
+  const modalD = document.createElement('div');
+  modalD.className = 'modal-overlay';
+  modalD.id = 'drive-d-modal';
+  modalD.innerHTML = `
+    <div class="modal" style="max-width:600px">
+      <div class="modal-title" id="drive-d-title">Dominio propio</div>
+      <div class="alert alert-error" id="drive-d-err"></div>
+      <div style="font-size:13px;line-height:1.5;margin-bottom:14px">
+        <div style="margin-bottom:8px">El cliente (o quien maneje su dominio) tiene que crear antes este registro en su DNS:</div>
+        <pre id="drive-d-cname" style="background:var(--gray-100,#f3f4f6);padding:10px;border-radius:6px;font-size:12px;overflow-x:auto;margin:0 0 8px"></pre>
+        <div class="text-muted">La dirección de HEPTA sigue funcionando siempre: las aplicaciones de escritorio y celular que ya están conectadas no se tocan. Los enlaces de los correos pasan a usar el dominio propio.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Dominio del cliente *</label>
+        <input class="form-input" id="drive-d-dominio" placeholder="drive.cliente.com.py" autocomplete="off" oninput="driveDominioCname()"/>
+        <div class="form-hint">Al activar se comprueba que ya apunte acá, se pide el certificado y la instancia se reinicia unos segundos.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="document.getElementById('drive-d-modal').classList.remove('open')">Cancelar</button>
+        <button class="btn btn-primary" id="drive-d-btn" onclick="driveDominioActivar()">Activar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modalD);
+  let slugDominio = null;
+  window.driveDominioCname = function () {
+    const d = ($('drive-d-dominio').value.trim().toLowerCase() || 'drive.cliente.com.py');
+    $('drive-d-cname').textContent = `${d}.   CNAME   ${slugDominio}.drive.hepta.com.py.`;
+  };
+  window.driveDominio = function (slug, actual) {
+    slugDominio = slug;
+    $('drive-d-title').textContent = `Dominio propio de ${slug}`;
+    $('drive-d-err').className = 'alert alert-error';
+    $('drive-d-dominio').value = actual || '';
+    window.driveDominioCname();
+    modalD.classList.add('open');
+  };
+  window.driveDominioActivar = async function () {
+    $('drive-d-btn').disabled = true;
+    try {
+      const r = await api('POST', `/admin/drive/${encodeURIComponent(slugDominio)}/dominio`, { dominio: $('drive-d-dominio').value });
+      if (!r.success) { showAlert('drive-d-err', 'error', r.error, 0); return; }
+      modalD.classList.remove('open');
+      seguirTrabajo(r.data.trabajo);
+    } finally { $('drive-d-btn').disabled = false; }
+  };
+
   /* ── pedido desde el formulario ── */
   function pedido() {
     const usuarios = lineasUsuarios($('drive-usuarios').value);
@@ -297,6 +344,13 @@
     $('drive-job-card').style.display = '';
     const dir = `https://${t.fqdn || t.slug + '.drive.hepta.com.py'}`;
     const cerrar = `<div style="margin-top:10px"><button class="btn btn-secondary btn-sm" onclick="document.getElementById('drive-job-card').style.display='none'">Cerrar</button></div>`;
+    if (t.action === 'custom_domain') {
+      $('drive-job-title').textContent = `Dominio propio de ${t.slug}`;
+      $('drive-job-body').innerHTML = t.status === 'running' ? `<div>Paso: <strong>${esc(t.step || 'Preparando')}</strong></div><div class="text-muted text-sm" style="margin-top:6px">Tarda entre uno y tres minutos. La instancia se reinicia unos segundos al final.</div>`
+        : t.status === 'done' ? `<div style="color:#047857"><strong>Listo.</strong> La instancia ya responde por su dominio propio y por la dirección de HEPTA.</div>${cerrar}`
+        : `<div style="color:var(--red)"><strong>${esc(t.error || 'No se pudo activar')}</strong></div><div class="text-muted" style="margin-top:6px">Último paso: ${esc(t.step || '—')}. La instancia sigue funcionando en su dirección de HEPTA. Se puede repetir: sigue desde donde quedó.</div>${cerrar}`;
+      return;
+    }
     if (t.action === 'delete_user') {
       $('drive-job-title').textContent = `Baja de un usuario de ${t.slug}`;
       $('drive-job-body').innerHTML = t.status === 'running' ? `<div>Paso: <strong>${esc(t.step || 'En cola')}</strong></div><div class="text-muted text-sm" style="margin-top:6px">Si hay que pasar muchos archivos puede tardar unos minutos.</div>`
@@ -364,10 +418,12 @@
       ? ` <span class="badge badge-red">sin publicar</span> <button class="btn btn-secondary btn-sm" onclick="drivePublicar('${esc(i.slug)}',this)">Publicar</button>` : '';
     const caidos = Number(i.contenedores) < 4 ? ` <span class="badge badge-red">${esc(i.contenedores)}/4 contenedores</span>` : '';
     return `<tr>
-      <td><strong>${esc(i.slug)}</strong>${caidos}${sinPublicar}<div class="text-sm"><a href="https://${esc(i.fqdn)}" target="_blank" rel="noopener">${esc(i.fqdn)}</a> · puerto ${esc(i.puerto)}</div></td>
+      <td><strong>${esc(i.slug)}</strong>${caidos}${sinPublicar}<div class="text-sm"><a href="https://${esc(i.fqdn)}" target="_blank" rel="noopener">${esc(i.fqdn)}</a> · puerto ${esc(i.puerto)}</div>
+        ${i.dominio ? `<div class="text-sm">${reg.params && reg.params.dominio === i.dominio ? '' : '<span class="badge badge-blue">a medio activar</span> '}<a href="https://${esc(i.dominio)}" target="_blank" rel="noopener">${esc(i.dominio)}</a></div>` : ''}</td>
       <td>${esc(reg.cliente || '—')}${reg.creado_por ? `<div class="text-muted text-sm">alta: ${esc(reg.creado_por)}</div>` : ''}</td>
       <td>${esc(i.usuarios)}</td><td>${esc(i.datos || '—')}</td><td>${resp}</td><td>${sec}</td>
       <td style="white-space:nowrap"><button class="btn btn-secondary btn-sm" onclick="driveUsuarios('${esc(i.slug)}')">Usuarios</button>
+          ${i.fqdn === i.slug + '.drive.hepta.com.py' ? `<button class="btn btn-secondary btn-sm" onclick="driveDominio('${esc(i.slug)}','${esc(i.dominio || '')}')">Dominio</button>` : ''}
           <button class="btn btn-secondary btn-sm" onclick="driveVerificar('${esc(i.slug)}',this)">Verificar</button></td></tr>`;
   }
 

@@ -19,6 +19,10 @@
 #   hepta-drive-alta usuario-eliminar     <slug> --usuario CORREO [--transferir-a CORREO]
 #                                                   lo borra. Con --transferir-a, antes pasa sus archivos a otro
 #                                                   usuario; sin eso, SUS ARCHIVOS SE BORRAN con él
+#   hepta-drive-alta dominio-aceptar   <slug> --dominio drive.cliente.com.py   la instancia empieza a aceptar ese nombre
+#   hepta-drive-alta dominio-principal <slug> --dominio drive.cliente.com.py   y lo usa en los enlaces de los correos
+#   hepta-drive-alta dominio-quitar    <slug>                                  vuelve a quedar solo el nombre de HEPTA
+#                                                   (el vhost y el certificado van aparte, en el NGINX: drive_vhost_add.sh)
 #   hepta-drive-alta secretos <slug>                entrega los secretos del alta (CSV para KeePass)
 #   hepta-drive-alta secretos <slug> --guardado     los borra de la VM, cuando ya están en KeePass
 #   hepta-drive-alta baja     <slug> --confirmar <slug>   apaga y archiva en /srv/nextcloud/_bajas (no borra datos)
@@ -70,7 +74,7 @@ occ_s() { occ "$@" >/dev/null 2>&1; }
 # ── Argumentos ──
 ACCION="${1:-}"; SLUG="${2:-}"
 [ $# -ge 1 ] && shift; [ $# -ge 1 ] && shift
-USUARIOS=""; CUOTA_GB=5; EQUIPO_GB=0; FQDN=""; CONFIRMAR=""; GUARDADO=0; LOGO=""; USUARIO=""; TRANSFERIR=""
+USUARIOS=""; CUOTA_GB=5; EQUIPO_GB=0; FQDN=""; CONFIRMAR=""; GUARDADO=0; LOGO=""; USUARIO=""; TRANSFERIR=""; DOMINIO=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --usuarios) USUARIOS="${2:-}"; shift 2 ;;
@@ -81,6 +85,7 @@ while [ $# -gt 0 ]; do
     --guardado) GUARDADO=1; shift ;;
     --logo) LOGO="${2:-}"; shift 2 ;;
     --usuario) USUARIO="$(echo "${2:-}" | tr 'A-Z' 'a-z')"; shift 2 ;;
+    --dominio) DOMINIO="$(echo "${2:-}" | tr 'A-Z' 'a-z')"; shift 2 ;;
     --transferir-a) TRANSFERIR="$(echo "${2:-}" | tr 'A-Z' 'a-z')"; shift 2 ;;
     *) morir "opción desconocida: $1" ;;
   esac
@@ -461,6 +466,59 @@ gestionar_usuario() {
   esac
 }
 
+# ── Dominio propio del cliente (se suma: el nombre de HEPTA sigue andando) ──
+# La instancia tiene fija su dirección (OVERWRITEHOST). Con dominio propio deja de fijarla y responde con el nombre
+# con el que la llaman, así las aplicaciones conectadas a la dirección vieja siguen andando; los enlaces que salen
+# por correo (que no tienen a quién preguntarle el nombre) usan el dominio propio. Va en un compose.override.yaml
+# del cliente, para no tocar la plantilla.
+dominio_propio() {
+  local c="$SLUG" puerto fq actual ov="$DIR/compose.override.yaml" i
+  puerto="$(de_env "$DIR/.env" APP_PORT)"; fq="$(de_env "$DIR/.env" FQDN)"
+  actual="$(cat "$DIR/dominio" 2>/dev/null || true)"
+  exec 9>"$VAR/clientes/$c.candado"; flock -n 9 || morir "ya hay una operación en curso sobre $c"
+  responde() { [ "$(curl -s -o /dev/null -m 10 -w '%{http_code}' -H "Host: $1" -H "X-Forwarded-Proto: https" "http://$IP_VM:$puerto/status.php")" = 200 ]; }
+  levantar() {
+    ( cd "$DIR" && $DOCKER compose up -d ) >>"$VAR/clientes/$c.log" 2>&1 || return 1
+    for i in $(seq 1 60); do grep -q 'installed: true' <<<"$(occ "$c" status 2>/dev/null)" && return 0; sleep 2; done
+    return 1
+  }
+  if [ "$ACCION" = dominio-quitar ]; then
+    [ -n "$actual" ] || { aviso "$c no tiene dominio propio."; return 0; }
+    [ -f "$ov" ] && mv "$ov" "$ov.quitado-$(date +%Y%m%d_%H%M)"
+    levantar || morir "la instancia no volvió a levantar (ver $VAR/clientes/$c.log)"
+    occ "$c" config:system:set overwrite.cli.url --value "https://$fq" >/dev/null
+    occ "$c" config:system:delete trusted_domains 20 >/dev/null 2>&1 || true
+    unlink "$DIR/dominio"
+    responde "$fq" || morir "$fq no responde después del cambio"
+    aviso "DOMINIO OK: $c volvió a quedar solo en $fq (falta quitar el vhost de $actual en el NGINX)"; return 0
+  fi
+  [ "${#DOMINIO}" -le 253 ] && [[ "$DOMINIO" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$ ]] || morir "falta --dominio con el nombre completo (por ejemplo drive.cliente.com.py)"
+  case "$DOMINIO" in *hepta.com.py) morir "los nombres de HEPTA no son un dominio propio" ;; esac
+  [ -z "$actual" ] || [ "$actual" = "$DOMINIO" ] || morir "$c ya tiene el dominio propio $actual; primero hay que quitarlo (dominio-quitar)"
+
+  if [ "$ACCION" = dominio-aceptar ]; then
+    occ "$c" config:system:set trusted_domains 20 --value "$DOMINIO" >/dev/null || morir "no pude sumar $DOMINIO a los nombres aceptados"
+    echo "$DOMINIO" > "$DIR/dominio"
+    responde "$DOMINIO" || morir "la instancia no responde por $DOMINIO después de aceptarlo"
+    aviso "DOMINIO OK: $c ya acepta $DOMINIO (todavía no es el principal)"; return 0
+  fi
+
+  # dominio-principal
+  [ "$actual" = "$DOMINIO" ] || morir "primero hay que aceptar el dominio (dominio-aceptar)"
+  aviso "· Reiniciando la instancia con el dominio propio"
+  ( umask 077; printf '# Dominio propio del cliente. Lo escribe hepta-drive-alta: no editar a mano.\nservices:\n  app:\n    environment:\n      OVERWRITEHOST: ""\n      OVERWRITECLIURL: https://%s\n  cron:\n    environment:\n      OVERWRITEHOST: ""\n      OVERWRITECLIURL: https://%s\n' "$DOMINIO" "$DOMINIO" > "$ov" )
+  deshacer() { unlink "$ov"; levantar || true; }
+  levantar || { deshacer; morir "la instancia no levantó con el cambio; volví a la configuración anterior"; }
+  # Si la dirección sigue fija, el nombre viejo o el nuevo dejarían de andar bien: se quita o se vuelve atrás
+  if [ -n "$(occ "$c" config:system:get overwritehost 2>/dev/null)" ]; then
+    occ "$c" config:system:delete overwritehost >/dev/null 2>&1 || true
+    [ -z "$(occ "$c" config:system:get overwritehost 2>/dev/null)" ] || { deshacer; morir "no pude dejar de fijar la dirección de la instancia; volví a la configuración anterior"; }
+  fi
+  occ "$c" config:system:set overwrite.cli.url --value "https://$DOMINIO" >/dev/null || true
+  if ! responde "$DOMINIO" || ! responde "$fq"; then deshacer; morir "la instancia no responde por los dos nombres; volví a la configuración anterior"; fi
+  aviso "DOMINIO OK: $c responde por https://$DOMINIO y por https://$fq; los correos usan $DOMINIO"
+}
+
 estado() {
   local d c puerto fq arriba usuarios paso resp
   for d in "$BASE"/clientes/*/; do
@@ -471,8 +529,8 @@ estado() {
     usuarios=$(occ "$c" user:list 2>/dev/null | grep -c '^  - ')
     paso="$(cat "$VAR/clientes/$c.paso" 2>/dev/null || echo '')"
     resp=enrolado; [ -f "$VAR/respaldo-pendiente/$c" ] && resp=pendiente; [ -f "$CONF_RESPALDO/$c.env" ] || resp=sin_configurar
-    printf '{"slug":"%s","fqdn":"%s","puerto":%s,"contenedores":%s,"usuarios":%s,"paso":"%s","respaldo":"%s","ultima_copia":"%s","secretos_pendientes":%s,"datos":"%s"}\n' \
-      "$c" "$fq" "${puerto:-0}" "$arriba" "$usuarios" "$paso" "$resp" "$(cat /var/lib/hepta-drive-respaldo/"$c".ultimo-ok 2>/dev/null)" \
+    printf '{"slug":"%s","fqdn":"%s","dominio":"%s","puerto":%s,"contenedores":%s,"usuarios":%s,"paso":"%s","respaldo":"%s","ultima_copia":"%s","secretos_pendientes":%s,"datos":"%s"}\n' \
+      "$c" "$fq" "$(cat "$d/dominio" 2>/dev/null)" "${puerto:-0}" "$arriba" "$usuarios" "$paso" "$resp" "$(cat /var/lib/hepta-drive-respaldo/"$c".ultimo-ok 2>/dev/null)" \
       "$([ -f "$VAR/secretos/$c.csv" ] && echo true || echo false)" "$(du -sh --exclude=db "$DATOS/$c" 2>/dev/null | cut -f1)"
   done
 }
@@ -529,6 +587,8 @@ case "$ACCION" in
               "SELECT substr(s.id, 7), GREATEST(f.size, 0) FROM oc_storages s JOIN oc_filecache f ON f.storage = s.numeric_id WHERE s.id LIKE 'home::%' AND f.path = 'files'" ;;
   usuario-deshabilitar|usuario-habilitar|usuario-eliminar)
             necesita_slug; [ -f "$DIR/.env" ] || morir "no existe el cliente $SLUG"; gestionar_usuario ;;
+  dominio-aceptar|dominio-principal|dominio-quitar)
+            necesita_slug; [ -f "$DIR/.env" ] || morir "no existe el cliente $SLUG"; dominio_propio ;;
   baja)     necesita_slug; baja ;;
-  *) sed -n '2,43p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,47p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

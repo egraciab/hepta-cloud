@@ -62,6 +62,20 @@ Los `.env` no se versionan: `env.ejemplo` tiene solo los nombres. Los valores na
 | cada 10 min | `hcsvrnd01` | `hepta-drive-enrolar`: alta del respaldo de los clientes nuevos (no hace nada si no hay) |
 | cada 6 h, :17 | VM `hepta-drive` | `hepta-backup.sh`: configuración y volcados, que el retiro lleva al NAS |
 
+## Dominio propio de un cliente
+
+La instancia nace siempre como `<cliente>.drive.hepta.com.py` y esa dirección no se abandona nunca: las aplicaciones de
+escritorio y celular quedan atadas a ella. El dominio del cliente se **suma** (Admin → HEPTA Drive → Dominio):
+
+1. El cliente crea un CNAME de su nombre a `<cliente>.drive.hepta.com.py` (sin proxy de por medio).
+2. La instancia acepta el nombre nuevo (`hepta-drive-alta dominio-aceptar`).
+3. El NGINX saca el certificado por HTTP y crea el vhost (`drive_vhost_add.sh <cliente> --dominio <nombre>`).
+4. La instancia deja de tener fija su dirección y usa el dominio propio en los enlaces de los correos
+   (`hepta-drive-alta dominio-principal`, que escribe `compose.override.yaml` en la carpeta del cliente).
+
+Para quitarlo: `hepta-drive-alta dominio-quitar <cliente>` en la VM y `drive_vhost_add.sh <cliente> --quitar-dominio <nombre>`
+en el NGINX. Un cliente tiene un solo dominio propio.
+
 ## Restaurar
 
 - **Un archivo o una carpeta:** primero la papelera y las versiones de Nextcloud (90 días). Si no alcanza:
