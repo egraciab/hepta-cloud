@@ -317,12 +317,14 @@
         <div class="text-muted text-sm" style="margin-top:6px">Tarda entre 2 y 5 minutos. Podés cerrar esta ventana: el alta sigue.</div>`;
     } else if (t.status === 'done') {
       $('drive-job-title').textContent = `Alta terminada: ${t.slug}`;
-      $('drive-job-body').innerHTML = `<div style="color:#047857"><strong>La instancia está creada</strong> en el puerto ${esc(t.port)} y los usuarios ya fueron invitados.</div>
-        <div style="margin-top:10px">Falta publicar la dirección. En <code>hcsvrnd01</code>:</div>
-        <pre style="background:var(--gray-100,#f3f4f6);padding:10px;border-radius:6px;font-size:12px;overflow-x:auto;margin:6px 0">lxc exec dkr-hgsvrlnx003 --project HEPTA -- drive_vhost_add.sh ${esc(t.slug)} ${esc(t.port)}</pre>
-        <div>Después: <a href="${esc(dir)}" target="_blank" rel="noopener">${esc(dir)}</a>. El respaldo se da de alta solo en los próximos 10 minutos.</div>
+      // Un alta terminada con "error" es un aviso: la instancia existe, pero la dirección no quedó publicada
+      const publicada = !t.error;
+      $('drive-job-body').innerHTML = `<div style="color:#047857"><strong>La instancia está creada</strong> y los usuarios ya fueron invitados.</div>
+        ${publicada ? `<div style="margin-top:8px">Dirección publicada: <a href="${esc(dir)}" target="_blank" rel="noopener">${esc(dir)}</a>. El respaldo se da de alta solo en los próximos 10 minutos.</div>`
+          : `<div style="margin-top:8px;color:var(--red)"><strong>${esc(t.error)}</strong></div>
+             <div style="margin-top:6px">Los usuarios ya tienen la invitación, pero el enlace no les va a abrir hasta publicarla. <button class="btn btn-primary btn-sm" onclick="drivePublicar('${esc(t.slug)}',this)">Publicar ahora</button></div>`}
         <div style="margin-top:8px;color:#92400E"><strong>No te olvides de los secretos:</strong> bajalos a KeePass desde la tabla de abajo. Ahí va la contraseña de las copias de este cliente.</div>
-        <div style="margin-top:10px"><button class="btn btn-secondary btn-sm" onclick="document.getElementById('drive-job-card').style.display='none'">Cerrar</button></div>`;
+        ${cerrar}`;
     } else {
       $('drive-job-title').textContent = `El alta de ${t.slug} no terminó bien`;
       $('drive-job-body').innerHTML = `<div style="color:var(--red)"><strong>${esc(t.error || 'Error sin detalle')}</strong></div>
@@ -358,9 +360,11 @@
            <button class="btn btn-secondary btn-sm" onclick="driveSecretos('${esc(i.slug)}')">Bajar</button>
            <button class="btn btn-secondary btn-sm" onclick="driveGuardados('${esc(i.slug)}')">Ya los guardé</button></div>` : '<div class="text-muted text-sm">solo godmode</div>'}`
       : '<span class="badge badge-gray">en KeePass</span>';
+    const sinPublicar = reg.params && reg.params.publicado === false
+      ? ` <span class="badge badge-red">sin publicar</span> <button class="btn btn-secondary btn-sm" onclick="drivePublicar('${esc(i.slug)}',this)">Publicar</button>` : '';
     const caidos = Number(i.contenedores) < 4 ? ` <span class="badge badge-red">${esc(i.contenedores)}/4 contenedores</span>` : '';
     return `<tr>
-      <td><strong>${esc(i.slug)}</strong>${caidos}<div class="text-sm"><a href="https://${esc(i.fqdn)}" target="_blank" rel="noopener">${esc(i.fqdn)}</a> · puerto ${esc(i.puerto)}</div></td>
+      <td><strong>${esc(i.slug)}</strong>${caidos}${sinPublicar}<div class="text-sm"><a href="https://${esc(i.fqdn)}" target="_blank" rel="noopener">${esc(i.fqdn)}</a> · puerto ${esc(i.puerto)}</div></td>
       <td>${esc(reg.cliente || '—')}${reg.creado_por ? `<div class="text-muted text-sm">alta: ${esc(reg.creado_por)}</div>` : ''}</td>
       <td>${esc(i.usuarios)}</td><td>${esc(i.datos || '—')}</td><td>${resp}</td><td>${sec}</td>
       <td style="white-space:nowrap"><button class="btn btn-secondary btn-sm" onclick="driveUsuarios('${esc(i.slug)}')">Usuarios</button>
@@ -382,6 +386,17 @@
   }
 
   window.driveVerTrabajo = id => seguirTrabajo(id);
+
+  window.drivePublicar = async function (slug, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      const r = await api('POST', `/admin/drive/${encodeURIComponent(slug)}/publicar`);
+      if (!r.success) { showAlert('drive-err', 'error', `${slug}: ${r.error}`, 0); return; }
+      showAlert('drive-ok', 'success', `${slug}: dirección publicada (https://${r.data.fqdn}).`, 6000);
+      $('drive-job-card').style.display = 'none';
+      cargarTabla();
+    } finally { if (btn) btn.disabled = false; }
+  };
 
   window.driveVerificar = async function (slug, btn) {
     if (btn) btn.disabled = true;

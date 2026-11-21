@@ -11,6 +11,7 @@
 //  Secretos del alta: no pasan por la base. Se piden al agente en el momento de bajarlos.
 // ============================================================
 const https = require('https');
+const http  = require('http');
 const { URL } = require('url');
 const pool  = require('../config/db');
 
@@ -63,6 +64,67 @@ async function pedir(method, ruta, cuerpo, { timeoutMs = 20000 } = {}) {
     if (payload) req.write(payload);
     req.end();
   });
+}
+
+// ── Dirección pública: el vhost lo crea la API del NGINX perimetral ──
+async function perimetral(method, ruta, cuerpo) {
+  const { rows } = await pool.query("SELECT key, value FROM site_config WHERE key IN ('perimetral_api_url','perimetral_api_key')");
+  const c = Object.fromEntries(rows.map(r => [r.key, r.value]));
+  if (!c.perimetral_api_url || !c.perimetral_api_key) throw new ErrorDrive(503, 'La API del NGINX perimetral no está configurada');
+  const u = new URL(c.perimetral_api_url.replace(/\/+$/, '') + ruta);
+  const payload = cuerpo === undefined ? null : JSON.stringify(cuerpo);
+  const lib = u.protocol === 'https:' ? https : http;
+  return new Promise((resolve, reject) => {
+    const req = lib.request({
+      hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80), path: u.pathname, method,
+      headers: { 'X-API-Key': c.perimetral_api_key, ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}) },
+    }, res => {
+      let texto = '';
+      res.setEncoding('utf8');
+      res.on('data', d => { texto += d; });
+      res.on('end', () => {
+        let json = null;
+        try { json = JSON.parse(texto); } catch (e) { /* sin JSON */ }
+        resolve({ status: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, json });
+      });
+    });
+    req.setTimeout(50000, () => req.destroy(new Error('el NGINX perimetral no respondió a tiempo')));
+    req.on('error', e => reject(new ErrorDrive(502, `No se pudo hablar con el NGINX perimetral: ${e.message}`)));
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+// Crea (o repite) el vhost de una instancia y deja anotado si quedó publicada.
+async function publicarVhost(slug, puerto) {
+  let error = null;
+  try {
+    const r = await perimetral('POST', '/drive-vhost', { slug, port: Number(puerto) });
+    if (!r.ok) {
+      const d = r.json && r.json.detail;
+      error = r.status === 404 ? 'la API del NGINX todavía no tiene la función de publicar un drive (falta actualizarla)'
+        : (typeof d === 'string' ? d : `respuesta ${r.status} del NGINX perimetral`);
+    }
+  } catch (e) { error = e.message; }
+  await pool.query(
+    `UPDATE client_services SET params = jsonb_set(params, '{publicado}', $2::jsonb), updated_at = NOW()
+      WHERE service = 'drive' AND slug = $1`, [slug, error ? 'false' : 'true']);
+  if (error) throw new ErrorDrive(502, error);
+  return true;
+}
+
+// Botón "Publicar": para reintentar, o para una instancia creada por consola.
+async function publicar(slug) {
+  const s = slugValido(slug);
+  const r = await pedir('GET', `/clientes/${s}`, undefined, { timeoutMs: 30000 });
+  if (r.status === 404) throw new ErrorDrive(404, 'No existe esa instancia');
+  if (!r.ok || !r.json || !r.json.puerto) throw new ErrorDrive(502, detalle(r));
+  if (r.json.fqdn !== `${s}.drive.hepta.com.py`) throw new ErrorDrive(409, 'Esta instancia tiene una dirección propia: su vhost se maneja aparte');
+  await pool.query(
+    `INSERT INTO client_services (service, slug, fqdn, port, status) VALUES ('drive', $1, $2, $3, 'active')
+     ON CONFLICT (service, slug) DO NOTHING`, [s, r.json.fqdn, r.json.puerto]);
+  await publicarVhost(s, r.json.puerto);
+  return { slug: s, fqdn: r.json.fqdn };
 }
 
 const detalle = r => (r.json && r.json.detail) || `respuesta ${r.status} del agente`;
@@ -195,7 +257,7 @@ async function cerrar(jobId, ok, paso, error, resultado) {
 
 // Consulta al agente y deja el trabajo al día. Devuelve true si ya terminó.
 async function actualizar(jobId) {
-  const { rows } = await pool.query('SELECT remote_job_id, status FROM provisioning_jobs WHERE id = $1', [jobId]);
+  const { rows } = await pool.query('SELECT remote_job_id, status, action FROM provisioning_jobs WHERE id = $1', [jobId]);
   if (!rows[0] || rows[0].status !== 'running') return true;
   const r = await pedir('GET', `/trabajos/${rows[0].remote_job_id}`);
   if (r.status === 404) { await cerrar(jobId, false, null, 'El agente ya no tiene este trabajo. Revisar el estado de la instancia en la VM.'); return true; }
@@ -205,7 +267,17 @@ async function actualizar(jobId) {
     await pool.query("UPDATE provisioning_jobs SET step = $2 WHERE id = $1 AND status = 'running'", [jobId, String(t.paso || '').slice(0, 200)]);
     return false;
   }
-  if (t.estado === 'listo') await cerrar(jobId, true, 'Listo', null, t.resultado);
+  if (t.estado === 'listo' && rows[0].action === 'create') {
+    // La instancia ya está creada. Falta publicarla; si el NGINX no responde, el alta vale igual y queda el aviso.
+    await pool.query("UPDATE provisioning_jobs SET step = 'Publicando la dirección' WHERE id = $1 AND status = 'running'", [jobId]);
+    let aviso = null;
+    try {
+      if (!t.resultado || !t.resultado.puerto) throw new Error('el agente no informó el puerto');
+      await publicarVhost(t.slug, t.resultado.puerto);
+    } catch (e) { aviso = `La instancia está creada, pero la dirección no quedó publicada: ${e.message}`.slice(0, 500); }
+    await cerrar(jobId, true, 'Listo', aviso, t.resultado);
+  }
+  else if (t.estado === 'listo') await cerrar(jobId, true, 'Listo', null, t.resultado);
   else await cerrar(jobId, false, String(t.paso || '').slice(0, 200), String(t.error || 'No terminó bien').slice(0, 500));
   return true;
 }
@@ -343,4 +415,4 @@ async function secretosGuardados(slug) {
   return true;
 }
 
-module.exports = { ErrorDrive, salud, listar, validar, crear, verTrabajo, verificar, usuarios, agregarUsuarios, estadoUsuario, eliminarUsuario, secretos, secretosGuardados, reanudar };
+module.exports = { ErrorDrive, salud, listar, validar, crear, verTrabajo, verificar, usuarios, agregarUsuarios, estadoUsuario, eliminarUsuario, publicar, secretos, secretosGuardados, reanudar };

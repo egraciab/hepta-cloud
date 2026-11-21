@@ -350,3 +350,56 @@ def delete_vhost(domain: str):
         return {"success": True, "message": f"Vhost {domain} eliminado."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── HEPTA Drive: vhost de la instancia de un cliente ──────────
+# <slug>.drive.hepta.com.py → 10.10.50.220:<puerto>. No se escribe nada desde acá: lo hace el script
+# /usr/local/sbin/drive_vhost_add.sh (tools/drive_vhost_add.sh del repo), que valida el nombre, el puerto y el
+# certificado, y deja todo como estaba si nginx -t falla. www-data lo corre por /etc/sudoers.d/hepta-drive-vhost.
+DRIVE_VHOST = "/usr/local/sbin/drive_vhost_add.sh"
+DRIVE_SLUG  = re.compile(r"^[a-z][a-z0-9-]{1,30}[a-z0-9]$")
+
+class DriveVhost(BaseModel):
+    slug: str
+    port: int
+
+    @field_validator("slug")
+    @classmethod
+    def validar_slug(cls, v):
+        if not DRIVE_SLUG.match(v) or "--" in v:
+            raise ValueError("slug inválido")
+        return v
+
+    @field_validator("port")
+    @classmethod
+    def validar_puerto(cls, v):
+        if not 8081 <= v <= 8199:
+            raise ValueError("el puerto tiene que estar entre 8081 y 8199")
+        return v
+
+def correr_drive_vhost(args):
+    try:
+        r = subprocess.run(["sudo", "-n", DRIVE_VHOST] + args, capture_output=True, text=True, timeout=40)
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="el script del vhost no respondió a tiempo")
+    salida = (r.stdout + r.stderr).strip()
+    if r.returncode != 0:
+        log.error(f"[DRIVE] {' '.join(args)}: {salida[-300:]}")
+        raise HTTPException(status_code=409, detail=salida[-300:] or "no se pudo cambiar el vhost")
+    return salida
+
+@app.post("/drive-vhost", dependencies=[Depends(verify_api_key)])
+def crear_drive_vhost(req: DriveVhost):
+    """Publica la instancia de HEPTA Drive de un cliente. Repetirlo con los mismos datos no rompe nada."""
+    salida = correr_drive_vhost([req.slug, str(req.port)])
+    log.info(f"[DRIVE] vhost de {req.slug} → puerto {req.port}")
+    return {"success": True, "slug": req.slug, "port": req.port, "message": salida.splitlines()[0] if salida else ""}
+
+@app.delete("/drive-vhost/{slug}", dependencies=[Depends(verify_api_key)])
+def quitar_drive_vhost(slug: str):
+    """Quita el vhost (el archivo queda renombrado en sites-available)."""
+    if not DRIVE_SLUG.match(slug) or "--" in slug:
+        raise HTTPException(status_code=422, detail="slug inválido")
+    salida = correr_drive_vhost([slug, "--quitar"])
+    log.info(f"[DRIVE] vhost de {slug} quitado")
+    return {"success": True, "slug": slug, "message": salida.splitlines()[-1] if salida else ""}

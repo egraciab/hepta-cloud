@@ -45,7 +45,7 @@ utils/old/                   # parches históricos (patch_*.py): solo referencia
 | Servicio | Dónde | Clave en `site_config` |
 |---|---|---|
 | Alta/suspensión de tenants Odoo | `hepta-provision` en `HGSVRLNX104:8888` (lee `PROVISION_API_KEY` de su `.env`) | `provision_api_url`, `provision_api_key` |
-| Vhosts y certificados del perimetral | `hepta-perimetral` en `dkr-hgsvrlnx003:8888` (`PERIMETRAL_API_KEY`) | `perimetral_api_url`, `perimetral_api_key` |
+| Vhosts y certificados del perimetral (tenants y HEPTA Drive) | `hepta-perimetral` en `dkr-hgsvrlnx003:8888` (`PERIMETRAL_API_KEY`) | `perimetral_api_url`, `perimetral_api_key` |
 | RetoPA (usuario y ficha del cliente) | API interna de RetoPA (`INTERNAL_API_KEY`), cabecera `X-Internal-Key` | `retopa_api_url`, `retopa_api_key`, `retopa_enabled`, `retopa_auto_list` |
 | HEPTA Drive (Nextcloud por cliente) | agente en la VM `hepta-drive`, `10.10.50.220:8888`, **con TLS** y certificado propio | `drive_api_url`, `drive_api_key`, `drive_api_cert` (se cargan con `scripts/drive_configurar.js`) |
 | Correo saliente | mailcow | `smtp_*` |
@@ -90,6 +90,8 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
 ## Pendientes
 
 - [ ] API perimetral: validar `domain` y `db` en `/vhost` y sacar la lista de suspendidos de `/health`.
+- [ ] NGINX perimetral: acotar el `sudo` de `www-data` (`/etc/sudoers.d/hepta-perimetral`): hoy puede correr `nginx`, `certbot`
+      y `ln` con cualquier argumento, que en la práctica es root. Pasar todo a scripts con argumentos validados, como el del drive.
 - [ ] TLS entre HEPTA Cloud y las dos APIs del puerto 8888: la contraseña inicial del cliente viaja sin cifrar
       dentro de la red interna. (El filtro por IP ya está: `ALLOWED_IPS` en el `.env` de cada API.)
 - [ ] RetoPA: la ficha del cliente se crea solo con un botón del Admin; enganchar al alta si se ofrece en el plan.
@@ -145,4 +147,6 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
   archivo (`frontend/public/admin/drive.js`). Botón **Usuarios**: lista y suma usuarios a una instancia (nacen como
   usuarios comunes, invitados por correo). Correo pasó al grupo Portal como **HEPTA Mail**. Toda instancia nace con la marca
   Hepta Cloud y en `<cliente>.drive.hepta.com.py`; el logo del cliente es solo a pedido y por consola (`--logo`).
-  Falta: que el vhost lo cree el Admin (hoy es un comando), pasar una instancia al dominio del cliente, baja y suspensión.
+  El vhost lo crea solo al terminar el alta (API perimetral, `POST /drive-vhost`, que corre `drive_vhost_add.sh`); si falla,
+  queda "sin publicar" con un botón para reintentar. Usuarios: barra de uso, quitar/devolver acceso y eliminar (godmode).
+  Falta: pasar una instancia al dominio del cliente, baja y suspensión desde el Admin.

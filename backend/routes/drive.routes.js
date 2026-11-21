@@ -66,6 +66,15 @@ router.post('/:slug/verificar', async (req, res) => {
   catch (err) { fail(res, err, 'admin/drive/verificar'); }
 });
 
+// Publicar la dirección (vhost en el NGINX perimetral): reintento o instancia creada por consola
+router.post('/:slug/publicar', async (req, res) => {
+  try {
+    const data = await drive.publicar(req.params.slug);
+    await logAction(req, 'drive_publish', data.slug, {});
+    res.json({ success: true, data });
+  } catch (err) { fail(res, err, 'admin/drive/publicar'); }
+});
+
 // ── Usuarios de una instancia ──
 router.get('/:slug/usuarios', async (req, res) => {
   try { res.json({ success: true, data: await drive.usuarios(req.params.slug) }); }
