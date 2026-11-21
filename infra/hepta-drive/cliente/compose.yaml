@@ -55,7 +55,9 @@ services:
     entrypoint: /cron.sh
     environment: *ncenv
     volumes: *ncvol
-    networks: [interna]
+    # Las tareas de fondo también hablan con OnlyOffice y con el antivirus: sin la red compartida, la
+    # verificación diaria de OnlyOffice falla y deja el editor deshabilitado (pasó el 20-nov).
+    networks: [interna, shared]
 networks:
   interna: {}
   shared:

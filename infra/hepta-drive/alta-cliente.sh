@@ -7,6 +7,7 @@
 #   hepta-drive-alta crear    <slug> [opciones]     alta completa. Se puede repetir: lo que ya está, lo saltea
 #   hepta-drive-alta verificar <slug>               comprueba que la instancia responde
 #   hepta-drive-alta estado   [slug]                qué hay hoy (JSON, una línea por cliente)
+#   hepta-drive-alta aplicar-plantilla [slug]       lleva un cambio de la plantilla a las instancias existentes
 #   hepta-drive-alta secretos <slug>                entrega UNA vez los secretos del alta (CSV para KeePass) y los borra
 #   hepta-drive-alta baja     <slug> --confirmar <slug>   apaga y archiva en /srv/nextcloud/_bajas (no borra datos)
 #
@@ -188,7 +189,7 @@ crear() {
 
   paso "Esperando que Nextcloud termine de instalarse"
   for i in $(seq 1 90); do
-    occ "$c" status 2>/dev/null | grep -q 'installed: true' && break
+    grep -q 'installed: true' <<<"$(occ "$c" status 2>/dev/null)" && break
     [ "$i" = 90 ] && morir "Nextcloud no terminó de instalarse en 15 minutos (ver: docker logs $c-app-1)"
     sleep 10
   done
@@ -204,7 +205,7 @@ crear() {
   occ "$c" config:system:set upgrade.disable-web --type boolean --value true >/dev/null
   occ "$c" config:system:set trusted_domains 10 --value "$c-app-1" >/dev/null      # OnlyOffice entra por la red interna
   # El router hace de origen para las visitas desde la LAN (hairpin): no contarlas como ataque
-  occ "$c" config:app:set bruteForce whitelist_0 --value 192.168.10.250 >/dev/null 2>&1
+  occ "$c" config:app:set bruteForce whitelist_0 --value 192.168.10.250/32 >/dev/null 2>&1
   # Enlaces públicos: contraseña propuesta por defecto y vencimiento obligatorio a 30 días
   occ "$c" config:app:set core shareapi_enable_link_password_by_default --value yes >/dev/null
   occ "$c" config:app:set core shareapi_default_expire_date --value yes >/dev/null
@@ -227,7 +228,7 @@ crear() {
   paso "Aplicaciones"
   local app
   for app in onlyoffice files_antivirus groupfolders mail; do
-    occ "$c" app:list --enabled 2>/dev/null | grep -q "^  - $app:" && continue
+    grep -q "^  - $app:" <<<"$(occ "$c" app:list --enabled 2>/dev/null)" && continue
     occ "$c" app:install "$app" >>"$VAR/clientes/$c.log" 2>&1 || occ "$c" app:enable "$app" >>"$VAR/clientes/$c.log" 2>&1 \
       || morir "no pude instalar la aplicación $app (ver $VAR/clientes/$c.log)"
   done
@@ -241,8 +242,8 @@ crear() {
 
   paso "Usuarios"
   local uid creados=0 invitar=""
-  occ "$c" user:add --help 2>/dev/null | grep -q -- '--generate-password' && invitar=si
-  occ "$c" group:list 2>/dev/null | grep -q "^  - $c:" || occ "$c" group:add "$c" >/dev/null
+  grep -q -- '--generate-password' <<<"$(occ "$c" user:add --help 2>/dev/null)" && invitar=si
+  grep -q "^  - $c:" <<<"$(occ "$c" group:list 2>/dev/null)" || occ "$c" group:add "$c" >/dev/null
   for i in "${!U_CORREO[@]}"; do
     uid="${U_CORREO[i]}"
     if ! occ "$c" user:info "$uid" >/dev/null 2>&1; then
@@ -308,8 +309,32 @@ verificar() {
   puerto="$(de_env "$DIR/.env" APP_PORT)"; fq="$(de_env "$DIR/.env" FQDN)"
   salida="$(curl -s -m 10 -H "Host: $fq" -H "X-Forwarded-Proto: https" "http://$IP_VM:$puerto/status.php")" || { echo "no responde en $IP_VM:$puerto" >&2; return 1; }
   grep -q '"installed":true' <<<"$salida" && grep -q '"maintenance":false' <<<"$salida" || { echo "status.php: $salida" >&2; return 1; }
-  occ "$SLUG" twofactorauth:enforce 2>/dev/null | grep -qi 'is enforced' || { echo "el doble factor no quedó obligatorio" >&2; return 1; }
+  grep -qi 'is enforced' <<<"$(occ "$SLUG" twofactorauth:enforce 2>/dev/null)" || { echo "el doble factor no quedó obligatorio" >&2; return 1; }
+  # Las tareas de fondo corren en el contenedor cron: tienen que llegar a OnlyOffice y al antivirus
+  [ "$($DOCKER exec "$SLUG-cron-1" curl -s -m 8 http://onlyoffice/healthcheck 2>/dev/null)" = true ] \
+    || { echo "el contenedor de tareas de fondo no llega a OnlyOffice" >&2; return 1; }
+  $DOCKER exec "$SLUG-cron-1" bash -c 'exec 3<>/dev/tcp/clamav/3310' 2>/dev/null \
+    || { echo "el contenedor de tareas de fondo no llega al antivirus" >&2; return 1; }
+  # La verificación propia de OnlyOffice (también limpia un error viejo guardado)
+  grep -qi 'error' <<<"$(occ "$SLUG" onlyoffice:documentserver --check 2>&1)" \
+    && { echo "OnlyOffice: $(occ "$SLUG" onlyoffice:documentserver --check 2>&1 | head -2 | tr '\n' ' ')" >&2; return 1; }
   return 0
+}
+
+# ── aplicar-plantilla: lleva un cambio de la plantilla a las instancias que ya existen ──
+aplicar_plantilla() {
+  local d c
+  [ -f "$BASE/plantilla/compose.yaml" ] || morir "falta la plantilla"
+  for d in "$BASE"/clientes/*/; do
+    [ -f "$d/.env" ] || continue
+    c="$(basename "$d")"; [ -n "$SLUG" ] && [ "$c" != "$SLUG" ] && continue
+    if cmp -s "$BASE/plantilla/compose.yaml" "$d/compose.yaml"; then aviso "$c: ya está al día"; continue; fi
+    cp -p "$d/compose.yaml" "$d/compose.yaml.antes-$(date +%Y%m%d_%H%M)"
+    install -m 644 "$BASE/plantilla/compose.yaml" "$d/compose.yaml"
+    # Solo se recrean los contenedores cuya definición cambió
+    ( cd "$d" && $DOCKER compose up -d ) 2>&1 | grep -E "Recreat|Started|Running|rror" | sed "s/^/   /"
+    aviso "$c: plantilla aplicada (la anterior quedó guardada al lado)"
+  done
 }
 
 estado() {
@@ -354,8 +379,9 @@ case "$ACCION" in
   validar)  necesita_slug; leer_usuarios; validar ;;
   crear)    necesita_slug; leer_usuarios; crear ;;
   verificar) necesita_slug; verificar && echo "OK: $SLUG responde y tiene el doble factor obligatorio" ;;
+  aplicar-plantilla) [ -z "$SLUG" ] || slug_ok "$SLUG" || morir "nombre inválido"; aplicar_plantilla ;;
   estado)   [ -z "$SLUG" ] || slug_ok "$SLUG" || morir "nombre inválido"; estado ;;
   secretos) necesita_slug; secretos ;;
   baja)     necesita_slug; baja ;;
-  *) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
