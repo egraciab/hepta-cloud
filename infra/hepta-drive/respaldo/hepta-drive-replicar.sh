@@ -96,6 +96,9 @@ done
 # Un cliente con Nextcloud y sin respaldo configurado
 SIN="$(en "$VM" cat /var/lib/hepta-drive-respaldo/sin-respaldo.txt 2>/dev/null | tr '\n' ' ' | sed 's/ *$//')"
 [ -z "$SIN" ] || alerta "en $VM hay clientes SIN respaldo configurado: $SIN"
+# Un cliente nuevo que hepta-drive-enrolar todavía no pudo dar de alta en el servidor de respaldos
+PEND="$(en "$VM" sh -c 'ls -1 /var/lib/hepta-drive/respaldo-pendiente 2>/dev/null' 2>/dev/null | tr '\n' ' ' | sed 's/ *$//')"
+[ -z "$PEND" ] || alerta "en $VM hay clientes con el alta del respaldo PENDIENTE: $PEND (ver /var/log/hepta-drive-enrolar.log)"
 
 [ "$SOLO_VER" = 1 ] && exit 0
 if [ "${#ALERTAS[@]}" -gt 0 ]; then

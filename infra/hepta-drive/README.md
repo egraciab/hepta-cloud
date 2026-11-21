@@ -3,10 +3,9 @@
 VM `hepta-drive` (10.10.50.220, DMZ). Un Nextcloud por cliente, con OnlyOffice y ClamAV compartidos. Todo el estado de
 un cliente vive en `/srv/nextcloud/<cliente>/` (`html/`, `data/`, `db/`), en el volumen de datos `hepta-drive-data`.
 
-> **Estado al 2026-11-19 (noche):** servidor de respaldos instalado (`hepta-respaldo`, 10.10.10.20), primera copia de
-> `hepta` hecha y **prueba de restauración OK** (archivos sin diferencias; base restaurada con sus roles y vuelta a
-> volcar). Copia nocturna y mantenimiento programados, **todavía no vistos correr solos**. Réplica al NAS y a Drive:
-> escrita y probada en un entorno local, falta instalarla en `hcsvrnd01`.
+> **Estado al 2026-11-21:** respaldo completo y visto correr solo (copia, mantenimiento, réplica al NAS y a Drive).
+> Alta de cliente por script (`hepta-drive-alta`) probada en la VM con un cliente de prueba. El alta del respaldo de
+> un cliente nuevo la hace sola `hepta-drive-enrolar`, desde `hcsvrnd01`.
 
 ## Qué hay acá
 
@@ -20,6 +19,9 @@ un cliente vive en `/srv/nextcloud/<cliente>/` (`html/`, `data/`, `db/`), en el 
 | `respaldo/instalar-vm.sh` | VM `hepta-drive` | Instala el script, el certificado del servidor y prueba que llegue |
 | `respaldo/hepta-drive-prueba-restauracion.sh` | VM `hepta-drive` | Baja una copia, la compara con producción y restaura la base en un Postgres temporal |
 | `respaldo/hepta-drive-replicar.sh` | `hcsvrnd01` | Copia los repositorios verificados al NAS (`/mnt/nas/hepta-drive-repos`) y comprueba cada archivo |
+| `respaldo/hepta-drive-enrolar.sh` | `hcsvrnd01` | Cada 10 min: crea en el servidor de respaldos el repositorio de un cliente nuevo, hace la primera copia y la verifica |
+| `alta-cliente.sh` | VM `hepta-drive` (`hepta-drive-alta`) | Alta, verificación, estado y baja de un cliente |
+| `../../tools/drive_vhost_add.sh` | NGINX perimetral | Vhost `<cliente>.drive.hepta.com.py` |
 | `../backup/conf/hepta-drive.conf` | `/etc/hepta-backup.conf` de la VM | Configuración y volcados cada 6 h, como las demás VM |
 
 Los `.env` no se versionan: `env.ejemplo` tiene solo los nombres. Los valores nacen en KeePass.
@@ -55,6 +57,7 @@ Los `.env` no se versionan: `env.ejemplo` tiene solo los nombres. Los valores na
 | 09:00 (06:00) | `hepta-respaldo` | `hepta-respaldo-repos mantener`: depuración 14/8/6 y verificación |
 | 10:00 (07:00) | `hcsvrnd01` | `hepta-drive-replicar`: réplica al NAS |
 | 11:00 (08:00) | `hcsvrnd01` | `hepta-backup-drive.sh repos`: réplica a Google Drive |
+| cada 10 min | `hcsvrnd01` | `hepta-drive-enrolar`: alta del respaldo de los clientes nuevos (no hace nada si no hay) |
 | cada 6 h, :17 | VM `hepta-drive` | `hepta-backup.sh`: configuración y volcados, que el retiro lleva al NAS |
 
 ## Restaurar
@@ -70,7 +73,8 @@ Los `.env` no se versionan: `env.ejemplo` tiene solo los nombres. Los valores na
 ## Pendiente
 
 - [x] Servidor de respaldos, primera copia y prueba de restauración de `hepta` (2026-11-19).
-- [ ] Ver correr solos la copia de las 02:00 y el mantenimiento de las 06:00.
-- [ ] Instalar la réplica al NAS y a Drive en `hcsvrnd01` y verla correr.
+- [x] Copia, mantenimiento y réplicas vistos correr solos (2026-11-20).
+- [x] `alta-cliente.sh` y vhost, probados con un cliente de prueba (2026-11-20).
+- [ ] `hepta-drive-enrolar`: instalar en `hcsvrnd01` y verlo dar de alta solo a un cliente de prueba.
+- [ ] Probar la baja. Runbook de alta.
 - [ ] Medir con la carga real del primer cliente (200 GB): primera copia, incremental y réplica.
-- [ ] `alta-cliente.sh`, plantilla del vhost y runbook de alta.
