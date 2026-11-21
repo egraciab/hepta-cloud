@@ -23,16 +23,18 @@ Después: `curl -s -o /dev/null -w '%{http_code}\n' https://cloud.hepta.com.py/a
 backend/server.js            # arranque, CORS, rate limit, montaje de rutas (el orden importa)
 backend/middleware/auth.js   # JWT Bearer: requireAuth, requireAdmin (admin|godmode), requireGodmode
 backend/routes/              # admin, admin_mail, auth, clients, credentials, leads, payments, portal,
-                             # portal_mail, provision, public, public_mail; retopa.js es un helper, no un router
+                             # portal_mail, provision, drive, public, public_mail; retopa.js es un helper, no un router
 backend/config/              # db, odoo (XML-RPC), credenciales, secretos (AES-256-GCM), site_config_publico,
                              # credenciales_alta (texto del correo de bienvenida; la clave inicial no se guarda)
 infra/                       # copia de la API perimetral y dónde vive lo demás (API y script de alta)
 backend/services/alta.js     # alta de un tenant en segundo plano (trabajos en memoria) y correo de bienvenida;
                              # la usan el alta manual (provision.routes) y la confirmación de pago (payments.routes)
 backend/services/adicionales.js  # instalar un módulo adicional (rubro) en una instancia, en segundo plano
+backend/services/drive.js    # HEPTA Drive: pide el alta al agente de la VM hepta-drive y sigue el trabajo (provisioning_jobs)
 backend/services/mailcow/    # cliente de mailcow, DNS y Cloudflare para el servicio de correo
+infra/hepta-drive/           # todo lo de la VM hepta-drive: script de alta, agente (API con TLS), marca, respaldo. Ver su README
 infra/backup/                # respaldos por VM: hepta-backup.sh, configuración de cada VM y retiro al NAS
-backend/scripts/             # import_mail, provision_mail, avisar_credenciales (se corren a mano)
+backend/scripts/             # import_mail, provision_mail, avisar_credenciales, drive_configurar, drive_comprobar (a mano)
 sql/, backend/migrate_*.sql, migracion_*.sql   # migraciones (se aplican a mano; no editar las ya aplicadas)
 tools/webmail_add.sh         # alta de un webmail de cliente en el nginx perimetral
 utils/old/                   # parches históricos (patch_*.py): solo referencia, no se ejecutan
@@ -45,6 +47,7 @@ utils/old/                   # parches históricos (patch_*.py): solo referencia
 | Alta/suspensión de tenants Odoo | `hepta-provision` en `HGSVRLNX104:8888` (lee `PROVISION_API_KEY` de su `.env`) | `provision_api_url`, `provision_api_key` |
 | Vhosts y certificados del perimetral | `hepta-perimetral` en `dkr-hgsvrlnx003:8888` (`PERIMETRAL_API_KEY`) | `perimetral_api_url`, `perimetral_api_key` |
 | RetoPA (usuario y ficha del cliente) | API interna de RetoPA (`INTERNAL_API_KEY`), cabecera `X-Internal-Key` | `retopa_api_url`, `retopa_api_key`, `retopa_enabled`, `retopa_auto_list` |
+| HEPTA Drive (Nextcloud por cliente) | agente en la VM `hepta-drive`, `10.10.50.220:8888`, **con TLS** y certificado propio | `drive_api_url`, `drive_api_key`, `drive_api_cert` (se cargan con `scripts/drive_configurar.js`) |
 | Correo saliente | mailcow | `smtp_*` |
 
 En el `.env`: `DB_*`, `JWT_SECRET`, `HEPTA_SECRET_KEY` (cifra las credenciales de integración), `CLOUDFLARE_API_TOKEN`, `ODOO_*`.
@@ -62,8 +65,10 @@ En el `.env`: `DB_*`, `JWT_SECRET`, `HEPTA_SECRET_KEY` (cifra las credenciales d
 - **`/api/site-config` es público.** Solo entrega claves que no son sensibles según
   `backend/config/site_config_publico.js`. Una clave nueva con una credencial tiene que terminar en `_key`,
   `_token`, `_pass`, `_password` o `_secret`, o empezar con un prefijo interno (`smtp_`, `provision_`,
-  `perimetral_`, `cloudflare_`, `odoo_`, `mailcow_`, `retopa_api_`). Hasta el 2026-11-12 este endpoint devolvía
+  `perimetral_`, `cloudflare_`, `odoo_`, `mailcow_`, `drive_`, `retopa_api_`). Hasta el 2026-11-12 este endpoint devolvía
   la tabla entera (incidente; las cuatro claves expuestas se rotaron ese día).
+- **Secretos de un alta de HEPTA Drive:** viven en la VM hasta que se bajan a KeePass (Admin → HEPTA Drive → *Bajar*, solo
+  godmode). No se guardan en la base ni en `admin_logs`; solo queda quién los bajó y cuándo.
 - **Frontera de licencia:** los clientes van al Odoo 19 CE multi-tenant; el ERP Enterprise del grupo nunca aloja
   bases de clientes.
 - **Producción:** cambio con respaldo antes (`pg_dump` de `heptacloud`) y verificación después. Sin adivinar
@@ -133,3 +138,9 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
   (`sql/2026-11-18_modulos_adicionales.sql`, con Boutique y Belleza y SPA a precio "A definir"), lista y edición en
   Admin → Planes, botón **Módulos** en cada instancia (instala en segundo plano con la API de alta 1.3.0,
   `POST /install-module`, solo `hepta_rubro_*` y plan Crecimiento o superior).
+- 2026-11-21 — **HEPTA Drive en el Admin**: alta de un Nextcloud por cliente desde Admin → HEPTA Drive (valida, crea en
+  segundo plano, muestra el avance, baja el paquete de secretos a KeePass). Tablas `client_services` y `provisioning_jobs`
+  (`sql/2026-11-21_hepta_drive.sql`). El trabajo lo hace el agente de la VM (`infra/hepta-drive/agente`), que termina en el
+  script `hepta-drive-alta`; el respaldo del cliente nuevo lo enrola solo `hcsvrnd01`. La pantalla va en su propio
+  archivo (`frontend/public/admin/drive.js`). Falta: que el vhost lo cree el Admin (hoy es un comando), logo del
+  cliente desde la pantalla, baja y suspensión.

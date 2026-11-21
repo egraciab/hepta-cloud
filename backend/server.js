@@ -46,6 +46,7 @@ app.use('/api/portal', portalRoutes);
 app.use('/api/leads',  leadsRoutes);
 app.use('/api/admin',     adminRoutes);
 app.use('/api/admin/provision', provisionRoutes);
+app.use('/api/admin/drive', require('./routes/drive.routes'));   // HEPTA Drive (Nextcloud por cliente)
 app.use('/api', paymentsRoutes);
 app.use('/api',        publicRoutes);
 
@@ -97,6 +98,9 @@ app.get('/admin/*', (req, res) =>
 app.get('*', (req, res) =>
   res.sendFile(path.join(FRONTEND, 'public', 'index.html'),
     err => { if (err) res.status(404).send('Not found'); }));
+
+// Altas de HEPTA Drive que quedaron abiertas si el backend se reinició: se retoman solas
+require('./services/drive').reanudar().catch(() => {});
 
 app.listen(PORT, () => {
   console.log(`[Hepta Cloud] Servidor corriendo en puerto ${PORT}`);
