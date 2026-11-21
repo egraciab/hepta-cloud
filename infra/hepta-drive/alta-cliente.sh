@@ -8,7 +8,8 @@
 #   hepta-drive-alta verificar <slug>               comprueba que la instancia responde
 #   hepta-drive-alta estado   [slug]                qué hay hoy (JSON, una línea por cliente)
 #   hepta-drive-alta aplicar-plantilla [slug]       lleva un cambio de la plantilla a las instancias existentes
-#   hepta-drive-alta secretos <slug>                entrega UNA vez los secretos del alta (CSV para KeePass) y los borra
+#   hepta-drive-alta secretos <slug>                entrega los secretos del alta (CSV para KeePass)
+#   hepta-drive-alta secretos <slug> --guardado     los borra de la VM, cuando ya están en KeePass
 #   hepta-drive-alta baja     <slug> --confirmar <slug>   apaga y archiva en /srv/nextcloud/_bajas (no borra datos)
 #
 # Opciones de validar y crear:
@@ -21,7 +22,7 @@
 # que pongan la suya. Si el cliente también tiene correo con HEPTA, primero se crean las casillas.
 #
 # Secretos: los genera este script y quedan en la VM (.env de la instancia y acceso al respaldo). Una copia para
-# KeePass queda en /var/lib/hepta-drive/secretos/<slug>.csv (600) hasta que se entrega con "secretos".
+# KeePass queda en /var/lib/hepta-drive/secretos/<slug>.csv (600) hasta que se confirma con "secretos <slug> --guardado".
 # Nada de esto se muestra en pantalla ni va al log.
 set -uo pipefail
 
@@ -53,7 +54,7 @@ occ_s() { occ "$@" >/dev/null 2>&1; }
 # ── Argumentos ──
 ACCION="${1:-}"; SLUG="${2:-}"
 [ $# -ge 1 ] && shift; [ $# -ge 1 ] && shift
-USUARIOS=""; CUOTA_GB=5; EQUIPO_GB=0; FQDN=""; CONFIRMAR=""
+USUARIOS=""; CUOTA_GB=5; EQUIPO_GB=0; FQDN=""; CONFIRMAR=""; GUARDADO=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --usuarios) USUARIOS="${2:-}"; shift 2 ;;
@@ -61,6 +62,7 @@ while [ $# -gt 0 ]; do
     --equipo-gb) EQUIPO_GB="${2:-}"; shift 2 ;;
     --fqdn) FQDN="${2:-}"; shift 2 ;;
     --confirmar) CONFIRMAR="${2:-}"; shift 2 ;;
+    --guardado) GUARDADO=1; shift ;;
     *) morir "opción desconocida: $1" ;;
   esac
 done
@@ -174,9 +176,9 @@ crear() {
         "$FQDN" "$puerto" "$(de_env "$BASE/clientes/hepta/.env" NC_TAG || echo 34-apache)" "$RAIZ" "$ADMIN_TECNICO" "$k_admin" "$k_db" "$k_redis" > "$DIR/.env"
       # Copia para KeePass (formato CSV de KeePass: Grupo,Título,Usuario,Contraseña,URL,Notas)
       { echo '"Group","Title","Username","Password","URL","Notes"'
-        printf '"Hepta Drive","hepta-drive / %s / admin Nextcloud","%s","%s","https://%s","Administrador técnico de HEPTA. El cliente no lo usa."\n' "$c" "$ADMIN_TECNICO" "$k_admin" "$FQDN"
-        printf '"Hepta Drive","hepta-drive / %s / Postgres","nextcloud","%s","",""\n' "$c" "$k_db"
-        printf '"Hepta Drive","hepta-drive / %s / Redis","","%s","",""\n' "$c" "$k_redis"
+        printf '"Clientes Hepta Cloud/%s","Drive · admin Nextcloud","%s","%s","https://%s","Administrador técnico de HEPTA. El cliente no lo usa."\n' "$c" "$ADMIN_TECNICO" "$k_admin" "$FQDN"
+        printf '"Clientes Hepta Cloud/%s","Drive · Postgres","nextcloud","%s","",""\n' "$c" "$k_db"
+        printf '"Clientes Hepta Cloud/%s","Drive · Redis","","%s","",""\n' "$c" "$k_redis"
       } > "$VAR/secretos/$c.csv" )
     unset k_admin k_db k_redis
   else
@@ -255,7 +257,7 @@ crear() {
         local k_u; k_u="$(clave 20)"
         $DOCKER exec -u www-data -e OC_PASS="$k_u" "$c-app-1" php occ user:add --password-from-env --email "$uid" \
           --display-name "${U_NOMBRE[i]}" --group "$c" "$uid" >>"$VAR/clientes/$c.log" 2>&1 || morir "no pude crear el usuario $uid"
-        ( umask 077; printf '"Hepta Drive","hepta-drive / %s / usuario %s","%s","%s","https://%s","Contraseña inicial: el usuario debe cambiarla."\n' "$c" "$uid" "$uid" "$k_u" "$FQDN" >> "$VAR/secretos/$c.csv" )
+        ( umask 077; printf '"Clientes Hepta Cloud/%s","Drive · usuario %s","%s","%s","https://%s","Contraseña inicial: el usuario debe cambiarla."\n' "$c" "$uid" "$uid" "$k_u" "$FQDN" >> "$VAR/secretos/$c.csv" )
         unset k_u
       fi
       creados=$((creados + 1))
@@ -287,8 +289,8 @@ crear() {
     install -d -m 700 "$CONF_RESPALDO" "$VAR/respaldo-pendiente"
     ( umask 077
       printf "REST_CLAVE='%s'\nRESTIC_PASSWORD='%s'\n" "$k1" "$k2" > "$CONF_RESPALDO/$c.env"
-      printf '"Hepta Drive","HEPTA Drive respaldo – %s – acceso","%s","%s","","Usuario del servidor de respaldos."\n' "$c" "$c" "$k1" >> "$VAR/secretos/$c.csv"
-      printf '"Hepta Drive","HEPTA Drive respaldo – %s – repositorio","","%s","","CRÍTICA: sin esta contraseña las copias de este cliente no se pueden leer."\n' "$c" "$k2" >> "$VAR/secretos/$c.csv" )
+      printf '"Clientes Hepta Cloud/%s","Drive · respaldo, acceso","%s","%s","","Usuario del servidor de respaldos (10.10.10.20)."\n' "$c" "$c" "$k1" >> "$VAR/secretos/$c.csv"
+      printf '"Clientes Hepta Cloud/%s","Drive · respaldo, repositorio (CRÍTICA)","","%s","","CRÍTICA: sin esta contraseña las copias de este cliente no se pueden leer."\n' "$c" "$k2" >> "$VAR/secretos/$c.csv" )
     unset k1 k2
     date -Is > "$VAR/respaldo-pendiente/$c"
   fi
@@ -356,7 +358,14 @@ estado() {
 secretos() {
   local f="$VAR/secretos/$SLUG.csv"
   [ -f "$f" ] || morir "no hay secretos pendientes de $SLUG (ya se entregaron, o el cliente no existe)"
-  cat "$f" && : > "$f" && unlink "$f"
+  if [ "$GUARDADO" = 1 ]; then
+    : > "$f" && unlink "$f" && aviso "Secretos de $SLUG borrados de la VM."
+    return
+  fi
+  # Con encabezado, para el importador CSV genérico de KeePass. No se borra acá: recién con --guardado,
+  # cuando ya están en KeePass (la contraseña del repositorio de copias no se puede volver a generar).
+  echo '"Group","Title","User Name","Password","URL","Notes"'
+  cat "$f"
 }
 
 baja() {
