@@ -96,6 +96,17 @@ done
 # Un cliente con Nextcloud y sin respaldo configurado
 SIN="$(en "$VM" cat /var/lib/hepta-drive-respaldo/sin-respaldo.txt 2>/dev/null | tr '\n' ' ' | sed 's/ *$//')"
 [ -z "$SIN" ] || alerta "en $VM hay clientes SIN respaldo configurado: $SIN"
+# La copia nocturna de cada cliente, tal como la anotó la VM. Sin esto, la copia fallida de un cliente que no tiene
+# repositorio en el servidor no la veía nadie (pasó con el cliente de prueba el 21-nov).
+for c in $(en "$VM" sh -c 'ls -1 /opt/hepta-drive/clientes 2>/dev/null' 2>/dev/null | grep -E '^[a-z][a-z0-9-]*$'); do
+  j="$(en "$VM" cat "/var/lib/hepta-drive-respaldo/$c.json" 2>/dev/null | head -1)"
+  if [ -z "$j" ]; then alerta "$c: la VM todavía no hizo ninguna copia de este cliente"; continue; fi
+  if [ "$(campo "$j" ok)" != true ]; then
+    alerta "$c: la última copia en la VM FALLÓ ($(campo "$j" fin)): $(grep -o '"errores":.*' <<<"$j" | cut -c1-200)"; continue
+  fi
+  edad=$(( (AHORA - $(date -d "$(campo "$j" fin)" +%s 2>/dev/null || echo 0)) / 3600 ))
+  [ "$edad" -lt "$MAX_HORAS" ] || alerta "$c: la última copia buena en la VM es de hace $edad h"
+done
 # Un cliente nuevo que hepta-drive-enrolar todavía no pudo dar de alta en el servidor de respaldos
 PEND="$(en "$VM" sh -c 'ls -1 /var/lib/hepta-drive/respaldo-pendiente 2>/dev/null' 2>/dev/null | tr '\n' ' ' | sed 's/ *$//')"
 [ -z "$PEND" ] || alerta "en $VM hay clientes con el alta del respaldo PENDIENTE: $PEND (ver /var/log/hepta-drive-enrolar.log)"
