@@ -362,9 +362,8 @@ secretos() {
     : > "$f" && unlink "$f" && aviso "Secretos de $SLUG borrados de la VM."
     return
   fi
-  # Con encabezado, para el importador CSV genérico de KeePass. No se borra acá: recién con --guardado,
+  # El archivo ya nace con su fila de encabezado, para el importador CSV genérico de KeePass. No se borra acá: recién con --guardado,
   # cuando ya están en KeePass (la contraseña del repositorio de copias no se puede volver a generar).
-  echo '"Group","Title","User Name","Password","URL","Notes"'
   cat "$f"
 }
 
