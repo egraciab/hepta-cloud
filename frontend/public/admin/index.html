@@ -135,23 +135,24 @@
       <div class="logo-text">HEPTA <span>CLOUD</span></div>
     </div>
     <nav class="sidebar-menu">
-      <div class="menu-item active" onclick="showSection('dashboard',this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dashboard</div>
-      <div class="menu-group">Sitio</div>
-      <div class="menu-item" onclick="showSection('general',this)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>Configuración general</div>
-      <div class="menu-item" onclick="showSection('services',this)"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Servicios y soluciones</div>
-      <div class="menu-item" onclick="showSection('plans',this)"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>Planes</div>
-      <div class="menu-group">Comunicación</div>
-      <div class="menu-item" onclick="showSection('smtp',this)"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>SMTP y plantillas</div>
-      <div class="menu-group">CRM</div>
-      <div class="menu-item" onclick="showSection('payments',this)"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Solicitudes de pago <span id="payments-badge" style="background:#EF4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:auto;display:none">0</span></div>
-      <div class="menu-item" onclick="showSection('leads',this)"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Leads</div>
-      <div class="menu-item" onclick="showSection('pages',this)"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Páginas legales</div>
-      <div class="menu-group">Portal</div>
-      <div class="menu-item" onclick="showSection('instances',this)"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Instancias</div>
+      <div class="menu-item active" onclick="showSection('dashboard',this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Panel</div>
+      <!-- Servicios: lo que HEPTA Cloud opera para sus clientes. HEPTA Drive y HEPTA Mail se suman solos debajo de HEPTA ERP -->
+      <div class="menu-group">Servicios</div>
+      <div class="menu-item" onclick="showSection('instances',this)"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>HEPTA ERP</div>
+      <div class="menu-group">Clientes</div>
       <div class="menu-item" onclick="showSection('clients',this)"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4"/><path d="M9 11h.01M15 11h.01"/></svg>Clientes</div>
-      <div class="menu-item" onclick="showSection('users',this)"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Usuarios</div>
-      <div class="menu-group">Integración</div>
-      <div class="menu-item" onclick="showSection('credentials',this)"><svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>Credenciales <span id="cred-badge" style="background:#EF4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:auto;display:none">0</span></div>
+      <div class="menu-item" onclick="showSection('users',this)"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Usuarios y accesos</div>
+      <div class="menu-group">Ventas</div>
+      <div class="menu-item" onclick="showSection('leads',this)"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Leads</div>
+      <div class="menu-item" onclick="showSection('payments',this)"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Solicitudes de pago <span id="payments-badge" style="background:#EF4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:auto;display:none">0</span></div>
+      <div class="menu-group">Sitio web</div>
+      <div class="menu-item" onclick="showSection('general',this)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>Configuración general</div>
+      <div class="menu-item" onclick="showSection('services',this)"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Contenido del sitio</div>
+      <div class="menu-item" onclick="showSection('plans',this)"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>Planes</div>
+      <div class="menu-item" onclick="showSection('pages',this)"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Páginas legales</div>
+      <div class="menu-group">Sistema</div>
+      <div class="menu-item" onclick="showSection('smtp',this)"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Correo saliente</div>
+      <div class="menu-item" onclick="showSection('credentials',this)"><svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>Integraciones <span id="cred-badge" style="background:#EF4444;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:auto;display:none">0</span></div>
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-user">
@@ -1158,7 +1159,7 @@ async function showApp(){
 }
 
 // ── NAV ────────────────────────────────────────────────────
-const sectionTitles={dashboard:'Dashboard',payments:'Solicitudes de pago',general:'Configuración general',services:'Servicios y soluciones',plans:'Planes',smtp:'SMTP y plantillas',leads:'Leads',instances:'Instancias',pages:'Páginas legales',users:'Usuarios del portal',clients:'Clientes (entidades fiscales)',credentials:'Credenciales de integración'};
+const sectionTitles={dashboard:'Panel',payments:'Solicitudes de pago',general:'Configuración general',services:'Contenido del sitio',plans:'Planes',smtp:'Correo saliente y plantillas',leads:'Leads',instances:'HEPTA ERP',pages:'Páginas legales',users:'Usuarios y accesos',clients:'Clientes',credentials:'Integraciones'};
 const sectionLoaders={dashboard:loadDashboard,payments:loadPayments,general:loadGeneral,services:loadServices,plans:loadPlans,smtp:loadSMTP,leads:loadLeads,instances:loadInstances,pages:loadPages,users:loadUsers,clients:loadClients,credentials:loadCredentials};
 function showSection(name,el){
   cerrarAvisoCarga();
