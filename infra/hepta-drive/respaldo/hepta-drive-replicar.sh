@@ -84,7 +84,9 @@ for c in $CLIENTES; do
   done < "$LISTA"
   if [ "$malos" -gt 0 ]; then alerta "$c: $malos archivo/s copiados al NAS no coinciden con su suma"; continue; fi
   # Segunda pasada en seco: no tiene que quedar nada por copiar ni por borrar
-  RESTO="$(rsync -rtn --size-only --delete --out-format='%i %n' -e "$PUENTE" "x:$RAIZ/$c/" "$DESTINO/$c/" 2>&1 | grep -v '/$' | grep -v ' locks/')"
+  # (las líneas que empiezan con punto son solo diferencias de fecha: el NAS no deja cambiarle la fecha a los archivos
+  #  de solo lectura de restic, como config y keys/*; el contenido es el mismo y ya se verificó por tamaño y por suma)
+  RESTO="$(rsync -rtn --size-only --delete --out-format='%i %n' -e "$PUENTE" "x:$RAIZ/$c/" "$DESTINO/$c/" 2>&1 | grep -v '/$' | grep -v ' locks/' | grep -v '^\.')"
   if [ -n "$RESTO" ]; then
     aviso "   Diferencias que quedaron ($(wc -l <<<"$RESTO")):"; head -5 <<<"$RESTO" | sed 's/^/     /'
     alerta "$c: la réplica del NAS no quedó igual al original ($(wc -l <<<"$RESTO") diferencia/s; la primera: $(head -1 <<<"$RESTO" | cut -c1-80))"; continue
