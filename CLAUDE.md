@@ -149,7 +149,8 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
   Hepta Cloud y en `<cliente>.drive.hepta.com.py`; el logo del cliente es solo a pedido y por consola (`--logo`).
   El vhost lo crea solo al terminar el alta (API perimetral, `POST /drive-vhost`, que corre `drive_vhost_add.sh`); si falla,
   queda "sin publicar" con un botón para reintentar. Usuarios: barra de uso, quitar/devolver acceso y eliminar (godmode).
-  **Dominio propio** (botón Dominio): se suma al nombre de HEPTA, que sigue andando. Comprueba el CNAME, la instancia lo
+  **Dominio propio** (botón Dominio): se suma al nombre de HEPTA, que sigue andando. Si la zona está en la cuenta de Cloudflare
+  de HEPTA crea el CNAME solo (`CLOUDFLARE_API_TOKEN`, sin pisar registros existentes); si no, comprueba el del cliente. La instancia lo
   acepta, el NGINX saca el certificado por HTTP y crea el vhost (`POST /drive-dominio`), y al final pasa a ser la dirección
   de los enlaces (`compose.override.yaml` del cliente). Quitarlo es por consola (`dominio-quitar` y `--quitar-dominio`).
   Falta: baja y suspensión desde el Admin.

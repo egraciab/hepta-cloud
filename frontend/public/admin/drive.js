@@ -247,7 +247,7 @@
       <div class="modal-title" id="drive-d-title">Dominio propio</div>
       <div class="alert alert-error" id="drive-d-err"></div>
       <div style="font-size:13px;line-height:1.5;margin-bottom:14px">
-        <div style="margin-bottom:8px">El cliente (o quien maneje su dominio) tiene que crear antes este registro en su DNS:</div>
+        <div style="margin-bottom:8px">Si el dominio está en la cuenta de Cloudflare de HEPTA, este registro se crea solo al activar. Si no, lo tiene que crear antes el cliente (o quien maneje su dominio):</div>
         <pre id="drive-d-cname" style="background:var(--gray-100,#f3f4f6);padding:10px;border-radius:6px;font-size:12px;overflow-x:auto;margin:0 0 8px"></pre>
         <div class="text-muted">La dirección de HEPTA sigue funcionando siempre: las aplicaciones de escritorio y celular que ya están conectadas no se tocan. Los enlaces de los correos pasan a usar el dominio propio.</div>
       </div>

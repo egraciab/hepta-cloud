@@ -79,7 +79,7 @@ router.post('/:slug/publicar', async (req, res) => {
 router.post('/:slug/dominio', async (req, res) => {
   try {
     const data = await drive.dominioPropio(req.params.slug, req.body, req.user.id);
-    await logAction(req, 'drive_custom_domain', data.slug, { trabajo: data.trabajo, dominio: data.dominio });
+    await logAction(req, 'drive_custom_domain', data.slug, { trabajo: data.trabajo, dominio: data.dominio, dns: data.dns });
     res.status(202).json({ success: true, data });
   } catch (err) { fail(res, err, 'admin/drive/dominio'); }
 });

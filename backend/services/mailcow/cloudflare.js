@@ -110,4 +110,41 @@ async function applyDnsPlan(plan, { onlyRequired = false, dryRun = false } = {})
   return { zone_id: zoneId, results };
 }
 
-module.exports = { applyDnsPlan, getZoneId };
+/**
+ * Deja un CNAME (solo DNS, sin proxy) en la zona que corresponda, si esa zona está en esta cuenta de Cloudflare.
+ * No pisa nada: si ya hay un registro con ese nombre que apunta a otro lado, lo informa y no lo toca.
+ *
+ * @returns {{estado: 'creado'|'ya_estaba'|'sin_zona'|'sin_token', zona?: string}}
+ * @throws  si el nombre ya tiene otro registro, o si Cloudflare rechaza el pedido (por ejemplo, token sin permiso)
+ */
+async function asegurarCname(nombre, destino) {
+  if (!process.env.CLOUDFLARE_API_TOKEN) return { estado: 'sin_token' };
+  const partes = nombre.split('.');
+  let zona = null, zoneId = null;
+  // drive.cliente.com.py → se busca cliente.com.py y después com.py (nunca el nombre entero: un CNAME no va en la raíz)
+  for (let i = 1; i <= partes.length - 2 && !zoneId; i++) {
+    const candidata = partes.slice(i).join('.');
+    const zonas = await cf(`/zones?name=${encodeURIComponent(candidata)}&status=active`);
+    if (zonas && zonas.length) { zona = candidata; zoneId = zonas[0].id; }
+  }
+  if (!zoneId) return { estado: 'sin_zona' };
+
+  const existentes = await cf(`/zones/${zoneId}/dns_records?name=${encodeURIComponent(nombre)}&per_page=50`) || [];
+  const limpio = (h) => String(h || '').toLowerCase().replace(/\.$/, '');
+  if (existentes.length) {
+    const igual = existentes.length === 1 && existentes[0].type === 'CNAME' && limpio(existentes[0].content) === limpio(destino);
+    if (igual && !existentes[0].proxied) return { estado: 'ya_estaba', zona };
+    const err = new Error(igual
+      ? `${nombre} ya apunta bien en Cloudflare, pero con el proxy (nube naranja) activado: hay que dejarlo en "solo DNS"`
+      : `${nombre} ya tiene en Cloudflare un registro ${existentes.map((e) => e.type).join(', ')} que apunta a otro lado. No lo piso: hay que revisarlo a mano`);
+    err.status = 409;
+    throw err;
+  }
+  await cf(`/zones/${zoneId}/dns_records`, {
+    method: 'POST',
+    body: { type: 'CNAME', name: nombre, content: destino, ttl: 300, proxied: false, comment: 'HEPTA Drive: dominio propio (creado por HEPTA Cloud)' },
+  });
+  return { estado: 'creado', zona };
+}
+
+module.exports = { applyDnsPlan, getZoneId, asegurarCname };

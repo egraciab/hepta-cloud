@@ -13,6 +13,7 @@
 const https = require('https');
 const http  = require('http');
 const dns   = require('dns').promises;
+const cloudflare = require('./mailcow/cloudflare');
 const { URL } = require('url');
 const pool  = require('../config/db');
 
@@ -426,15 +427,22 @@ async function dominioPropio(slug, cuerpo, actorId) {
   const destino = `${s}.drive.hepta.com.py`;
   if (r.json.fqdn !== destino) throw new ErrorDrive(409, 'Esta instancia no nació con una dirección de HEPTA Drive: su dominio se maneja aparte');
   if (r.json.dominio && r.json.dominio !== dominio) throw new ErrorDrive(409, `Esta instancia ya tiene el dominio propio ${r.json.dominio}. Para cambiarlo, primero hay que quitarlo (por consola).`);
-  if (!(await apuntaAca(dominio, destino)))
-    throw new ErrorDrive(422, `${dominio} todavía no apunta a ${destino}. Hay que crear un registro CNAME y esperar a que se propague.`);
+  // Si el dominio está en la cuenta de Cloudflare de HEPTA, el CNAME se crea solo. Si no, lo crea el cliente y acá
+  // solo se comprueba que ya apunte.
+  let cf = { estado: 'sin_zona' };
+  try { cf = await cloudflare.asegurarCname(dominio, destino); }
+  catch (e) { throw new ErrorDrive(e.status === 409 ? 409 : 502, e.message); }
+  const dnsNuestro = cf.estado === 'creado' || cf.estado === 'ya_estaba';
+  if (!dnsNuestro && !(await apuntaAca(dominio, destino)))
+    throw new ErrorDrive(422, `${dominio} todavía no apunta a ${destino}. Ese dominio no está en la cuenta de Cloudflare de HEPTA: el registro CNAME lo tiene que crear el cliente, y hay que esperar a que se propague.`);
 
   const { rows: cs } = await pool.query(
     `INSERT INTO client_services (service, slug, fqdn, port, status, created_by) VALUES ('drive', $1, $2, $3, 'active', $4)
      ON CONFLICT (service, slug) DO UPDATE SET updated_at = NOW() RETURNING id`, [s, destino, r.json.puerto || null, actorId || null]);
   const { rows: j } = await pool.query(
     `INSERT INTO provisioning_jobs (client_service_id, action, status, step, actor_id)
-     VALUES ($1, 'custom_domain', 'running', 'Preparando la instancia', $2) RETURNING id`, [cs[0].id, actorId || null]);
+     VALUES ($1, 'custom_domain', 'running', $3, $2) RETURNING id`,
+    [cs[0].id, actorId || null, cf.estado === 'creado' ? 'Registro creado en Cloudflare; esperando que se propague' : 'Preparando la instancia']);
   const id = j[0].id;
   locales.add(id);
   const paso = t => pool.query("UPDATE provisioning_jobs SET step = $2 WHERE id = $1 AND status = 'running'", [id, t]);
@@ -444,6 +452,11 @@ async function dominioPropio(slug, cuerpo, actorId) {
   };
   (async () => {
     try {
+      if (dnsNuestro) {
+        // Recién creado puede tardar en verse desde acá. No frena: el que decide es el certificado, más abajo.
+        for (let i = 0; i < 18 && !(await apuntaAca(dominio, destino).catch(() => false)); i++) await new Promise(r => setTimeout(r, 10000));
+        await paso('Preparando la instancia');
+      }
       await agente('aceptar');
       await paso('Certificado y publicación en el NGINX');
       const v = await perimetral('POST', '/drive-dominio', { slug: s, dominio }, 180000);
@@ -459,7 +472,7 @@ async function dominioPropio(slug, cuerpo, actorId) {
       await cerrar(id, false, null, String(e.message || e).slice(0, 500)).catch(() => {});
     } finally { locales.delete(id); }
   })();
-  return { trabajo: id, slug: s, dominio };
+  return { trabajo: id, slug: s, dominio, dns: cf.estado };
 }
 
 // ── Sobre una instancia ──────────────────────────────────────
