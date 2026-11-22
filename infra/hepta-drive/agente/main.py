@@ -20,7 +20,9 @@ cuenta: cada pedido termina en /usr/local/sbin/hepta-drive-alta, el mismo script
   GET  /clientes/{slug}/secretos       paquete para KeePass (CSV). No se borra al leerlo
   POST /clientes/{slug}/secretos/guardado   lo borra de la VM, cuando ya está en KeePass
 
-A propósito NO hay baja por acá: se hace por consola.
+  POST /clientes/{slug}/suspension     suspende (modo mantenimiento) o reactiva
+  POST /clientes/{slug}/baja           apaga y archiva la instancia, con una última copia antes → 202 con un trabajo.
+                                       No borra datos: quedan archivados en la VM y en el servidor de respaldos.
 
 Seguridad: clave en la cabecera X-API-Key, filtro por IP de origen (ALLOWED_IPS) y TLS con certificado propio,
 porque por acá pasa el paquete de secretos. Los secretos no se escriben en el registro.
@@ -39,7 +41,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import APIKeyHeader
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 API_KEY = os.getenv("DRIVE_API_KEY", "")
 ALLOWED_IPS = {ip.strip() for ip in os.getenv("ALLOWED_IPS", "").split(",") if ip.strip()}
 ALTA = os.getenv("HD_ALTA", "/usr/local/sbin/hepta-drive-alta")
@@ -352,6 +354,34 @@ async def eliminar_usuario(slug: str, request: Request):
     if codigo != 0 or not lineas_json(salida):
         raise HTTPException(status_code=404, detail="no existe ese cliente")
     return lanzar("baja de usuario", slug, args, "")
+
+
+@app.post("/clientes/{slug}/suspension", dependencies=[Depends(con_clave)])
+async def suspension(slug: str, request: Request):
+    slug_valido(slug)
+    cuerpo = await cuerpo_json(request)
+    if not isinstance(cuerpo, dict) or not isinstance(cuerpo.get("suspendida"), bool):
+        raise HTTPException(status_code=422, detail="falta 'suspendida' (true o false)")
+    verbo = "suspender" if cuerpo["suspendida"] else "reactivar"
+    codigo, salida, error = correr([verbo, slug], timeout=90)
+    if codigo != 0:
+        raise HTTPException(status_code=409, detail=salida_de_error(error, salida))
+    log.info("%s %s", verbo, slug)
+    return {"ok": True, "slug": slug, "suspendida": cuerpo["suspendida"]}
+
+
+@app.post("/clientes/{slug}/baja", dependencies=[Depends(con_clave)], status_code=202)
+async def baja(slug: str, request: Request):
+    slug_valido(slug)
+    cuerpo = await cuerpo_json(request)
+    # Hay que repetir el nombre: una baja no puede salir de un pedido armado a medias
+    if not isinstance(cuerpo, dict) or cuerpo.get("confirmar") != slug:
+        raise HTTPException(status_code=422, detail="para dar de baja hay que repetir el nombre de la instancia en 'confirmar'")
+    codigo, salida, _ = correr(["estado", slug])
+    if codigo != 0 or not lineas_json(salida):
+        raise HTTPException(status_code=404, detail="no existe ese cliente")
+    args = ["baja", slug, "--confirmar", slug] + (["--sin-copia"] if cuerpo.get("sin_copia") is True else [])
+    return lanzar("baja", slug, args, "")
 
 
 DOMINIO_RE = re.compile(r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$")

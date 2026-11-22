@@ -98,6 +98,16 @@ done
 # Un cliente con Nextcloud y sin respaldo configurado
 SIN="$(en "$VM" cat /var/lib/hepta-drive-respaldo/sin-respaldo.txt 2>/dev/null | tr '\n' ' ' | sed 's/ *$//')"
 [ -z "$SIN" ] || alerta "en $VM hay clientes SIN respaldo configurado: $SIN"
+# Un repositorio que alguien borró a mano en el servidor (cliente dado de baja hace más de 30 días): se quita su
+# réplica del NAS, y la subida a Drive la quita de allá. Solo con esa marca; nunca porque "falta" en el origen.
+for c in $(en "$SERVIDOR" sh -c "ls -1 $RAIZ/_purgados 2>/dev/null" 2>/dev/null | grep -E '^[a-z0-9][a-z0-9-]{1,30}$'); do
+  if [ -d "$DESTINO/$c" ] && ! en "$SERVIDOR" test -e "$RAIZ/$c"; then
+    if [ "$SOLO_VER" = 1 ]; then aviso "── $c: se borraría su réplica del NAS (repositorio borrado en el servidor)"; continue; fi
+    find "${DESTINO:?}/$c" -depth -delete && aviso "── $c: réplica del NAS borrada (el repositorio se borró en el servidor)"
+    [ -e "$DESTINO/$c.estado.json" ] && unlink "$DESTINO/$c.estado.json"
+  fi
+done
+
 # La copia nocturna de cada cliente, tal como la anotó la VM. Sin esto, la copia fallida de un cliente que no tiene
 # repositorio en el servidor no la veía nadie (pasó con el cliente de prueba el 21-nov).
 for c in $(en "$VM" sh -c 'ls -1 /opt/hepta-drive/clientes 2>/dev/null' 2>/dev/null | grep -E '^[a-z][a-z0-9-]*$'); do

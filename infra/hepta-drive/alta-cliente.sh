@@ -25,6 +25,8 @@
 #                                                   (el vhost y el certificado van aparte, en el NGINX: drive_vhost_add.sh)
 #   hepta-drive-alta secretos <slug>                entrega los secretos del alta (CSV para KeePass)
 #   hepta-drive-alta secretos <slug> --guardado     los borra de la VM, cuando ya están en KeePass
+#   hepta-drive-alta suspender <slug> / reactivar <slug>   la deja en modo mantenimiento (nadie entra; los datos y
+#                                                   las copias siguen) y la vuelve a abrir
 #   hepta-drive-alta baja     <slug> --confirmar <slug>   apaga y archiva en /srv/nextcloud/_bajas (no borra datos)
 #
 # Opciones de validar y crear:
@@ -74,7 +76,7 @@ occ_s() { occ "$@" >/dev/null 2>&1; }
 # ── Argumentos ──
 ACCION="${1:-}"; SLUG="${2:-}"
 [ $# -ge 1 ] && shift; [ $# -ge 1 ] && shift
-USUARIOS=""; CUOTA_GB=5; EQUIPO_GB=0; FQDN=""; CONFIRMAR=""; GUARDADO=0; LOGO=""; USUARIO=""; TRANSFERIR=""; DOMINIO=""
+USUARIOS=""; CUOTA_GB=5; EQUIPO_GB=0; FQDN=""; CONFIRMAR=""; GUARDADO=0; LOGO=""; USUARIO=""; TRANSFERIR=""; DOMINIO=""; SIN_COPIA=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --usuarios) USUARIOS="${2:-}"; shift 2 ;;
@@ -83,6 +85,7 @@ while [ $# -gt 0 ]; do
     --fqdn) FQDN="${2:-}"; shift 2 ;;
     --confirmar) CONFIRMAR="${2:-}"; shift 2 ;;
     --guardado) GUARDADO=1; shift ;;
+    --sin-copia) SIN_COPIA=1; shift ;;
     --logo) LOGO="${2:-}"; shift 2 ;;
     --usuario) USUARIO="$(echo "${2:-}" | tr 'A-Z' 'a-z')"; shift 2 ;;
     --dominio) DOMINIO="$(echo "${2:-}" | tr 'A-Z' 'a-z')"; shift 2 ;;
@@ -550,9 +553,9 @@ estado() {
     usuarios=$(occ "$c" user:list 2>/dev/null | grep -c '^  - ')
     paso="$(cat "$VAR/clientes/$c.paso" 2>/dev/null || echo '')"
     resp=enrolado; [ -f "$VAR/respaldo-pendiente/$c" ] && resp=pendiente; [ -f "$CONF_RESPALDO/$c.env" ] || resp=sin_configurar
-    printf '{"slug":"%s","fqdn":"%s","dominio":"%s","puerto":%s,"contenedores":%s,"usuarios":%s,"paso":"%s","respaldo":"%s","ultima_copia":"%s","secretos_pendientes":%s,"datos":"%s"}\n' \
+    printf '{"slug":"%s","fqdn":"%s","dominio":"%s","puerto":%s,"contenedores":%s,"usuarios":%s,"paso":"%s","respaldo":"%s","ultima_copia":"%s","secretos_pendientes":%s,"suspendida":%s,"datos":"%s"}\n' \
       "$c" "$fq" "$(cat "$d/dominio" 2>/dev/null)" "${puerto:-0}" "$arriba" "$usuarios" "$paso" "$resp" "$(cat /var/lib/hepta-drive-respaldo/"$c".ultimo-ok 2>/dev/null)" \
-      "$([ -f "$VAR/secretos/$c.csv" ] && echo true || echo false)" "$(du -sh --exclude=db "$DATOS/$c" 2>/dev/null | cut -f1)"
+      "$([ -f "$VAR/secretos/$c.csv" ] && echo true || echo false)" "$([ -f "$d/suspendida" ] && echo true || echo false)" "$(du -sh --exclude=db "$DATOS/$c" 2>/dev/null | cut -f1)"
   done
 }
 
@@ -572,15 +575,25 @@ baja() {
   [ "$CONFIRMAR" = "$SLUG" ] || morir "para dar de baja hay que repetir el nombre: --confirmar $SLUG"
   [ "$SLUG" != hepta ] || morir "la instancia hepta no se da de baja con este script"
   [ -f "$DIR/.env" ] || morir "no existe el cliente $SLUG"
-  local dest="$DATOS/_bajas/$SLUG-$(date +%Y%m%d_%H%M)"
-  aviso "Apagando $SLUG…"
+  local dest="$DATOS/_bajas/$SLUG-$(date +%Y%m%d_%H%M)" enrolado=0
+  [ -f "$CONF_RESPALDO/$SLUG.env" ] && [ ! -f "$VAR/respaldo-pendiente/$SLUG" ] && enrolado=1
+  # Una última copia antes de apagar: lo que el cliente dejó hasta hoy queda en su repositorio, que se guarda 30 días
+  if [ "$enrolado" = 1 ] && [ "$SIN_COPIA" = 0 ]; then
+    aviso "· Última copia de respaldo"
+    /usr/local/sbin/hepta-drive-respaldo "$SLUG" >>"$VAR/clientes/$SLUG.log" 2>&1 \
+      || morir "la última copia de respaldo falló y no se dio de baja nada (ver $VAR/clientes/$SLUG.log). Para dar de baja igual, sin esa copia: --sin-copia"
+  fi
+  aviso "· Apagando la instancia"
   ( cd "$DIR" && $DOCKER compose down ) >>"$VAR/clientes/$SLUG.log" 2>&1 || morir "docker compose down falló"
   install -d -m 700 "$DATOS/_bajas" "$dest"
   mv "$RAIZ" "$dest/datos" && mv "$DIR" "$dest/config" || morir "no pude archivar; revisar $dest"
   [ -f "$CONF_BACKUP" ] && sed -i "/\"$SLUG-nextcloud.dump|/d; /\"$SLUG-globales.sql|/d" "$CONF_BACKUP"
   [ -f "$CONF_RESPALDO/$SLUG.env" ] && mv "$CONF_RESPALDO/$SLUG.env" "$dest/respaldo.env"
-  for f in "$VAR/clientes/$SLUG".{paso,cuota,candado} "$VAR/respaldo-pendiente/$SLUG"; do [ -e "$f" ] && unlink "$f"; done
-  aviso "BAJA OK. Archivado en $dest. Los datos NO se borraron: se borran a mano a los 30 días, junto con su repositorio de copias."
+  for f in "$VAR/clientes/$SLUG".{paso,cuota,candado} "$VAR/respaldo-pendiente/$SLUG" "$VAR/secretos/$SLUG.csv" \
+           /var/lib/hepta-drive-respaldo/"$SLUG".json /var/lib/hepta-drive-respaldo/"$SLUG".ultimo-ok; do [ -e "$f" ] && unlink "$f"; done
+  # hcsvrnd01 ve esta marca y archiva el repositorio en el servidor de respaldos (la VM no puede tocarlo)
+  if [ "$enrolado" = 1 ]; then install -d -m 700 "$VAR/respaldo-baja"; date -Is > "$VAR/respaldo-baja/$SLUG"; fi
+  aviso "BAJA OK: $SLUG archivado en $dest. Los datos NO se borraron: se borran a mano a los 30 días, junto con su repositorio de copias."
 }
 
 case "$ACCION" in
@@ -610,6 +623,16 @@ case "$ACCION" in
             necesita_slug; [ -f "$DIR/.env" ] || morir "no existe el cliente $SLUG"; gestionar_usuario ;;
   dominio-aceptar|dominio-principal|dominio-quitar)
             necesita_slug; [ -f "$DIR/.env" ] || morir "no existe el cliente $SLUG"; dominio_propio ;;
+  suspender|reactivar)
+            necesita_slug; [ -f "$DIR/.env" ] || morir "no existe el cliente $SLUG"
+            [ "$SLUG" != hepta ] || morir "la instancia hepta no se suspende con este script"
+            if [ "$ACCION" = suspender ]; then
+              occ "$SLUG" maintenance:mode --on >/dev/null || morir "no pude suspender $SLUG"
+              date -Is > "$DIR/suspendida"; aviso "SUSPENDIDA: $SLUG muestra la página de mantenimiento. Datos y copias siguen."
+            else
+              occ "$SLUG" maintenance:mode --off >/dev/null || morir "no pude reactivar $SLUG"
+              [ -e "$DIR/suspendida" ] && unlink "$DIR/suspendida"; aviso "REACTIVADA: $SLUG vuelve a atender."
+            fi ;;
   baja)     necesita_slug; baja ;;
-  *) sed -n '2,47p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,49p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

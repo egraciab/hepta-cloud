@@ -251,6 +251,10 @@ async function cerrar(jobId, ok, paso, error, resultado) {
     `UPDATE provisioning_jobs SET status = $2, step = COALESCE($3, step), error = $4, finished_at = NOW()
       WHERE id = $1 AND status = 'running' RETURNING client_service_id, action`,
     [jobId, ok ? 'done' : 'failed', paso || null, error || null]);
+  if (rows.length && rows[0].action === 'delete') {
+    if (ok) await pool.query("UPDATE client_services SET status = 'cancelled', updated_at = NOW() WHERE id = $1", [rows[0].client_service_id]);
+    return;
+  }
   if (!rows.length || rows[0].action !== 'create') return;   // sumar usuarios no cambia el estado de la instancia
   await pool.query(
     `UPDATE client_services SET status = $2, port = COALESCE($3, port), fqdn = COALESCE($4, fqdn), updated_at = NOW() WHERE id = $1`,
@@ -284,6 +288,11 @@ async function actualizar(jobId) {
       await publicarVhost(t.slug, t.resultado.puerto);
     } catch (e) { aviso = `La instancia está creada, pero la dirección no quedó publicada: ${e.message}`.slice(0, 500); }
     await cerrar(jobId, true, 'Listo', aviso, t.resultado);
+  }
+  else if (t.estado === 'listo' && rows[0].action === 'delete') {
+    // La instancia ya está apagada y archivada. Falta sacarla del NGINX (y de Cloudflare, si el registro era nuestro).
+    await pool.query("UPDATE provisioning_jobs SET step = 'Quitando la dirección pública' WHERE id = $1 AND status = 'running'", [jobId]);
+    await cerrar(jobId, true, 'Listo', await despublicar(t.slug));
   }
   else if (t.estado === 'listo') await cerrar(jobId, true, 'Listo', null, t.resultado);
   else await cerrar(jobId, false, String(t.paso || '').slice(0, 200), String(t.error || 'No terminó bien').slice(0, 500));
@@ -399,6 +408,66 @@ async function eliminarUsuario(slug, cuerpo, actorId) {
   return { trabajo: j[0].id, slug: s, usuario, transferir_a };
 }
 
+// ── Suspensión y baja ────────────────────────────────────────
+// Suspender deja la instancia en modo mantenimiento: nadie entra, pero los datos y las copias siguen. Se deshace.
+async function suspension(slug, cuerpo) {
+  const s = slugValido(slug);
+  if (typeof (cuerpo || {}).suspendida !== 'boolean') throw new ErrorDrive(422, 'Falta indicar si queda suspendida');
+  const r = await pedir('POST', `/clientes/${s}/suspension`, { suspendida: cuerpo.suspendida }, { timeoutMs: 100000 });
+  if (!r.ok) throw new ErrorDrive([404, 409, 422].includes(r.status) ? r.status : 502, detalle(r));
+  await pool.query("UPDATE client_services SET status = $2, updated_at = NOW() WHERE service = 'drive' AND slug = $1 AND status IN ('active','suspended')",
+    [s, cuerpo.suspendida ? 'suspended' : 'active']);
+  return { slug: s, suspendida: cuerpo.suspendida };
+}
+
+// Saca la instancia del NGINX y, si el CNAME del dominio propio lo creó HEPTA Cloud, también de Cloudflare.
+// Devuelve un aviso si algo no se pudo quitar (la baja vale igual), o null.
+async function despublicar(slug) {
+  const { rows } = await pool.query("SELECT params FROM client_services WHERE service = 'drive' AND slug = $1", [slug]);
+  const dominio = rows[0] && rows[0].params && rows[0].params.dominio;
+  const faltan = [];
+  if (dominio) {
+    try {
+      const d = await perimetral('DELETE', `/drive-dominio/${slug}/${dominio}`);
+      if (!d.ok) faltan.push(`el vhost de ${dominio}`);
+    } catch (e) { faltan.push(`el vhost de ${dominio}`); }
+    try { await cloudflare.quitarCname(dominio, `${slug}.drive.hepta.com.py`); } catch (e) { faltan.push(`el registro de ${dominio} en Cloudflare`); }
+  }
+  try {
+    const v = await perimetral('DELETE', `/drive-vhost/${slug}`);
+    if (!v.ok) faltan.push(`el vhost de ${slug}.drive.hepta.com.py`);
+  } catch (e) { faltan.push(`el vhost de ${slug}.drive.hepta.com.py`); }
+  await pool.query("UPDATE client_services SET params = jsonb_set(params, '{publicado}', 'false'::jsonb) WHERE service = 'drive' AND slug = $1", [slug]);
+  return faltan.length ? `La instancia quedó dada de baja, pero no se pudo quitar: ${faltan.join('; ')}. Hay que quitarlo a mano en el NGINX.` : null;
+}
+
+// Baja: última copia, apagar y archivar. No borra datos (quedan 30 días en la VM y en el servidor de respaldos).
+async function baja(slug, cuerpo, actorId) {
+  const s = slugValido(slug);
+  if (s === 'hepta') throw new ErrorDrive(409, 'La instancia propia de HEPTA no se da de baja desde acá');
+  if (String((cuerpo || {}).confirmar || '').trim().toLowerCase() !== s)
+    throw new ErrorDrive(422, 'Para dar de baja hay que escribir el nombre de la instancia como confirmación');
+  const { rows: abiertos } = await pool.query("SELECT 1 FROM provisioning_jobs WHERE status = 'running' LIMIT 1");
+  if (abiertos.length) throw new ErrorDrive(409, 'Hay otro trabajo en curso. Esperá a que termine.');
+  const e = await pedir('GET', `/clientes/${s}`, undefined, { timeoutMs: 30000 });
+  if (e.status === 404) throw new ErrorDrive(404, 'No existe esa instancia');
+  if (!e.ok || !e.json) throw new ErrorDrive(502, detalle(e));
+  if (e.json.secretos_pendientes) throw new ErrorDrive(409, 'Esta instancia tiene secretos sin bajar a KeePass. Bajalos antes: ahí está la contraseña de sus copias, que se guardan 30 días.');
+  const r = await pedir('POST', `/clientes/${s}/baja`, { confirmar: s, sin_copia: (cuerpo || {}).sin_copia === true }, { timeoutMs: 30000 });
+  if (r.status !== 202 || !r.json || !r.json.trabajo) throw new ErrorDrive([404, 409, 422].includes(r.status) ? r.status : 502, detalle(r));
+  // Se anota el dominio propio que tenga, venga de donde venga, para poder quitarlo del NGINX al terminar
+  const { rows: cs } = await pool.query(
+    `INSERT INTO client_services (service, slug, fqdn, port, status, params, created_by)
+     VALUES ('drive', $1, $2, $3, 'active', $4::jsonb, $5)
+     ON CONFLICT (service, slug) DO UPDATE SET params = client_services.params || $4::jsonb, updated_at = NOW() RETURNING id`,
+    [s, e.json.fqdn || null, e.json.puerto || null, JSON.stringify(e.json.dominio ? { dominio: e.json.dominio } : {}), actorId || null]);
+  const { rows: j } = await pool.query(
+    `INSERT INTO provisioning_jobs (client_service_id, action, remote_job_id, status, step, actor_id)
+     VALUES ($1, 'delete', $2, 'running', 'En cola', $3) RETURNING id`, [cs[0].id, r.json.trabajo, actorId || null]);
+  seguir(j[0].id);
+  return { trabajo: j[0].id, slug: s };
+}
+
 // ── Dominio propio del cliente ───────────────────────────────
 // Se suma al nombre de HEPTA, que sigue andando. Cuatro pasos, todos repetibles: comprobar que el dominio ya apunta
 // acá, que la instancia lo acepte, certificado y vhost en el NGINX, y recién al final usarlo como dirección principal.
@@ -499,4 +568,4 @@ async function secretosGuardados(slug) {
   return true;
 }
 
-module.exports = { ErrorDrive, salud, listar, validar, crear, verTrabajo, verificar, usuarios, agregarUsuarios, estadoUsuario, eliminarUsuario, publicar, dominioPropio, secretos, secretosGuardados, reanudar };
+module.exports = { ErrorDrive, salud, listar, validar, crear, verTrabajo, verificar, usuarios, agregarUsuarios, estadoUsuario, eliminarUsuario, publicar, dominioPropio, suspension, baja, secretos, secretosGuardados, reanudar };

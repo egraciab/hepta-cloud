@@ -344,6 +344,14 @@
     $('drive-job-card').style.display = '';
     const dir = `https://${t.fqdn || t.slug + '.drive.hepta.com.py'}`;
     const cerrar = `<div style="margin-top:10px"><button class="btn btn-secondary btn-sm" onclick="document.getElementById('drive-job-card').style.display='none'">Cerrar</button></div>`;
+    if (t.action === 'delete') {
+      $('drive-job-title').textContent = `Baja de ${t.slug}`;
+      $('drive-job-body').innerHTML = t.status === 'running' ? `<div>Paso: <strong>${esc(t.step || 'En cola')}</strong></div><div class="text-muted text-sm" style="margin-top:6px">Primero se hace una última copia de respaldo; después se apaga y se archiva.</div>`
+        : t.status === 'done' ? `<div style="color:#047857"><strong>La instancia quedó dada de baja.</strong> Nada se borró: los datos quedan archivados en el servidor y su repositorio de copias se guarda 30 días. Pasado ese plazo, el borrado es a mano.</div>
+            ${t.error ? `<div style="margin-top:8px;color:var(--red)"><strong>${esc(t.error)}</strong></div>` : ''}${cerrar}`
+        : `<div style="color:var(--red)"><strong>${esc(t.error || 'No se pudo dar de baja')}</strong></div><div class="text-muted" style="margin-top:6px">La instancia sigue funcionando como estaba.</div>${cerrar}`;
+      return;
+    }
     if (t.action === 'custom_domain') {
       $('drive-job-title').textContent = `Dominio propio de ${t.slug}`;
       $('drive-job-body').innerHTML = t.status === 'running' ? `<div>Paso: <strong>${esc(t.step || 'Preparando')}</strong></div><div class="text-muted text-sm" style="margin-top:6px">Tarda entre uno y tres minutos. La instancia se reinicia unos segundos al final.</div>`
@@ -416,15 +424,19 @@
       : '<span class="badge badge-gray">en KeePass</span>';
     const sinPublicar = reg.params && reg.params.publicado === false
       ? ` <span class="badge badge-red">sin publicar</span> <button class="btn btn-secondary btn-sm" onclick="drivePublicar('${esc(i.slug)}',this)">Publicar</button>` : '';
+    const susp = i.suspendida ? ' <span class="badge badge-red">suspendida</span>' : '';
     const caidos = Number(i.contenedores) < 4 ? ` <span class="badge badge-red">${esc(i.contenedores)}/4 contenedores</span>` : '';
     return `<tr>
-      <td><strong>${esc(i.slug)}</strong>${caidos}${sinPublicar}<div class="text-sm"><a href="https://${esc(i.fqdn)}" target="_blank" rel="noopener">${esc(i.fqdn)}</a> · puerto ${esc(i.puerto)}</div>
+      <td><strong>${esc(i.slug)}</strong>${susp}${caidos}${sinPublicar}<div class="text-sm"><a href="https://${esc(i.fqdn)}" target="_blank" rel="noopener">${esc(i.fqdn)}</a> · puerto ${esc(i.puerto)}</div>
         ${i.dominio ? `<div class="text-sm">${reg.params && reg.params.dominio === i.dominio ? '' : '<span class="badge badge-blue">a medio activar</span> '}<a href="https://${esc(i.dominio)}" target="_blank" rel="noopener">${esc(i.dominio)}</a></div>` : ''}</td>
       <td>${esc(reg.cliente || '—')}${reg.creado_por ? `<div class="text-muted text-sm">alta: ${esc(reg.creado_por)}</div>` : ''}</td>
       <td>${esc(i.usuarios)}</td><td>${esc(i.datos || '—')}</td><td>${resp}</td><td>${sec}</td>
       <td style="white-space:nowrap"><button class="btn btn-secondary btn-sm" onclick="driveUsuarios('${esc(i.slug)}')">Usuarios</button>
           ${i.fqdn === i.slug + '.drive.hepta.com.py' ? `<button class="btn btn-secondary btn-sm" onclick="driveDominio('${esc(i.slug)}','${esc(i.dominio || '')}')">Dominio</button>` : ''}
-          <button class="btn btn-secondary btn-sm" onclick="driveVerificar('${esc(i.slug)}',this)">Verificar</button></td></tr>`;
+          <button class="btn btn-secondary btn-sm" onclick="driveVerificar('${esc(i.slug)}',this)">Verificar</button>
+          ${i.slug === 'hepta' ? '' : `<div style="margin-top:4px">
+            <button class="btn btn-secondary btn-sm" onclick="driveSuspension('${esc(i.slug)}',${i.suspendida ? 'false' : 'true'},this)">${i.suspendida ? 'Reactivar' : 'Suspender'}</button>
+            ${esGod() ? `<button class="btn btn-danger btn-sm" onclick="driveBaja('${esc(i.slug)}')">Dar de baja</button>` : ''}</div>`}</td></tr>`;
   }
 
   async function cargarTabla() {
@@ -442,6 +454,25 @@
   }
 
   window.driveVerTrabajo = id => seguirTrabajo(id);
+
+  window.driveSuspension = async function (slug, suspender, btn) {
+    if (suspender && !confirm(`¿Suspender ${slug}?\n\nSus usuarios van a ver una página de mantenimiento y no van a poder entrar ni sincronizar. Los datos y las copias de respaldo siguen. Se reactiva cuando quieras.`)) return;
+    if (btn) btn.disabled = true;
+    try {
+      const r = await api('POST', `/admin/drive/${encodeURIComponent(slug)}/suspension`, { suspendida: suspender });
+      if (!r.success) { showAlert('drive-err', 'error', `${slug}: ${r.error}`, 0); return; }
+      showAlert('drive-ok', 'success', suspender ? `${slug} quedó suspendida.` : `${slug} volvió a atender.`, 5000);
+      cargarTabla();
+    } finally { if (btn) btn.disabled = false; }
+  };
+
+  window.driveBaja = async function (slug) {
+    const escrito = prompt(`Dar de baja ${slug}.\n\nSe hace una última copia de respaldo, se apaga la instancia y se quita su dirección. Sus usuarios dejan de poder entrar.\nNo se borra nada: los datos quedan archivados y las copias se guardan 30 días.\n\nPara confirmar, escribí el nombre de la instancia:`);
+    if (escrito === null) return;
+    const r = await api('POST', `/admin/drive/${encodeURIComponent(slug)}/baja`, { confirmar: escrito.trim().toLowerCase() });
+    if (!r.success) { showAlert('drive-err', 'error', `${slug}: ${r.error}`, 0); return; }
+    seguirTrabajo(r.data.trabajo);
+  };
 
   window.drivePublicar = async function (slug, btn) {
     if (btn) btn.disabled = true;

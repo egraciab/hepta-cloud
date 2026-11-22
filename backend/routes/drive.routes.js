@@ -84,6 +84,24 @@ router.post('/:slug/dominio', async (req, res) => {
   } catch (err) { fail(res, err, 'admin/drive/dominio'); }
 });
 
+// Suspender o reactivar (modo mantenimiento). Reversible.
+router.post('/:slug/suspension', async (req, res) => {
+  try {
+    const data = await drive.suspension(req.params.slug, req.body);
+    await logAction(req, data.suspendida ? 'drive_suspend' : 'drive_resume', data.slug, {});
+    res.json({ success: true, data });
+  } catch (err) { fail(res, err, 'admin/drive/suspension'); }
+});
+
+// Baja: solo godmode, repitiendo el nombre. No borra datos.
+router.post('/:slug/baja', requireGodmode, async (req, res) => {
+  try {
+    const data = await drive.baja(req.params.slug, req.body, req.user.id);
+    await logAction(req, 'drive_delete', data.slug, { trabajo: data.trabajo, sin_copia: req.body.sin_copia === true });
+    res.status(202).json({ success: true, data });
+  } catch (err) { fail(res, err, 'admin/drive/baja'); }
+});
+
 // ── Usuarios de una instancia ──
 router.get('/:slug/usuarios', async (req, res) => {
   try { res.json({ success: true, data: await drive.usuarios(req.params.slug) }); }

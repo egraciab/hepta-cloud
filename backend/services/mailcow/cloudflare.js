@@ -147,4 +147,28 @@ async function asegurarCname(nombre, destino) {
   return { estado: 'creado', zona };
 }
 
-module.exports = { applyDnsPlan, getZoneId, asegurarCname };
+/**
+ * Quita un CNAME que creó HEPTA Cloud. Solo si sigue apuntando al destino esperado: un registro que alguien
+ * cambió a mano no se toca. No falla si ya no está o si la zona no es de esta cuenta.
+ * @returns {'quitado'|'no_estaba'|'no_es_nuestro'|'sin_zona'|'sin_token'}
+ */
+async function quitarCname(nombre, destino) {
+  if (!process.env.CLOUDFLARE_API_TOKEN) return 'sin_token';
+  const partes = nombre.split('.');
+  let zoneId = null;
+  for (let i = 1; i <= partes.length - 2 && !zoneId; i++) {
+    const zonas = await cf(`/zones?name=${encodeURIComponent(partes.slice(i).join('.'))}&status=active`);
+    if (zonas && zonas.length) zoneId = zonas[0].id;
+  }
+  if (!zoneId) return 'sin_zona';
+  const existentes = await cf(`/zones/${zoneId}/dns_records?name=${encodeURIComponent(nombre)}&per_page=50`) || [];
+  if (!existentes.length) return 'no_estaba';
+  const limpio = (h) => String(h || '').toLowerCase().replace(/\.$/, '');
+  const nuestro = existentes.length === 1 && existentes[0].type === 'CNAME' && limpio(existentes[0].content) === limpio(destino)
+    && String(existentes[0].comment || '').startsWith('HEPTA Drive');
+  if (!nuestro) return 'no_es_nuestro';
+  await cf(`/zones/${zoneId}/dns_records/${existentes[0].id}`, { method: 'DELETE' });
+  return 'quitado';
+}
+
+module.exports = { applyDnsPlan, getZoneId, asegurarCname, quitarCname };

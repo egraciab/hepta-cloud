@@ -49,7 +49,10 @@ Los `.env` no se versionan: `env.ejemplo` tiene solo los nombres. Los valores na
 - **Bases:** `pg_dump -Fc` verificado antes de cada copia; `db/` en crudo no se respalda. Tampoco las vistas previas.
 - `ceph-hdd` tiene sus tres discos en `hcsvrnd04` y está en la misma sala: es la copia rápida. Las que cuentan ante
   un desastre son el NAS y Drive, y solo se replican después de una verificación buena.
-- A los 30 días de la baja de un cliente se borra su repositorio entero (y sus réplicas).
+- **Baja de un cliente:** el repositorio se **archiva** solo (sin acceso para la VM y sin exigirle copias nuevas) y queda
+  entero, igual que su réplica en el NAS y en Drive. Borrarlo es una decisión de una persona, en el servidor de
+  respaldos, y recién a los 30 días: `hepta-respaldo-repos borrar <cliente> --confirmar <cliente>`. El mantenimiento
+  diario avisa cuando un archivado ya cumplió el plazo; la réplica del día siguiente lo quita del NAS y de Drive.
 
 ## Horarios (UTC en los equipos; Paraguay entre paréntesis)
 

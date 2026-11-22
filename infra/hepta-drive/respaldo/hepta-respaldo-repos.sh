@@ -11,10 +11,17 @@
 #                                            repositorio y anota el estado. Sin cliente: todos. Va por cron, una vez al día.
 #   hepta-respaldo-repos estado              cómo está cada repositorio
 #   hepta-respaldo-repos copias <cliente>    lista las copias de un cliente
+#   hepta-respaldo-repos archivar <cliente>  cliente dado de baja: le quita el acceso y deja de exigirle copias nuevas.
+#                                            El repositorio queda entero. Lo dispara hcsvrnd01 (hepta-drive-enrolar).
+#   hepta-respaldo-repos archivados          los archivados y hace cuánto
+#   hepta-respaldo-repos borrar <cliente> --confirmar <cliente>
+#                                            borra para siempre un repositorio ARCHIVADO hace 30 días o más. A mano:
+#                                            ningún proceso automático borra copias.
 #
 # Las contraseñas nacen en KeePass. La de acceso queda como hash en el htpasswd; la del repositorio, en
 # $CONF/claves/<cliente> (600, root): hace falta para depurar y verificar.
-# Dar de baja un cliente no tiene comando a propósito: se borra a mano, 30 días después de la baja (ver el runbook).
+# Borrar es siempre una decisión de una persona en este servidor: la VM no puede, y el mantenimiento solo avisa
+# cuando un archivado ya cumplió sus 30 días.
 set -uo pipefail
 
 CONF="${HR_CONF:-/etc/hepta-respaldo}"
@@ -38,7 +45,37 @@ restic_de() {   # restic_de <cliente> <args...>
   RESTIC_PASSWORD="$(cat "$CONF/claves/$c")" RESTIC_REPOSITORY="$RAIZ/$c" RESTIC_CACHE_DIR="$RAIZ/_cache" \
     como_dueno restic "$@"
 }
-repos() { local f; for f in "$CONF"/claves/*; do [ -f "$f" ] && basename "$f"; done; return 0; }
+ARCHIVO="$RAIZ/_archivados"                # una marca por cliente dado de baja, con la fecha
+DIAS_ARCHIVO="${HR_DIAS_ARCHIVO:-30}"
+# Los repositorios activos: los que tienen contraseña cargada y no están archivados
+repos() { local f; for f in "$CONF"/claves/*; do [ -f "$f" ] && [ ! -f "$ARCHIVO/$(basename "$f")" ] && basename "$f"; done; return 0; }
+dias_archivado() { echo $(( ($(date +%s) - $(date -d "$(cat "$ARCHIVO/$1")" +%s 2>/dev/null || date +%s)) / 86400 )); }
+
+archivar() {
+  local c="$1"
+  nombre_ok "$c" && [ -f "$CONF/claves/$c" ] && [ -d "$RAIZ/$c" ] || { echo "ERROR: no existe el repositorio '$c'" >&2; exit 2; }
+  if [ -f "$ARCHIVO/$c" ]; then aviso "$c ya estaba archivado ($(cat "$ARCHIVO/$c"))."; return 0; fi
+  install -d -m 700 -o "$USUARIO" -g "$USUARIO" "$ARCHIVO"
+  # Sin usuario, la VM ya no puede escribir en este repositorio
+  htpasswd -D "$CONF/htpasswd" "$c" >/dev/null 2>&1 || true
+  systemctl kill -s HUP hepta-rest-server 2>/dev/null || true
+  date -Is > "$ARCHIVO/$c"
+  [ -f "$ESTADO/$c.json" ] && mv "$ESTADO/$c.json" "$ARCHIVO/$c.ultimo-estado.json"
+  aviso "$c archivado: sin acceso y sin exigirle copias nuevas. El repositorio queda entero; se puede borrar a mano desde el $(date -d "+$DIAS_ARCHIVO days" +%F)."
+}
+
+borrar() {
+  local c="$1" conf="$2" dias
+  nombre_ok "$c" && [ -f "$ARCHIVO/$c" ] || { echo "ERROR: '$c' no está archivado. Solo se borra un repositorio archivado." >&2; exit 2; }
+  [ "$conf" = "$c" ] || { echo "ERROR: para borrar hay que repetir el nombre: borrar $c --confirmar $c" >&2; exit 2; }
+  dias="$(dias_archivado "$c")"
+  [ "$dias" -ge "$DIAS_ARCHIVO" ] || { echo "ERROR: $c se archivó hace $dias día/s; se puede borrar recién a los $DIAS_ARCHIVO." >&2; exit 2; }
+  [ -d "$RAIZ/$c" ] && find "${RAIZ:?}/$c" -depth -delete
+  for f in "$CONF/claves/$c" "$ARCHIVO/$c" "$ARCHIVO/$c.ultimo-estado.json"; do [ -e "$f" ] && unlink "$f"; done
+  # La marca le avisa a la réplica que también tiene que borrar la copia del NAS (y con ella, la de Drive)
+  install -d -m 700 -o "$USUARIO" -g "$USUARIO" "$RAIZ/_purgados"; date -Is > "$RAIZ/_purgados/$c"
+  aviso "$c borrado para siempre de este servidor. La réplica de mañana lo quita del NAS y de Drive."
+}
 
 alta() {
   local c="$1" k1 k2
@@ -106,6 +143,13 @@ mantener_uno() {
 
 case "${1:-}" in
   alta) [ -n "${2:-}" ] || { echo "Uso: $0 alta <cliente>" >&2; exit 2; }; alta "$2" ;;
+  archivar) [ -n "${2:-}" ] || { echo "Uso: $0 archivar <cliente>" >&2; exit 2; }; archivar "$2" ;;
+  borrar) [ -n "${2:-}" ] && [ "${3:-}" = "--confirmar" ] || { echo "Uso: $0 borrar <cliente> --confirmar <cliente>" >&2; exit 2; }; borrar "$2" "${4:-}" ;;
+  archivados)
+    for f in "$ARCHIVO"/*; do
+      [ -f "$f" ] || continue; case "$f" in *.json) continue ;; esac
+      c="$(basename "$f")"; echo "$c · archivado el $(cut -c1-10 "$f") (hace $(dias_archivado "$c") día/s) · $(du -sh "$RAIZ/$c" 2>/dev/null | cut -f1)"
+    done ;;
   copias) nombre_ok "${2:-}" && [ -f "$CONF/claves/$2" ] || { echo "Uso: $0 copias <cliente>" >&2; exit 2; }
           restic_de "$2" snapshots --compact ;;
   estado)
@@ -121,6 +165,11 @@ case "${1:-}" in
     for c in $LISTA; do mantener_uno "$c"; done
     if [ "$FALLARON" -gt 0 ]; then aviso "Terminó CON $FALLARON repositorio/s con problemas."; exit 1; fi
     [ -n "${2:-}" ] || date -Is > "$ESTADO/ultimo-ok"
+    # Archivados que ya cumplieron su plazo: se avisa, no se borra
+    for f in "$ARCHIVO"/*; do
+      [ -f "$f" ] || continue; case "$f" in *.json) continue ;; esac
+      c="$(basename "$f")"; [ "$(dias_archivado "$c")" -ge "$DIAS_ARCHIVO" ] && aviso "AVISO: $c está archivado hace $(dias_archivado "$c") días: ya se puede borrar (hepta-respaldo-repos borrar $c --confirmar $c)."
+    done
     aviso "Mantenimiento OK." ;;
-  *) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

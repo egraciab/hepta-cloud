@@ -153,4 +153,7 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
   de HEPTA crea el CNAME solo (`CLOUDFLARE_API_TOKEN`, sin pisar registros existentes); si no, comprueba el del cliente. La instancia lo
   acepta, el NGINX saca el certificado por HTTP y crea el vhost (`POST /drive-dominio`), y al final pasa a ser la dirección
   de los enlaces (`compose.override.yaml` del cliente). Quitarlo es por consola (`dominio-quitar` y `--quitar-dominio`).
-  Falta: baja y suspensión desde el Admin.
+  **Suspender / Reactivar** (modo mantenimiento: nadie entra, datos y copias siguen) y **Dar de baja** (godmode, repitiendo
+  el nombre): última copia, apaga y archiva, quita los vhosts y el CNAME propio. No borra nada: los datos quedan en
+  `/srv/nextcloud/_bajas` y el repositorio de copias se archiva solo (`hepta-respaldo-repos archivar`, vía `hcsvrnd01`).
+  Borrar un repositorio archivado es siempre a mano y recién a los 30 días (`hepta-respaldo-repos borrar`).

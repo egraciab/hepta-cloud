@@ -12,6 +12,9 @@
 #   3. Hace la primera copia y la verifica en el servidor (así la réplica de la mañana ya la lleva).
 #   4. Recién entonces quita la marca. Si algo falla, la marca queda y se reintenta en la próxima corrida.
 #
+# También archiva el repositorio de un cliente dado de baja (marca en /var/lib/hepta-drive/respaldo-baja/<cliente>):
+# le quita el acceso y el control diario deja de pedirle copias nuevas. Borrar es aparte y a mano, en el servidor.
+#
 # Mientras un cliente siga pendiente, la réplica diaria (hepta-drive-replicar) lo suma a la alerta general.
 #
 # Uso: hepta-drive-enrolar            procesa los pendientes (no dice nada si no hay ninguno)
@@ -23,6 +26,7 @@ SERVIDOR="${HD_SERVIDOR:-hepta-respaldo}"
 VM="${HD_VM:-hepta-drive}"
 RAIZ="${HD_RAIZ:-/srv/restic}"
 PENDIENTES="${HD_PENDIENTES:-/var/lib/hepta-drive/respaldo-pendiente}"
+DE_BAJA="${HD_DE_BAJA:-/var/lib/hepta-drive/respaldo-baja}"
 CONF_VM="${HD_CONF_VM:-/etc/hepta-drive-respaldo}"
 CLIENTES_VM="${HD_CLIENTES_VM:-/opt/hepta-drive/clientes}"
 SOLO_VER=0; [ "${1:-}" = "--solo-ver" ] && SOLO_VER=1
@@ -35,10 +39,26 @@ nombre_ok() { [[ "$1" =~ ^[a-z][a-z0-9-]{1,30}[a-z0-9]$ ]]; }
 exec 9>"/tmp/hepta-drive-enrolar.candado"; flock -n 9 || exit 0
 
 LISTA="$(en "$VM" sh -c "ls -1 '$PENDIENTES' 2>/dev/null" 2>/dev/null)" || { aviso "ERROR: la VM $VM no responde"; exit 1; }
-[ -n "$LISTA" ] || exit 0
+BAJAS="$(en "$VM" sh -c "ls -1 '$DE_BAJA' 2>/dev/null" 2>/dev/null || true)"
+[ -n "$LISTA$BAJAS" ] || exit 0
 
 FALLARON=0
 falla() { FALLARON=$((FALLARON + 1)); aviso "   ERROR: $*"; }
+
+# Clientes dados de baja: su repositorio se archiva (sin acceso y sin exigirle copias nuevas). No se borra nada.
+for c in $BAJAS; do
+  aviso "── $c (baja)"
+  nombre_ok "$c" || { falla "nombre inválido en la carpeta de bajas; se ignora"; continue; }
+  # Si la VM todavía tiene al cliente, no es una baja: no se le quita el respaldo a una instancia viva
+  if en "$VM" test -d "$CLIENTES_VM/$c"; then falla "la VM todavía tiene al cliente $c: no archivo su respaldo. Revisar."; continue; fi
+  if [ "$SOLO_VER" = 1 ]; then aviso "   falta archivar su repositorio"; continue; fi
+  if en "$SERVIDOR" test -e "$RAIZ/$c"; then
+    en "$SERVIDOR" hepta-respaldo-repos archivar "$c" 2>&1 | sed 's/^/   /' || { falla "no se pudo archivar el repositorio de $c"; continue; }
+  else
+    aviso "   no tenía repositorio en el servidor"
+  fi
+  en "$VM" unlink "$DE_BAJA/$c" || { falla "no pude quitar la marca de baja"; continue; }
+done
 
 for c in $LISTA; do
   aviso "── $c"
