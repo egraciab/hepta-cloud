@@ -304,6 +304,9 @@ crear() {
   occ "$c" config:system:set maintenance_window_start --type integer --value 5 >/dev/null
   occ "$c" config:system:set upgrade.disable-web --type boolean --value true >/dev/null
   occ "$c" config:system:set trusted_domains 10 --value "$c-app-1" >/dev/null      # OnlyOffice entra por la red interna
+  # El nombre de HEPTA, anotado a propósito: mientras la dirección está fija Nextcloud no lo exige, pero el día que
+  # se suma un dominio propio deja de estar fija y sin esto rechazaría su propio nombre (pasó en la prueba del 21-nov)
+  occ "$c" config:system:set trusted_domains 11 --value "$FQDN" >/dev/null
   # El router hace de origen para las visitas desde la LAN (hairpin): no contarlas como ataque
   occ "$c" config:app:set bruteForce whitelist_0 --value 192.168.10.250/32 >/dev/null 2>&1
   # Enlaces públicos: contraseña propuesta por defecto y vencimiento obligatorio a 30 días
@@ -510,6 +513,8 @@ dominio_propio() {
 
   if [ "$ACCION" = dominio-aceptar ]; then
     occ "$c" config:system:set trusted_domains 20 --value "$DOMINIO" >/dev/null || morir "no pude sumar $DOMINIO a los nombres aceptados"
+    # El nombre de HEPTA también tiene que estar en la lista: al dejar de estar fija la dirección, Nextcloud lo exige
+    occ "$c" config:system:set trusted_domains 11 --value "$fq" >/dev/null || morir "no pude anotar $fq entre los nombres aceptados"
     echo "$DOMINIO" > "$DIR/dominio"
     responde "$DOMINIO" || morir "la instancia no responde por $DOMINIO después de aceptarlo"
     aviso "DOMINIO OK: $c ya acepta $DOMINIO (todavía no es el principal)"; return 0
@@ -517,6 +522,7 @@ dominio_propio() {
 
   # dominio-principal
   [ "$actual" = "$DOMINIO" ] || morir "primero hay que aceptar el dominio (dominio-aceptar)"
+  occ "$c" config:system:set trusted_domains 11 --value "$fq" >/dev/null || morir "no pude anotar $fq entre los nombres aceptados"
   aviso "· Reiniciando la instancia con el dominio propio"
   ( umask 077; printf '# Dominio propio del cliente. Lo escribe hepta-drive-alta: no editar a mano.\nservices:\n  app:\n    environment:\n      OVERWRITEHOST: ""\n      OVERWRITECLIURL: https://%s\n  cron:\n    environment:\n      OVERWRITEHOST: ""\n      OVERWRITECLIURL: https://%s\n' "$DOMINIO" "$DOMINIO" > "$ov" )
   deshacer() { unlink "$ov"; levantar || true; }
