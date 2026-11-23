@@ -6,7 +6,8 @@
  *
  * .env:  CLOUDFLARE_API_TOKEN=...
  *
- * Idempotente: si el registro ya existe con el mismo nombre/tipo, lo edita.
+ * Idempotente: si el registro ya existe con el mismo nombre/tipo, lo edita. Un TXT solo pisa a otro de su misma clase
+ * (SPF, DMARC o DKIM): los demás TXT del dominio quedan como estaban.
  */
 
 const { jsonRequest } = require('./http');
@@ -52,11 +53,34 @@ async function getZoneId(domain) {
   return zones[0].id;
 }
 
+// ── Formato de los registros ──
+// Los TXT van entre comillas, como pide Cloudflare (si no, marca el registro con una advertencia). Cada cadena de un
+// TXT admite hasta 255 caracteres: la clave DKIM, que es más larga, se parte en varias cadenas seguidas.
+const sinComillas = (v) => {
+  const t = String(v || '').trim();
+  const partes = t.match(/"((?:[^"\\]|\\.)*)"/g);
+  return partes && /^"/.test(t) ? partes.map((x) => x.slice(1, -1)).join('') : t;
+};
+const entreComillas = (v) => (sinComillas(v).match(/.{1,255}/g) || ['']).map((x) => `"${x}"`).join(' ');
+
+// El comentario dice quién creó el registro y para qué, como los de HEPTA Drive
+const COMENTARIOS = {
+  mx: 'correo entrante',
+  spf: 'SPF, quién puede enviar',
+  dkim: 'DKIM, firma de los correos',
+  dmarc: 'DMARC, política y reportes',
+  autodiscover: 'autoconfiguración de Outlook',
+  autoconfig: 'autoconfiguración de Thunderbird',
+  srv_autodiscover: 'autoconfiguración de Outlook, SRV',
+};
+const comentario = (record) => `HEPTA Mail: ${COMENTARIOS[record.key] || record.key} (creado por HEPTA Cloud)`;
+
 function toCloudflare(record, domain) {
   const name = record.name === '@' ? domain : `${record.name}.${domain}`;
-  const base = { type: record.type, name, ttl: record.ttl || 3600, proxied: false };
+  const base = { type: record.type, name, ttl: record.ttl || 3600, proxied: false, comment: comentario(record) };
 
   if (record.type === 'MX') return { ...base, content: record.value, priority: record.priority ?? 10 };
+  if (record.type === 'TXT') return { ...base, content: entreComillas(record.value) };
   if (record.type === 'SRV') {
     return {
       ...base,
@@ -74,6 +98,16 @@ function toCloudflare(record, domain) {
   return { ...base, content: record.value };
 }
 
+// Qué registro existente reemplaza cada uno. Un TXT solo reemplaza a otro de su misma clase (SPF por SPF, DMARC por
+// DMARC, DKIM por DKIM): en la raíz suele haber otros TXT (verificación de Google, de Microsoft…) que no se tocan.
+function buscarExistente(existing, payload) {
+  const mismos = (existing || []).filter((e) => e.type === payload.type && e.name === payload.name);
+  if (payload.type !== 'TXT') return mismos[0];
+  const clase = (v) => (sinComillas(v).match(/^v=(spf1|DMARC1|DKIM1)\b/i) || [])[1];
+  const buscada = clase(payload.content);
+  return buscada ? mismos.find((e) => (clase(e.content) || '').toLowerCase() === buscada.toLowerCase()) : undefined;
+}
+
 /**
  * Aplica el plan DNS a Cloudflare.
  * @param {object} plan  salida de buildDnsRecords()
@@ -87,7 +121,7 @@ async function applyDnsPlan(plan, { onlyRequired = false, dryRun = false } = {})
   for (const record of plan.records) {
     if (onlyRequired && !record.required) continue;
     const payload = toCloudflare(record, plan.domain);
-    const match = (existing || []).find((e) => e.type === payload.type && e.name === payload.name);
+    const match = buscarExistente(existing, payload);
 
     if (dryRun) {
       results.push({ record: record.key, action: match ? 'would_update' : 'would_create', name: payload.name });
@@ -171,4 +205,4 @@ async function quitarCname(nombre, destino) {
   return 'quitado';
 }
 
-module.exports = { applyDnsPlan, getZoneId, asegurarCname, quitarCname };
+module.exports = { applyDnsPlan, getZoneId, asegurarCname, quitarCname, _prueba: { toCloudflare, buscarExistente, entreComillas, sinComillas } };
