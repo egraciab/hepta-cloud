@@ -2,7 +2,8 @@
 """
 HEPTA CLOUD — Perimetral API
 Corre en Nginx Perimetral (192.168.10.125:8888)
-Gestiona suspensión de instancias via fragmentos Nginx
+Suspensión y dominio propio de los tenants, y vhosts de HEPTA Drive. Todo lo que necesita root lo hacen
+dos scripts con argumentos validados (hepta-tenant-nginx y drive_vhost_add.sh): www-data no puede correr otra cosa.
 """
 import os
 import re
@@ -18,8 +19,6 @@ API_KEY             = os.getenv("PERIMETRAL_API_KEY", "CHANGE_ME_SECRET")
 SUSPENDED_DIR       = os.getenv("SUSPENDED_DIR", "/etc/nginx/hepta-suspended")
 BASE_DOMAIN         = os.getenv("BASE_DOMAIN", "erp.hepta.com.py")
 LOG_FILE            = os.getenv("LOG_FILE", "/var/log/hepta_perimetral.log")
-CF_CREDENTIALS_FILE = os.getenv("CF_CREDENTIALS_FILE", "/etc/letsencrypt/cloudflare/credentials.ini")
-CF_API_TOKEN        = os.getenv("CF_API_TOKEN", "")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,7 +27,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("hepta.perimetral")
 
-app = FastAPI(title="Hepta Perimetral API", version="1.0.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="Hepta Perimetral API", version="2.0.0", docs_url=None, redoc_url=None)
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
 
 # ── Quién puede hablarle a esta API ───────────────────────────
@@ -64,292 +63,112 @@ class TenantAction(BaseModel):
             raise ValueError("Tenant inválido")
         return v.lower()
 
-# ── Helpers ────────────────────────────────────────────────────
-def get_conf_path(tenant: str) -> str:
-    return os.path.join(SUSPENDED_DIR, f"{tenant}.{BASE_DOMAIN}.conf")
+# ── Lo que necesita root lo hace un script ─────────────────────
+# /usr/local/sbin/hepta-tenant-nginx (tools/tenant_nginx.sh del repo) valida sus argumentos, deja todo como estaba
+# si nginx -t falla y es lo único de los tenants que www-data puede correr por sudo (/etc/sudoers.d/hepta-perimetral).
+TENANT_NGINX = "/usr/local/sbin/hepta-tenant-nginx"
+DOMINIO_RE   = re.compile(r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$")
+DB_RE        = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\." + re.escape(BASE_DOMAIN) + r")?$")
+CORREO_RE    = re.compile(r"^[A-Za-z0-9._%+-]+@([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$")
 
-def nginx_reload() -> bool:
-    result = subprocess.run(["sudo", "nginx", "-t"], capture_output=True, text=True)
-    if result.returncode != 0:
-        log.error(f"nginx -t falló: {result.stderr}")
-        return False
-    subprocess.run(["sudo", "systemctl", "reload", "nginx"], check=True)
-    return True
+def correr_tenant(args, espera=40):
+    try:
+        r = subprocess.run(["sudo", "-n", TENANT_NGINX] + args, capture_output=True, text=True, timeout=espera)
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="el script de nginx no respondió a tiempo")
+    salida = (r.stdout + r.stderr).strip()
+    if r.returncode != 0:
+        log.error(f"[TENANT] {' '.join(args)}: {salida[-300:]}")
+        raise HTTPException(status_code=500, detail=salida[-300:] or "no se pudo cambiar nginx")
+    return salida
 
-def write_suspended_conf(tenant: str):
-    domain = f"{tenant}.{BASE_DOMAIN}"
-    conf = f"""# Suspendido por Hepta Cloud — {datetime.utcnow().isoformat()}
-# tenant: {tenant}
-if ($host = "{domain}") {{
-    return 503 "Instancia suspendida. Contactá a soporte en cloud.hepta.com.py";
-}}
-"""
-    os.makedirs(SUSPENDED_DIR, exist_ok=True)
-    with open(get_conf_path(tenant), "w") as f:
-        f.write(conf)
-    log.info(f"[SUSPEND] Conf creada: {get_conf_path(tenant)}")
-
-def remove_suspended_conf(tenant: str):
-    path = get_conf_path(tenant)
-    if os.path.exists(path):
-        os.remove(path)
-        log.info(f"[REACTIVATE] Conf eliminada: {path}")
+def listar_suspendidos():
+    if not os.path.isdir(SUSPENDED_DIR):
+        return []
+    return sorted(f[:-len(f".{BASE_DOMAIN}.conf")] for f in os.listdir(SUSPENDED_DIR) if f.endswith(f".{BASE_DOMAIN}.conf"))
 
 # ── Endpoints ──────────────────────────────────────────────────
 @app.get("/health")
 def health():
-    suspended = []
-    if os.path.isdir(SUSPENDED_DIR):
-        suspended = [f.replace(f".{BASE_DOMAIN}.conf", "")
-                     for f in os.listdir(SUSPENDED_DIR) if f.endswith(".conf")]
-    return {
-        "status":    "ok",
-        "suspended": suspended,
-        "timestamp": datetime.utcnow().isoformat(),
-    }
+    # Sin datos: qué instancias están suspendidas lo dice /suspended, con la clave
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
 
 @app.get("/suspended", dependencies=[Depends(verify_api_key)])
 def list_suspended():
     """Lista todas las instancias suspendidas"""
-    suspended = []
-    if os.path.isdir(SUSPENDED_DIR):
-        suspended = [f.replace(f".{BASE_DOMAIN}.conf", "")
-                     for f in os.listdir(SUSPENDED_DIR) if f.endswith(".conf")]
-    return {"success": True, "data": suspended}
+    return {"success": True, "data": listar_suspendidos()}
 
 @app.post("/suspend", dependencies=[Depends(verify_api_key)])
 def suspend(req: TenantAction):
-    """Suspende un tenant — crea fragmento Nginx + reload"""
+    """Suspende un tenant: fragmento de nginx que responde 503"""
     log.info(f"[SUSPEND] tenant={req.tenant}")
-    try:
-        write_suspended_conf(req.tenant)
-        if not nginx_reload():
-            remove_suspended_conf(req.tenant)
-            raise HTTPException(status_code=500, detail="nginx -t falló, conf revertida")
-        return {
-            "success": True,
-            "tenant":  req.tenant,
-            "message": f"Instancia {req.tenant}.{BASE_DOMAIN} suspendida.",
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.error(f"[SUSPEND] Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    correr_tenant(["suspender", req.tenant])
+    return {"success": True, "tenant": req.tenant, "message": f"Instancia {req.tenant}.{BASE_DOMAIN} suspendida."}
 
 @app.post("/reactivate", dependencies=[Depends(verify_api_key)])
 def reactivate(req: TenantAction):
-    """Reactiva un tenant — elimina fragmento Nginx + reload"""
+    """Reactiva un tenant"""
     log.info(f"[REACTIVATE] tenant={req.tenant}")
-    try:
-        remove_suspended_conf(req.tenant)
-        if not nginx_reload():
-            raise HTTPException(status_code=500, detail="nginx -t falló tras reactivar")
-        return {
-            "success": True,
-            "tenant":  req.tenant,
-            "message": f"Instancia {req.tenant}.{BASE_DOMAIN} reactivada.",
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.error(f"[REACTIVATE] Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Agregar al main.py de la API Perimetral (/opt/hepta/perimetral_api/main.py)
-# Pegar ANTES de la última línea (if __name__ == "__main__")
-
-import shutil
+    correr_tenant(["reactivar", req.tenant])
+    return {"success": True, "tenant": req.tenant, "message": f"Instancia {req.tenant}.{BASE_DOMAIN} reactivada."}
 
 class VhostRequest(BaseModel):
     domain: str        # dominio propio: barrios.com.py
-    db: str            # DB interna: barrios.erp.hepta.com.py
+    db: str            # base del tenant: barrios o barrios.erp.hepta.com.py
     certbot_email: str = "admin@hepta.com.py"
-    cf_token: str = ""
-    disable_subdomain: bool = True  # suspender subdominio wildcard
+    cf_token: str = ""              # ya no se usa: el certificado sale con la credencial de Cloudflare del servidor
+    disable_subdomain: bool = True  # suspender el subdominio de HEPTA
 
     @field_validator("domain")
     @classmethod
     def validate_domain(cls, v):
-        import re
-        if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$', v):
+        v = v.strip().lower()
+        if len(v) > 253 or not DOMINIO_RE.match(v) or v.startswith("www.") or v.endswith("hepta.com.py"):
             raise ValueError("Dominio inválido")
-        return v.lower()
+        return v
+
+    @field_validator("db")
+    @classmethod
+    def validate_db(cls, v):
+        v = v.strip().lower()
+        if not DB_RE.match(v):
+            raise ValueError("db inválida")
+        return v
+
+    @field_validator("certbot_email")
+    @classmethod
+    def validate_email(cls, v):
+        v = v.strip()
+        if not CORREO_RE.match(v):
+            raise ValueError("correo inválido")
+        return v
 
 @app.post("/vhost", dependencies=[Depends(verify_api_key)])
 def create_vhost(req: VhostRequest):
-    """
-    Crea vhost Nginx para dominio propio + SSL certbot.
-    Opcionalmente suspende el subdominio wildcard anterior.
-    """
+    """Dominio propio de un tenant: vhost, certificado y (si se pide) suspensión del subdominio de HEPTA."""
     log.info(f"[VHOST] domain={req.domain} db={req.db}")
-
-    nginx_sites   = "/etc/nginx/sites-available"
-    nginx_enabled = "/etc/nginx/sites-enabled"
-    conf_file     = f"{nginx_sites}/{req.domain}.conf"
-
-    try:
-        # 1. Crear vhost
-        vhost_content = f"""server {{
-    server_name {req.domain} www.{req.domain};
-
-    location / {{
-        proxy_pass http://odoo19_backend;
-        proxy_set_header Host {req.db};
-        proxy_set_header X-Forwarded-Host {req.db};
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 720s;
-        proxy_connect_timeout 720s;
-        proxy_send_timeout 720s;
-        client_max_body_size 100m;
-    }}
-
-    location /websocket {{
-        proxy_pass http://odoo19_evented;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_set_header Host {req.db};
-        proxy_set_header X-Forwarded-Host {req.db};
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 720s;
-        proxy_send_timeout 720s;
-    }}
-
-    listen 80;
-}}
-"""
-        # Escribir con sudo tee (www-data no tiene permisos directos)
-        result = subprocess.run(
-            ["sudo", "tee", conf_file],
-            input=vhost_content, text=True, capture_output=True
-        )
-        if result.returncode != 0:
-            raise Exception(f"Error escribiendo conf: {result.stderr}")
-
-        # 2. Symlink en sites-enabled
-        enabled_path = f"{nginx_enabled}/{req.domain}.conf"
-        if not os.path.exists(enabled_path):
-            subprocess.run(["sudo", "ln", "-sf", conf_file, enabled_path], check=True)
-
-        # 3. Test nginx
-        test = subprocess.run(["sudo", "nginx", "-t"], capture_output=True, text=True)
-        if test.returncode != 0:
-            os.remove(conf_file)
-            if os.path.exists(enabled_path): os.remove(enabled_path)
-            raise HTTPException(status_code=500, detail=f"nginx -t falló: {test.stderr}")
-
-        # 4. Reload nginx
-        subprocess.run(["sudo", "systemctl", "reload", "nginx"], check=True)
-        log.info(f"[VHOST] Nginx recargado para {req.domain}")
-
-        # 5. Certbot SSL
-        cf_tok = req.cf_token or CF_API_TOKEN or ""
-        cf_creds = CF_CREDENTIALS_FILE
-        tmp_creds = None
-        if cf_tok:
-            tmp_creds = f"/tmp/cf_{req.domain.replace(chr(46),chr(95))}.ini"
-            with open(tmp_creds, "w") as fcf:
-                fcf.write(f"dns_cloudflare_api_token = {cf_tok}\n")
-            os.chmod(tmp_creds, 0o600)
-            cf_creds = tmp_creds
-        certbot_result = subprocess.run([
-            "sudo", "certbot", "certonly",
-            "--dns-cloudflare",
-            "--dns-cloudflare-credentials", cf_creds,
-            "--dns-cloudflare-propagation-seconds", "20",
-            "-d", req.domain, "-d", f"www.{req.domain}",
-            "--non-interactive", "--agree-tos",
-            "--email", req.certbot_email,
-        ], capture_output=True, text=True, timeout=180)
-        if tmp_creds and os.path.exists(tmp_creds): os.remove(tmp_creds)
-
-        ssl_ok = certbot_result.returncode == 0
-        if ssl_ok:
-            cert = f"/etc/letsencrypt/live/{req.domain}/fullchain.pem"
-            key  = f"/etc/letsencrypt/live/{req.domain}/privkey.pem"
-            lines = [
-                f"server {{",
-                f"    listen 443 ssl;",
-                f"    server_name {req.domain} www.{req.domain};",
-                f"    ssl_certificate     {cert};",
-                f"    ssl_certificate_key {key};",
-                f"    include /etc/letsencrypt/options-ssl-nginx.conf;",
-                f"    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;",
-                f"    client_max_body_size 100m;",
-                f"    proxy_read_timeout 720s;",
-                f"    location / {{",
-                f"        proxy_pass http://odoo19_backend;",
-                f"        proxy_set_header Host {req.db};",
-                f"        proxy_set_header X-Forwarded-Proto https;",
-                f"        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;",
-                f"        proxy_set_header X-Real-IP $remote_addr;",
-                f"    }}",
-                f"    location /websocket {{",
-                f"        proxy_pass http://odoo19_evented;",
-                f"        proxy_set_header Upgrade $http_upgrade;",
-                f"        proxy_set_header Connection $connection_upgrade;",
-                f"        proxy_set_header Host {req.db};",
-                f"        proxy_set_header X-Forwarded-Proto https;",
-                f"        proxy_read_timeout 720s;",
-                f"    }}",
-                f"}}",
-                f"server {{",
-                f"    listen 80;",
-                f"    server_name {req.domain} www.{req.domain};",
-                f"    return 301 https://$host$request_uri;",
-                f"}}",
-            ]
-            ssl_conf = "\n".join(lines) + "\n"
-            subprocess.run(["sudo", "tee", conf_file], input=ssl_conf, text=True, capture_output=True)
-            subprocess.run(["sudo", "systemctl", "reload", "nginx"], check=True)
-            log.info(f"[VHOST] SSL OK para {req.domain}")
-        else:
-            log.warning(f"[VHOST] Certbot fallo: {certbot_result.stderr[-300:]}")
-
-        # 6. Suspender subdominio wildcard si se pidió
-        if req.disable_subdomain:
-            tenant = req.db.split('.')[0]
-            write_suspended_conf(tenant)
-            nginx_reload()
-            log.info(f"[VHOST] Subdominio {tenant} suspendido")
-
-        log.info(f"[VHOST] OK: {req.domain} → {req.db} ssl={ssl_ok}")
-        return {
-            "success":  True,
-            "domain":   req.domain,
-            "db":       req.db,
-            "ssl":      ssl_ok,
-            "ssl_msg":  certbot_result.stdout[-200:] if ssl_ok else certbot_result.stderr[-200:],
-            "message":  f"Dominio {req.domain} activado.{' SSL OK.' if ssl_ok else ' SSL pendiente — verificá el DNS.'}",
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.error(f"[VHOST] Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
+    args = ["vhost", req.domain, req.db, req.certbot_email] + ([] if req.disable_subdomain else ["--sin-suspender"])
+    salida = correr_tenant(args, espera=200)
+    ssl_ok = salida.splitlines()[-1].strip() == "ssl=si" if salida else False
+    log.info(f"[VHOST] OK: {req.domain} → {req.db} ssl={ssl_ok}")
+    return {
+        "success": True,
+        "domain":  req.domain,
+        "db":      req.db,
+        "ssl":     ssl_ok,
+        "ssl_msg": salida[-200:],
+        "message": f"Dominio {req.domain} activado.{' SSL OK.' if ssl_ok else ' SSL pendiente — verificá el DNS.'}",
+    }
 
 @app.delete("/vhost/{domain}", dependencies=[Depends(verify_api_key)])
 def delete_vhost(domain: str):
-    """Elimina el vhost de un dominio propio"""
-    nginx_sites   = "/etc/nginx/sites-available"
-    nginx_enabled = "/etc/nginx/sites-enabled"
-    conf_file     = f"{nginx_sites}/{domain}.conf"
-    enabled_path  = f"{nginx_enabled}/{domain}.conf"
-
-    try:
-        subprocess.run(["sudo", "rm", "-f", enabled_path], capture_output=True)
-        subprocess.run(["sudo", "rm", "-f", conf_file], capture_output=True)
-        nginx_reload()
-        log.info(f"[VHOST] Eliminado: {domain}")
-        return {"success": True, "message": f"Vhost {domain} eliminado."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Quita el vhost de un dominio propio (solo si lo creó el script)"""
+    domain = domain.strip().lower()
+    if len(domain) > 253 or not DOMINIO_RE.match(domain):
+        raise HTTPException(status_code=422, detail="dominio inválido")
+    salida = correr_tenant(["quitar-vhost", domain])
+    log.info(f"[VHOST] Eliminado: {domain}")
+    return {"success": True, "message": salida.splitlines()[-1] if salida else ""}
 
 
 # ── HEPTA Drive: vhost de la instancia de un cliente ──────────

@@ -89,9 +89,9 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
 
 ## Pendientes
 
-- [ ] API perimetral: validar `domain` y `db` en `/vhost` y sacar la lista de suspendidos de `/health`.
-- [ ] NGINX perimetral: acotar el `sudo` de `www-data` (`/etc/sudoers.d/hepta-perimetral`): hoy puede correr `nginx`, `certbot`
-      y `ln` con cualquier argumento, que en la práctica es root. Pasar todo a scripts con argumentos validados, como el del drive.
+- [ ] API perimetral 2.0.0 (`infra/perimetral_api/instalar-permisos.sh`): sin sudo amplio para `www-data`, entradas
+      validadas y `/health` sin la lista de suspendidos. En el repo desde el 2026-11-23; falta instalarla en
+      `dkr-hgsvrlnx003`, probar suspender/reactivar desde el Admin y retirar la regla vieja de sudo (paso 2).
 - [ ] TLS entre HEPTA Cloud y las dos APIs del puerto 8888: la contraseña inicial del cliente viaja sin cifrar
       dentro de la red interna. (El filtro por IP ya está: `ALLOWED_IPS` en el `.env` de cada API.)
 - [ ] RetoPA: la ficha del cliente se crea solo con un botón del Admin; enganchar al alta si se ofrece en el plan.
