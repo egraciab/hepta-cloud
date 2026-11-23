@@ -86,10 +86,15 @@
   <script>
     // La dirección de la instancia llega del NGINX (?i=<tenant>). Solo se muestra si tiene forma de nombre.
     (function () {
-      var i = (new URLSearchParams(location.search).get('i') || '').toLowerCase();
-      if (/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(i)) {
+      var q = new URLSearchParams(location.search);
+      var i = (q.get('i') || '').toLowerCase(), dom = (q.get('d') || '').toLowerCase();
+      if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(i)) i = '';
+      // Si llegó por el dominio propio del cliente (?d=), se muestra ese nombre, que es el que conocen
+      if (dom.length > 253 || !/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(dom)) dom = '';
+      var nombre = dom || (i ? i + '.erp.hepta.com.py' : '');
+      if (nombre) {
         var d = document.getElementById('dir');
-        d.textContent = i + '.erp.hepta.com.py';
+        d.textContent = nombre;
         d.hidden = false;
       }
       fetch('/api/site-config').then(function (r) { return r.json(); }).then(function (j) {
@@ -99,7 +104,7 @@
           document.getElementById('logo').replaceChildren(img);
         }
         if (c.whatsapp_number && /^\d{8,15}$/.test(String(c.whatsapp_number))) {
-          var msg = 'Hola, la instancia ' + (i || '') + ' de Hepta Cloud aparece suspendida. ¿Me ayudan a reactivarla?';
+          var msg = 'Hola, la instancia ' + (nombre || '') + ' de Hepta Cloud aparece suspendida. ¿Me ayudan a reactivarla?';
           var wa = document.getElementById('wa');
           wa.href = 'https://wa.me/' + c.whatsapp_number + '?text=' + encodeURIComponent(msg);
           wa.target = '_blank'; wa.rel = 'noopener';

@@ -6,11 +6,14 @@
 # 755. La API (usuario www-data) lo corre por sudo y no puede correr nada más que esto y el script del drive: antes
 # tenía sudo para nginx, certbot, tee, ln y rm con cualquier argumento, que en la práctica era root.
 #
-#   hepta-tenant-nginx suspender <tenant>                  las visitas van a la página de aviso de Hepta Cloud
+#   hepta-tenant-nginx suspender <tenant>                  las visitas (subdominio y dominio propio) van al aviso
 #   hepta-tenant-nginx reactivar <tenant>                  vuelve a responder
 #   hepta-tenant-nginx vhost <dominio> <db> [correo]       dominio propio: vhost, certificado por DNS de Cloudflare
-#                       [--sin-suspender]                  y, salvo --sin-suspender, suspende <tenant>.erp.hepta.com.py
+#                       [--sin-suspender]                  y, salvo --sin-suspender, el subdominio manda al dominio
 #   hepta-tenant-nginx quitar-vhost <dominio>              quita un vhost creado por este script
+#   hepta-tenant-nginx listar                              las suspendidas (no cuenta las que pasaron a su dominio)
+#   hepta-tenant-nginx enganchar <dominio> <tenant> [--probar]   vhost de dominio propio que ya existía: que lo
+#                                                          corte la suspensión y el subdominio mande al dominio
 #   hepta-tenant-nginx rehacer-suspendidas                 reescribe las ya suspendidas con el formato actual
 #   hepta-tenant-nginx probar                              valida la configuración de nginx (no cambia nada)
 #
@@ -22,6 +25,7 @@ set -euo pipefail
 BASE="${HT_BASE:-erp.hepta.com.py}"
 SITIOS="${HT_NGINX:-/etc/nginx}"
 SUSP="${HT_SUSPENDIDOS:-/etc/nginx/hepta-suspended}"
+SUSPD="${HT_SUSP_DOMINIOS:-/etc/nginx/hepta-suspended-dominios}"
 NGINX="${HT_NGINX_BIN:-nginx}"
 CERTBOT="${HT_CERTBOT:-certbot}"
 RECARGAR="${HT_RECARGAR:-systemctl reload nginx}"
@@ -31,7 +35,7 @@ CORREO_DEF="${HT_CORREO:-admin@hepta.com.py}"
 AVISO="${HT_AVISO:-https://cloud.hepta.com.py/suspendida}"
 CANDADO="${HT_CANDADO:-/run/hepta-tenant-nginx.candado}"
 
-uso() { sed -n '3,19p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+uso() { sed -n '3,22p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 error() { echo "ERROR: $*" >&2; exit 1; }
 [ "$(id -u)" = 0 ] || error "corré como root"
 
@@ -55,38 +59,99 @@ valida() { "$NGINX" -t >/dev/null 2>&1; }
 recargar() { $RECARGAR; }
 
 # ── Suspensión ──
+# Dos fragmentos por tenant:
+#   $SUSP/<t>.erp.hepta.com.py.conf   lo incluye el server del comodín *.erp.hepta.com.py. Es de un tipo:
+#        suspendido → manda a la página de aviso · migrado → manda al dominio propio del cliente (301)
+#   $SUSPD/<t>.conf                   lo incluyen los vhosts del dominio propio de ese tenant: existe solo
+#        mientras está suspendido, y manda a la página de aviso sin mirar el nombre
+# Así "suspender" corta el subdominio de HEPTA y también el dominio propio, y "reactivar" no le devuelve la vida
+# a un subdominio que se apagó a propósito al pasar al dominio propio.
 susp_conf() { echo "$SUSP/$1.$BASE.conf"; }
-suspender() {
-  local t="$1" f; f="$(susp_conf "$t")"
-  mkdir -p "$SUSP"
-  local tmp; tmp="$(mktemp "$SUSP/.nuevo.XXXXXX")"
-  # Las visitas van a la página de aviso de Hepta Cloud (servicio en pausa, datos a salvo, cómo reactivar)
-  printf '# Suspendido por Hepta Cloud — %s\n# tenant: %s\nif ($host = "%s.%s") {\n    return 302 %s?i=%s;\n}\n' \
-    "$(date -u +%FT%TZ)" "$t" "$t" "$BASE" "$AVISO" "$t" > "$tmp"
-  chmod 644 "$tmp"
-  local previo=""; [ -e "$f" ] && { previo="$(mktemp)"; cp -p "$f" "$previo"; }
-  mv "$tmp" "$f"
+dom_conf() { echo "$SUSPD/$1.conf"; }
+tipo_de() { [ -e "$1" ] || { echo ninguno; return; }; grep -q '^# tipo: migrado' "$1" && echo migrado || echo suspendido; }
+
+# Escribe varios archivos juntos: si nginx -t falla, vuelve todos a como estaban. Uso: aplicar <dest> <contenido|-> ...
+aplicar() {
+  local -a dest=() prev=()
+  while [ $# -ge 2 ]; do
+    local f="$1" c="$2"; shift 2
+    mkdir -p "$(dirname "$f")"
+    local p=""; [ -e "$f" ] && { p="$(mktemp)"; cp -p "$f" "$p"; }
+    dest+=("$f"); prev+=("${p:--}")
+    if [ "$c" = - ]; then [ -e "$f" ] && unlink "$f"; else
+      local tmp; tmp="$(mktemp "$(dirname "$f")/.nuevo.XXXXXX")"; printf '%s\n' "$c" > "$tmp"; chmod 644 "$tmp"; mv "$tmp" "$f"; fi
+  done
   if ! valida; then
-    if [ -n "$previo" ]; then mv "$previo" "$f"; else unlink "$f"; fi
-    error "nginx -t falló; no se suspendió $t"
+    local i; for i in "${!dest[@]}"; do
+      if [ "${prev[$i]}" = - ]; then [ -e "${dest[$i]}" ] && unlink "${dest[$i]}"; else mv "${prev[$i]}" "${dest[$i]}"; fi
+    done
+    return 1
   fi
-  [ -n "$previo" ] && unlink "$previo"
+  local x; for x in "${prev[@]}"; do [ "$x" = - ] || unlink "$x"; done
   recargar
-  echo "suspendida: $t.$BASE"
+}
+frag_suspendido() { printf '# Suspendido por Hepta Cloud — %s\n# tipo: suspendido\n# tenant: %s\nif ($host = "%s.%s") {\n    return 302 %s?i=%s;\n}\n' "$(date -u +%FT%TZ)" "$1" "$1" "$BASE" "$AVISO" "$1"; }
+frag_migrado() { printf '# Subdominio de HEPTA apagado: el cliente usa su dominio propio — %s\n# tipo: migrado\n# tenant: %s\n# dominio: %s\nif ($host = "%s.%s") {\n    return 301 https://%s$request_uri;\n}\n' "$(date -u +%FT%TZ)" "$1" "$2" "$1" "$BASE" "$2"; }
+frag_dominio() { printf '# Suspendido por Hepta Cloud — %s\n# tenant: %s\nreturn 302 %s?i=%s&d=$host;\n' "$(date -u +%FT%TZ)" "$1" "$AVISO" "$1"; }
+
+suspender() {
+  local t="$1" a; a="$(susp_conf "$t")"
+  local -a cambios=("$(dom_conf "$t")" "$(frag_dominio "$t")")
+  [ "$(tipo_de "$a")" = migrado ] || cambios+=("$a" "$(frag_suspendido "$t")")   # el migrado ya lleva al dominio propio, que queda cortado
+  aplicar "${cambios[@]}" || error "nginx -t falló; no se suspendió $t (quedó como estaba)"
+  echo "suspendida: $t.$BASE$([ "$(tipo_de "$a")" = migrado ] && echo " y su dominio propio")"
 }
 reactivar() {
-  local t="$1" f; f="$(susp_conf "$t")"
-  [ -e "$f" ] || { echo "no estaba suspendida: $t.$BASE"; return 0; }
-  local previo; previo="$(mktemp)"; cp -p "$f" "$previo"; unlink "$f"
-  if ! valida; then mv "$previo" "$f"; error "nginx -t falló; $t sigue suspendida"; fi
-  unlink "$previo"
-  recargar
+  local t="$1" a d; a="$(susp_conf "$t")"; d="$(dom_conf "$t")"
+  local -a cambios=()
+  [ -e "$d" ] && cambios+=("$d" -)
+  [ "$(tipo_de "$a")" = suspendido ] && cambios+=("$a" -)
+  [ ${#cambios[@]} -gt 0 ] || { echo "no estaba suspendida: $t.$BASE"; return 0; }
+  aplicar "${cambios[@]}" || error "nginx -t falló; $t sigue suspendida"
   echo "reactivada: $t.$BASE"
+}
+migrar() {   # el subdominio de HEPTA pasa a mandar al dominio propio
+  local t="$1" d="$2"
+  aplicar "$(susp_conf "$t")" "$(frag_migrado "$t" "$d")" || error "nginx -t falló; el subdominio de $t quedó como estaba"
+  echo "subdominio: $t.$BASE → https://$d"
+}
+listar() {   # los suspendidos de verdad (no los que pasaron a su dominio)
+  local f t
+  for f in "$SUSP"/*."$BASE".conf; do [ -e "$f" ] || continue; [ "$(tipo_de "$f")" = suspendido ] && basename "$f" ".$BASE.conf"; done
+  for f in "$SUSPD"/*.conf; do [ -e "$f" ] || continue; t="$(basename "$f" .conf)"; [ "$(tipo_de "$(susp_conf "$t")")" = migrado ] && echo "$t"; done
+  return 0
+}
+
+# Vhost de dominio propio que ya existía (lo creó la API vieja o se hizo a mano): se le suma la línea que lo corta
+# cuando el tenant se suspende, y el subdominio de HEPTA pasa a mandar al dominio propio. No cambia nada más.
+enganchar() {
+  local d="$1" t="$2" probar="$3" conf="$SITIOS/sites-available/$1.conf"
+  [ -f "$conf" ] || error "no existe $conf (¿el vhost de $d tiene otro nombre? buscarlo con: grep -l '$d' $SITIOS/sites-enabled/*)"
+  grep -q "$t.$BASE" "$conf" || error "$conf no apunta a $t.$BASE. No se toca."
+  local inc="    include $SUSPD/$t.con[f];   # hepta: corte por suspensión"
+  local nuevo; nuevo="$(mktemp)"
+  if grep -qF "$SUSPD/$t.con[f]" "$conf"; then cp -p "$conf" "$nuevo"; else
+    awk -v inc="$inc" -v d="$d" '{ print } $0 ~ "^[ \t]*server_name[ \t]" && index($0, d) { print inc }' "$conf" > "$nuevo"
+  fi
+  if [ "$probar" = si ]; then
+    diff -u "$conf" "$nuevo" || true
+    echo "subdominio: $(tipo_de "$(susp_conf "$t")") → pasaría a migrado (https://$d)"
+    unlink "$nuevo"; return 0
+  fi
+  grep -qF "$SUSPD/$t.con[f]" "$nuevo" || { unlink "$nuevo"; error "no encontré un server_name con $d en $conf"; }
+  mkdir -p "$SUSPD"
+  cp -p "$conf" "$conf.antes-enganche-$(date +%Y%m%d_%H%M)"
+  local -a cambios=("$conf" "$(cat "$nuevo")")
+  [ "$(tipo_de "$(susp_conf "$t")")" = suspendido ] && [ ! -e "$(dom_conf "$t")" ] && cambios+=("$(susp_conf "$t")" "$(frag_migrado "$t" "$d")")
+  [ "$(tipo_de "$(susp_conf "$t")")" = ninguno ] && cambios+=("$(susp_conf "$t")" "$(frag_migrado "$t" "$d")")
+  unlink "$nuevo"
+  aplicar "${cambios[@]}" || error "nginx -t falló; $conf quedó como estaba"
+  echo "enganchado: $d (tenant $t); subdominio: $(tipo_de "$(susp_conf "$t")")"
 }
 
 # ── Dominio propio de un tenant ──
-bloques() {   # $1 dominio, $2 host interno, $3 http|https
-  local d="$1" h="$2"
+bloques() {   # $1 dominio, $2 host interno, $3 http|https, $4 tenant
+  local d="$1" h="$2" inc="    include $SUSPD/$4.con[f];   # hepta: corte por suspensión"
   local proxy="        proxy_set_header Host $h;
         proxy_set_header X-Forwarded-Host $h;
         proxy_set_header X-Forwarded-Proto https;
@@ -115,6 +180,7 @@ $proxy
 server {
     listen 443 ssl;
     server_name $d www.$d;
+$inc
     ssl_certificate     $LIVE/$d/fullchain.pem;
     ssl_certificate_key $LIVE/$d/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
@@ -134,6 +200,7 @@ EOF
 server {
     listen 80;
     server_name $d www.$d;
+$inc
 
 $loc
 }
@@ -154,7 +221,7 @@ vhost() {
     if [ -n "$previo" ]; then cp -p "$previo" "$conf"; else [ -L "$enlace" ] && unlink "$enlace"; [ -e "$conf" ] && unlink "$conf"; fi
     valida && recargar || true
   }
-  escribir() { { echo "$marca"; bloques "$d" "$h" "$1"; } > "$conf.nuevo"; chmod 644 "$conf.nuevo"; mv "$conf.nuevo" "$conf"; }
+  escribir() { mkdir -p "$SUSPD"; { echo "$marca"; bloques "$d" "$h" "$1" "$t"; } > "$conf.nuevo"; chmod 644 "$conf.nuevo"; mv "$conf.nuevo" "$conf"; }
 
   # 1. Por HTTP (lo que haya andando sigue igual si ya tenía certificado)
   if [ -s "$LIVE/$d/fullchain.pem" ]; then escribir https; else escribir http; fi
@@ -188,8 +255,8 @@ vhost() {
   fi
   [ -n "$previo" ] && unlink "$previo"
 
-  # 4. El subdominio de HEPTA deja de responder (el cliente entra solo por su dominio)
-  if [ "$suspender_sub" = si ]; then suspender "$t"; fi
+  # 4. El subdominio de HEPTA pasa a mandar al dominio propio (salvo que el tenant esté suspendido: ahí sigue cortado)
+  if [ "$suspender_sub" = si ] && [ ! -e "$(dom_conf "$t")" ]; then migrar "$t" "$d"; fi
   echo "vhost: $d → $h"
   echo "ssl=$ssl"
 }
@@ -225,11 +292,17 @@ case "${1:-}" in
   quitar-vhost)
     d="${2:-}"; d="${d,,}"; dominio_ok "$d" || error "dominio inválido"
     quitar_vhost "$d" ;;
+  listar) listar ;;
+  enganchar)
+    d="${2:-}"; d="${d,,}"; dominio_ok "$d" || error "dominio inválido"
+    t="$(tenant_de "${3:-}")" || error "tenant inválido"
+    enganchar "$d" "$t" "$([ "${4:-}" = --probar ] && echo si || echo no)" ;;
   rehacer-suspendidas)
     # Vuelve a escribir los fragmentos de las ya suspendidas con el formato actual (página de aviso)
     n=0; for f in "$SUSP"/*."$BASE".conf; do
       [ -e "$f" ] || continue
       t="$(basename "$f" ".$BASE.conf")"; t="$(tenant_de "$t")" || { echo "se saltea $f (nombre raro)"; continue; }
+      [ "$(tipo_de "$f")" = suspendido ] || continue
       suspender "$t" >/dev/null && n=$((n + 1))
     done
     echo "rehechas: $n" ;;

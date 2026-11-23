@@ -83,9 +83,9 @@ def correr_tenant(args, espera=40):
     return salida
 
 def listar_suspendidos():
-    if not os.path.isdir(SUSPENDED_DIR):
-        return []
-    return sorted(f[:-len(f".{BASE_DOMAIN}.conf")] for f in os.listdir(SUSPENDED_DIR) if f.endswith(f".{BASE_DOMAIN}.conf"))
+    # Las suspendidas de verdad: el script no cuenta los subdominios apagados porque el cliente pasó a su dominio
+    salida = correr_tenant(["listar"])
+    return sorted({l.strip() for l in salida.splitlines() if l.strip()})
 
 # ── Endpoints ──────────────────────────────────────────────────
 @app.get("/health")
