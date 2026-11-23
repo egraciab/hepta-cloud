@@ -67,6 +67,7 @@ install -m 755 -o root -g root "$TN" "$SCRIPT"
 TMP="$(mktemp)"
 echo "www-data ALL=(root) NOPASSWD: $SCRIPT" > "$TMP"
 visudo -cf "$TMP" >/dev/null || { echo "ERROR: la regla de sudo no pasó la validación" >&2; unlink "$TMP"; exit 1; }
+[ -f "$SUDOERS" ] && { mkdir -p /root/sudoers-retirados; cp -p "$SUDOERS" "/root/sudoers-retirados/$(basename "$SUDOERS").$(date +%Y%m%d_%H%M)"; }
 install -m 440 -o root -g root "$TMP" "$SUDOERS"; unlink "$TMP"
 sudo -u www-data sudo -n "$SCRIPT" probar >/dev/null || { echo "ERROR: www-data no puede correr el script" >&2; exit 1; }
 echo "Permiso listo: $SUDOERS"
