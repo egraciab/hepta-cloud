@@ -89,9 +89,6 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
 
 ## Pendientes
 
-- [ ] API perimetral 2.0.0 (`infra/perimetral_api/instalar-permisos.sh`): sin sudo amplio para `www-data`, entradas
-      validadas y `/health` sin la lista de suspendidos. En el repo desde el 2026-11-23; falta instalarla en
-      `dkr-hgsvrlnx003`, probar suspender/reactivar desde el Admin y retirar la regla vieja de sudo (paso 2).
 - [ ] TLS entre HEPTA Cloud y las dos APIs del puerto 8888: la contraseña inicial del cliente viaja sin cifrar
       dentro de la red interna. (El filtro por IP ya está: `ALLOWED_IPS` en el `.env` de cada API.)
 - [ ] RetoPA: la ficha del cliente se crea solo con un botón del Admin; enganchar al alta si se ofrece en el plan.
@@ -157,3 +154,8 @@ No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minu
   el nombre): última copia, apaga y archiva, quita los vhosts y el CNAME propio. No borra nada: los datos quedan en
   `/srv/nextcloud/_bajas` y el repositorio de copias se archiva solo (`hepta-respaldo-repos archivar`, vía `hcsvrnd01`).
   Borrar un repositorio archivado es siempre a mano y recién a los 30 días (`hepta-respaldo-repos borrar`).
+- 2026-11-23 — **API perimetral 2.0.0** en `dkr-hgsvrlnx003`: `www-data` solo puede correr por sudo `hepta-tenant-nginx`
+  (`tools/tenant_nginx.sh`: suspender, reactivar, dominio propio de tenants) y `drive_vhost_add.sh`; ya no tiene `nginx`,
+  `certbot`, `tee`, `ln` ni `rm` sueltos. `/vhost` valida dominio, db y correo; `/health` sin la lista de suspendidos.
+  Probado suspendiendo y reactivando `spademo` desde el Admin. Una instancia suspendida ya no devuelve un 503 pelado:
+  manda a **`/suspendida?i=<tenant>`**, página de Hepta Cloud (servicio en pausa, datos a salvo, portal y WhatsApp).

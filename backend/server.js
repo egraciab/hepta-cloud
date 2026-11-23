@@ -85,6 +85,10 @@ app.use('/admin',  express.static(path.join(FRONTEND, 'public', 'admin')));
 app.get('/terminos', (req, res) =>
   res.sendFile(path.join(FRONTEND, 'public', 'terminos', 'index.html'),
     err => { if (err) res.status(404).send('Not found'); }));
+// Aviso de servicio en pausa: el NGINX perimetral manda acá las instancias suspendidas (?i=<tenant>)
+app.get('/suspendida', (req, res) =>
+  res.sendFile(path.join(FRONTEND, 'public', 'suspendida', 'index.html'),
+    err => { if (err) res.status(404).send('Not found'); }));
 app.get('/privacidad', (req, res) =>
   res.sendFile(path.join(FRONTEND, 'public', 'privacidad', 'index.html'),
     err => { if (err) res.status(404).send('Not found'); }));

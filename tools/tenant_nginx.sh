@@ -6,11 +6,12 @@
 # 755. La API (usuario www-data) lo corre por sudo y no puede correr nada más que esto y el script del drive: antes
 # tenía sudo para nginx, certbot, tee, ln y rm con cualquier argumento, que en la práctica era root.
 #
-#   hepta-tenant-nginx suspender <tenant>                  la instancia responde 503 (fragmento en hepta-suspended)
+#   hepta-tenant-nginx suspender <tenant>                  las visitas van a la página de aviso de Hepta Cloud
 #   hepta-tenant-nginx reactivar <tenant>                  vuelve a responder
 #   hepta-tenant-nginx vhost <dominio> <db> [correo]       dominio propio: vhost, certificado por DNS de Cloudflare
 #                       [--sin-suspender]                  y, salvo --sin-suspender, suspende <tenant>.erp.hepta.com.py
 #   hepta-tenant-nginx quitar-vhost <dominio>              quita un vhost creado por este script
+#   hepta-tenant-nginx rehacer-suspendidas                 reescribe las ya suspendidas con el formato actual
 #   hepta-tenant-nginx probar                              valida la configuración de nginx (no cambia nada)
 #
 # <tenant> y <db>: el nombre de la base (prueba) o con el dominio de HEPTA (prueba.erp.hepta.com.py).
@@ -27,9 +28,10 @@ RECARGAR="${HT_RECARGAR:-systemctl reload nginx}"
 CF_CRED="${HT_CF_CRED:-/etc/letsencrypt/cloudflare/credentials.ini}"
 LIVE="${HT_LIVE:-/etc/letsencrypt/live}"
 CORREO_DEF="${HT_CORREO:-admin@hepta.com.py}"
+AVISO="${HT_AVISO:-https://cloud.hepta.com.py/suspendida}"
 CANDADO="${HT_CANDADO:-/run/hepta-tenant-nginx.candado}"
 
-uso() { sed -n '3,18p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+uso() { sed -n '3,19p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 error() { echo "ERROR: $*" >&2; exit 1; }
 [ "$(id -u)" = 0 ] || error "corré como root"
 
@@ -58,8 +60,9 @@ suspender() {
   local t="$1" f; f="$(susp_conf "$t")"
   mkdir -p "$SUSP"
   local tmp; tmp="$(mktemp "$SUSP/.nuevo.XXXXXX")"
-  printf '# Suspendido por Hepta Cloud — %s\n# tenant: %s\nif ($host = "%s.%s") {\n    return 503 "Instancia suspendida. Contactá a soporte en cloud.hepta.com.py";\n}\n' \
-    "$(date -u +%FT%TZ)" "$t" "$t" "$BASE" > "$tmp"
+  # Las visitas van a la página de aviso de Hepta Cloud (servicio en pausa, datos a salvo, cómo reactivar)
+  printf '# Suspendido por Hepta Cloud — %s\n# tenant: %s\nif ($host = "%s.%s") {\n    return 302 %s?i=%s;\n}\n' \
+    "$(date -u +%FT%TZ)" "$t" "$t" "$BASE" "$AVISO" "$t" > "$tmp"
   chmod 644 "$tmp"
   local previo=""; [ -e "$f" ] && { previo="$(mktemp)"; cp -p "$f" "$previo"; }
   mv "$tmp" "$f"
@@ -222,6 +225,14 @@ case "${1:-}" in
   quitar-vhost)
     d="${2:-}"; d="${d,,}"; dominio_ok "$d" || error "dominio inválido"
     quitar_vhost "$d" ;;
+  rehacer-suspendidas)
+    # Vuelve a escribir los fragmentos de las ya suspendidas con el formato actual (página de aviso)
+    n=0; for f in "$SUSP"/*."$BASE".conf; do
+      [ -e "$f" ] || continue
+      t="$(basename "$f" ".$BASE.conf")"; t="$(tenant_de "$t")" || { echo "se saltea $f (nombre raro)"; continue; }
+      suspender "$t" >/dev/null && n=$((n + 1))
+    done
+    echo "rehechas: $n" ;;
   probar)
     valida && echo "nginx -t: OK" || error "nginx -t falla" ;;
   *) uso ;;

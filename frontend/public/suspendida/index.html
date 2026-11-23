@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <meta name="robots" content="noindex,nofollow"/>
+  <title>Servicio en pausa · Hepta Cloud</title>
+  <link rel="preload" href="/assets/fonts/exo-2-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin/>
+  <link href="/assets/fonts/exo2.css?v=1" rel="stylesheet"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{--navy:#0D1F5C;--blue:#1254A4;--blue-light:#1A6FD4;--blue-pale:#E6F1FB;--teal:#1D9E75;--teal-pale:#E1F5EE;--gray-600:#5B6475;--gray-800:#1F2937}
+    html,body{height:100%}
+    body{font-family:'Exo 2',system-ui,sans-serif;color:var(--gray-800);line-height:1.6;
+      background:radial-gradient(1200px 600px at 85% -10%,rgba(26,111,212,.55),transparent 60%),
+                 radial-gradient(900px 500px at -10% 110%,rgba(29,158,117,.35),transparent 60%),var(--navy);
+      display:flex;flex-direction:column;min-height:100vh;background-attachment:fixed}
+    header{padding:22px max(16px,5%);display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .marca{display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none;font-weight:700;letter-spacing:.4px}
+    .marca-ico{width:36px;height:36px;border-radius:8px;background:var(--blue);display:grid;place-items:center;font-size:14px;overflow:hidden}
+    .marca-ico img{width:100%;height:100%;object-fit:contain}
+    header a.link{color:rgba(255,255,255,.75);font-size:14px;text-decoration:none}
+    header a.link:hover{color:#fff}
+    main{flex:1;display:grid;place-items:center;padding:16px}
+    .card{background:#fff;border-radius:18px;max-width:620px;width:100%;padding:40px 36px 32px;box-shadow:0 30px 80px rgba(3,10,40,.45);position:relative;overflow:hidden}
+    .card::before{content:"";position:absolute;inset:0 0 auto 0;height:5px;background:linear-gradient(90deg,var(--blue),var(--teal))}
+    .icono{width:64px;height:64px;border-radius:16px;background:var(--blue-pale);display:grid;place-items:center;margin-bottom:20px}
+    .icono svg{width:32px;height:32px;stroke:var(--blue);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    h1{font-size:clamp(24px,4vw,30px);line-height:1.2;color:var(--navy);margin-bottom:10px}
+    .dir{display:inline-block;font-size:13px;font-weight:600;color:var(--blue);background:var(--blue-pale);border-radius:999px;padding:3px 12px;margin-bottom:18px;word-break:break-all}
+    p{font-size:16px;margin-bottom:14px}
+    .tranqui{display:flex;gap:10px;align-items:flex-start;background:var(--teal-pale);color:#0E5A43;border-radius:12px;padding:12px 14px;font-size:14.5px;margin:18px 0 22px}
+    .tranqui svg{flex:none;width:20px;height:20px;margin-top:2px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+    .quien{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px}
+    .quien div{border:1px solid #E5E7EB;border-radius:12px;padding:14px}
+    .quien b{display:block;color:var(--navy);font-size:14px;margin-bottom:4px}
+    .quien span{font-size:14px;color:var(--gray-600)}
+    .acciones{display:flex;flex-wrap:wrap;gap:10px}
+    .btn{display:inline-flex;align-items:center;gap:8px;border-radius:10px;padding:12px 18px;font:600 15px 'Exo 2',sans-serif;text-decoration:none;transition:transform .12s ease,background .12s ease}
+    .btn:hover{transform:translateY(-1px)}
+    .btn.pri{background:var(--blue);color:#fff}
+    .btn.pri:hover{background:var(--blue-light)}
+    .btn.wa{background:#fff;color:var(--teal);border:1.5px solid var(--teal)}
+    .btn svg{width:18px;height:18px;fill:currentColor}
+    footer{padding:22px max(16px,5%);color:rgba(255,255,255,.7);font-size:13.5px;display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center}
+    footer a{color:#fff;font-weight:600;text-decoration:none}
+    footer a:hover{text-decoration:underline}
+    @media (max-width:560px){.card{padding:32px 22px 24px}.quien{grid-template-columns:1fr}.acciones{flex-direction:column}.btn{justify-content:center}}
+  </style>
+</head>
+<body>
+  <header>
+    <a class="marca" href="/"><span class="marca-ico" id="logo">H7</span>Hepta Cloud</a>
+    <a class="link" href="/portal/">Portal de clientes →</a>
+  </header>
+
+  <main>
+    <section class="card" aria-labelledby="titulo">
+      <div class="icono" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></div>
+      <h1 id="titulo">Este sistema está en pausa</h1>
+      <div class="dir" id="dir" hidden></div>
+      <p>El servicio de esta empresa en Hepta Cloud está suspendido por el momento. En cuanto se regularice, vuelve a funcionar tal como estaba, en la misma dirección.</p>
+
+      <div class="tranqui">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>
+        <span><strong>Los datos están a salvo.</strong> No se borró nada: la información y sus copias de seguridad siguen guardadas.</span>
+      </div>
+
+      <div class="quien">
+        <div><b>¿Sos el responsable de la cuenta?</b><span>Entrá al portal para ver tu cuenta, o escribinos y lo resolvemos juntos.</span></div>
+        <div><b>¿Trabajás en la empresa?</b><span>Avisale al responsable de tu empresa: la reactivación la gestiona esa persona.</span></div>
+      </div>
+
+      <div class="acciones">
+        <a class="btn pri" href="/portal/">Ir al portal de clientes</a>
+        <a class="btn wa" id="wa" href="/#contacto"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 12 12 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7.5-.1 1.5-.6 1.8-1.2.2-.6.2-1.1.1-1.2l-.5-.3z"/></svg>Escribinos</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Hepta Cloud · ERP, correo y nube privada, hechos en Paraguay.</span>
+    <a href="/">Conocé Hepta Cloud →</a>
+  </footer>
+
+  <script>
+    // La dirección de la instancia llega del NGINX (?i=<tenant>). Solo se muestra si tiene forma de nombre.
+    (function () {
+      var i = (new URLSearchParams(location.search).get('i') || '').toLowerCase();
+      if (/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(i)) {
+        var d = document.getElementById('dir');
+        d.textContent = i + '.erp.hepta.com.py';
+        d.hidden = false;
+      }
+      fetch('/api/site-config').then(function (r) { return r.json(); }).then(function (j) {
+        var c = (j && (j.data || j)) || {};
+        if (c.logo_url && /^(https:\/\/|\/)/.test(c.logo_url)) {
+          var img = document.createElement('img'); img.src = c.logo_url; img.alt = '';
+          document.getElementById('logo').replaceChildren(img);
+        }
+        if (c.whatsapp_number && /^\d{8,15}$/.test(String(c.whatsapp_number))) {
+          var msg = 'Hola, la instancia ' + (i || '') + ' de Hepta Cloud aparece suspendida. ¿Me ayudan a reactivarla?';
+          var wa = document.getElementById('wa');
+          wa.href = 'https://wa.me/' + c.whatsapp_number + '?text=' + encodeURIComponent(msg);
+          wa.target = '_blank'; wa.rel = 'noopener';
+        }
+      }).catch(function () {});
+    })();
+  </script>
+</body>
+</html>
