@@ -186,7 +186,8 @@ async function iniciar(instId, dominioCrudo, { reemplazar = false, actorId = nul
 
       // 4. Que responda de verdad
       t.paso = `Probando https://${r.dominio}`;
-      await comprobar(r.dominio);
+      const prueba = await comprobar(r.dominio);
+      if (!prueba.www) t.avisos.push(`www.${r.dominio} todavía no redirige desde acá (${prueba.motivo}); el dominio sí anda. Revisar en un rato: curl -sI https://www.${r.dominio}/`);
 
       // 5. El subdominio pasa al dominio propio y Odoo arma sus enlaces con él
       t.paso = 'El subdominio de HEPTA pasa a mandar al dominio propio';
@@ -203,7 +204,7 @@ async function iniciar(instId, dominioCrudo, { reemplazar = false, actorId = nul
         [r.dominio, `https://${r.dominio}`, t.instance_id]);
       t.estado = 'ok'; t.paso = 'Listo';
     } catch (e) {
-      t.estado = 'error'; t.error = String(e.message || e).slice(0, 500);
+      const error = String(e.message || e).slice(0, 500);
       // Si el DNS ya se había cambiado, vuelve a como estaba
       if (zona && t.dns_cambiado) {
         try {
@@ -213,6 +214,8 @@ async function iniciar(instId, dominioCrudo, { reemplazar = false, actorId = nul
         }
         catch (e2) { t.avisos.push(`OJO: no pude restaurar el DNS (${e2.message}). Lo que había está en dns_previo`); }
       }
+      // Recién ahora: el Admin muestra el resultado en cuanto ve el estado, y tiene que incluir la vuelta atrás
+      t.error = error; t.estado = 'error';
     } finally {
       t.fin = Date.now();
       await pool.query('INSERT INTO admin_logs (user_id, action, target, detail) VALUES ($1,$2,$3,$4)',
@@ -251,21 +254,64 @@ async function restaurarDns(zoneId, t) {
   for (const x of t.dns_previo) await cloudflare.cf(`/zones/${zoneId}/dns_records`, { method: 'POST', body: x });
 }
 
-// El dominio responde con el login de Odoo y el www manda al dominio. Hasta 5 minutos (propagación y caché).
+// ── Prueba desde afuera ──
+// Se resuelve con DNS públicos (1.1.1.1 y 8.8.8.8) y no con el de la red: el DNS interno guarda hasta una hora el "no
+// existe" de un nombre recién creado (el www, típicamente) y la prueba fallaba con el sitio andando.
+const https = require('https');
+const { Resolver } = require('dns').promises;
+const publico = new Resolver({ timeout: 3000, tries: 2 });
+publico.setServers(['1.1.1.1', '8.8.8.8']);
+
+async function ipPublica(nombre) {
+  for (const [f, fam] of [['resolve4', 4], ['resolve6', 6]]) {
+    try { const a = await publico[f](nombre); if (a.length) return { address: a[0], family: fam }; } catch (e) { /* sigue */ }
+  }
+  return null;   // sin respuesta de los públicos (¿puerto 53 cerrado?): se usa el DNS del sistema
+}
+
+function pedirHttps(url) {
+  return ipPublica(new URL(url).hostname).then(dir => new Promise((resolve, reject) => {
+    const lookup = dir ? (h, o, cb) => (o && o.all ? cb(null, [dir]) : cb(null, dir.address, dir.family)) : undefined;
+    const req = https.request(url, { method: 'GET', timeout: 15000, lookup, headers: { 'User-Agent': 'HEPTA Cloud (prueba de dominio propio)' } }, res => {
+      let cuerpo = '';
+      res.setEncoding('utf8');
+      res.on('data', c => { if (cuerpo.length < 300000) cuerpo += c; });
+      res.on('end', () => resolve({ status: res.statusCode, location: res.headers.location || '', cuerpo }));
+    });
+    req.on('timeout', () => req.destroy(Object.assign(new Error('sin respuesta en 15 s'), { code: 'TIMEOUT' })));
+    req.on('error', reject);
+    req.end();
+  }));
+}
+let pedir = pedirHttps;   // los harness la reemplazan
+
+const esOdoo = t => /odoo|web\/assets/i.test(t || '');
+
+// El dominio tiene que responder con el login de Odoo (hasta 5 minutos: propagación y caché). Si no, se vuelve atrás.
+// El www se prueba aparte (hasta 1 minuto) y si no anda queda como aviso: el sitio ya funciona y volver todo atrás
+// por el www hacía más daño que dejarlo para revisar.
 async function comprobar(dominio) {
   let ultimo = '';
   for (let i = 0; i < 30; i++) {
     try {
-      const a = await fetch(`https://${dominio}/web/login`, { redirect: 'manual', signal: AbortSignal.timeout(15000) });
-      const cuerpo = a.status === 200 ? await a.text() : '';
-      const b = await fetch(`https://www.${dominio}/`, { redirect: 'manual', signal: AbortSignal.timeout(15000) });
-      const loc = b.headers.get('location') || '';
-      if (a.status === 200 && /odoo|web\/assets/i.test(cuerpo) && b.status === 301 && loc.startsWith(`https://${dominio}/`)) return;
-      ultimo = `login ${a.status}${a.status === 200 && !/odoo|web\/assets/i.test(cuerpo) ? ' (no es Odoo)' : ''}, www ${b.status} ${loc}`;
-    } catch (e) { ultimo = e.cause?.code || e.message; }
+      const a = await pedir(`https://${dominio}/web/login`);
+      if (a.status === 200 && esOdoo(a.cuerpo)) { ultimo = null; break; }
+      ultimo = `login ${a.status}${a.status === 200 ? ' (no es Odoo)' : ''}`;
+    } catch (e) { ultimo = e.code || e.message; }
     await new Promise(res => setTimeout(res, 10000));
   }
-  throw new Error(`https://${dominio} no respondió bien en 5 minutos (${ultimo})`);
+  if (ultimo !== null) throw new Error(`https://${dominio} no respondió bien en 5 minutos (${ultimo})`);
+
+  let www = '';
+  for (let i = 0; i < 6; i++) {
+    try {
+      const b = await pedir(`https://www.${dominio}/`);
+      if (b.status === 301 && b.location.startsWith(`https://${dominio}/`)) return { www: true };
+      www = `respondió ${b.status} ${b.location}`;
+    } catch (e) { www = e.code || e.message; }
+    await new Promise(res => setTimeout(res, 10000));
+  }
+  return { www: false, motivo: www };
 }
 
 function detalle(x, quien) {
@@ -275,4 +321,4 @@ function detalle(x, quien) {
   return `${quien} respondió ${x.status}`;
 }
 
-module.exports = { revisar, iniciar, ver, _prueba: { normalizar } };
+module.exports = { revisar, iniciar, ver, _prueba: { normalizar, usarPedir: f => { pedir = f; }, pedirHttps } };
