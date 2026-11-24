@@ -88,6 +88,10 @@ async function revisar(instId, dominioCrudo) {
     };
   }
 
+  // El www solo en la raíz de la zona (cliente.com.py). Para un subdominio (erp.cliente.com.py) no tiene sentido, y el
+  // certificado gratuito de Cloudflare cubre un solo nivel: www.erp.cliente.com.py daría error de certificado.
+  const conWww = zona.zona === dominio;
+  if (!conWww) nombres.pop();
   const todos = await cloudflare.cf(`/zones/${zona.id}/dns_records?per_page=500`) || [];
   const registros = nombres.map(n => {
     const aca = todos.filter(r => limpio(r.name) === n);
@@ -105,7 +109,7 @@ async function revisar(instId, dominioCrudo) {
   let ssl = null;
   try { ssl = (await cloudflare.cf(`/zones/${zona.id}/settings/ssl`)).value; } catch (e) { ssl = null; }
   return {
-    dominio, instancia: inst.label, db: inst.db_name, modo: 'hepta', zona: zona.zona, destino: cfg.lb, registros,
+    dominio, instancia: inst.label, db: inst.db_name, modo: 'hepta', zona: zona.zona, destino: cfg.lb, registros, con_www: conWww,
     ssl, ssl_cambia: ssl !== 'strict', otros_con_proxy: otrosConProxy,
     correo: todos.filter(r => r.type === 'MX').map(r => r.content),
     hay_que_reemplazar: registros.some(r => r.accion === 'reemplazar'),
@@ -186,7 +190,7 @@ async function iniciar(instId, dominioCrudo, { reemplazar = false, actorId = nul
 
       // 4. Que responda de verdad
       t.paso = `Probando https://${r.dominio}`;
-      const prueba = await comprobar(r.dominio);
+      const prueba = await comprobar(r.dominio, r.con_www !== false);
       if (!prueba.www) t.avisos.push(`www.${r.dominio} todavía no redirige desde acá (${prueba.motivo}); el dominio sí anda. Revisar en un rato: curl -sI https://www.${r.dominio}/`);
 
       // 5. El subdominio pasa al dominio propio y Odoo arma sus enlaces con él
@@ -290,7 +294,7 @@ const esOdoo = t => /odoo|web\/assets/i.test(t || '');
 // El dominio tiene que responder con el login de Odoo (hasta 5 minutos: propagación y caché). Si no, se vuelve atrás.
 // El www se prueba aparte (hasta 1 minuto) y si no anda queda como aviso: el sitio ya funciona y volver todo atrás
 // por el www hacía más daño que dejarlo para revisar.
-async function comprobar(dominio) {
+async function comprobar(dominio, conWww = true) {
   let ultimo = '';
   for (let i = 0; i < 30; i++) {
     try {
@@ -302,6 +306,7 @@ async function comprobar(dominio) {
   }
   if (ultimo !== null) throw new Error(`https://${dominio} no respondió bien en 5 minutos (${ultimo})`);
 
+  if (!conWww) return { www: true };
   let www = '';
   for (let i = 0; i < 6; i++) {
     try {
