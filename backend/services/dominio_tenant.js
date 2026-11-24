@@ -139,6 +139,8 @@ async function iniciar(instId, dominioCrudo, { reemplazar = false, actorId = nul
   if (r.modo === 'cliente' && !r.listo) throw new ErrorAlta(422, `Todavía no apunta. ${r.instrucciones}`);
   if (r.hay_que_reemplazar && !reemplazar)
     throw new ErrorAlta(409, 'Hay registros que se van a reemplazar: revisalos y confirmá');
+  if (r.modo === 'hepta' && r.ssl === null)
+    throw new ErrorAlta(409, `El token de Cloudflare no puede leer el SSL de ${r.zona}: le falta el permiso Zone Settings (lectura y edición)`);
   if (r.modo === 'hepta' && r.ssl_cambia && r.otros_con_proxy.length)
     throw new ErrorAlta(409, `La zona está en SSL "${r.ssl || '?'}" y tiene otros nombres con proxy (${r.otros_con_proxy.join(', ')}). ` +
       'Pasarla a "Full (strict)" los afecta: revisarlo a mano en Cloudflare antes.');
