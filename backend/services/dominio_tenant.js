@@ -109,7 +109,9 @@ async function revisar(instId, dominioCrudo) {
     ssl, ssl_cambia: ssl !== 'strict', otros_con_proxy: otrosConProxy,
     correo: todos.filter(r => r.type === 'MX').map(r => r.content),
     hay_que_reemplazar: registros.some(r => r.accion === 'reemplazar'),
-    bloqueos: registros.map(r => r.bloqueo).filter(Boolean),
+    bloqueos: [...registros.map(r => r.bloqueo).filter(Boolean),
+      ...(ssl === null ? [`El token de Cloudflare no puede leer el SSL de ${zona.zona}: le falta el permiso Zone Settings (lectura y edición)`] : []),
+      ...(ssl !== 'strict' && otrosConProxy.length ? [`La zona está en SSL "${ssl}" y tiene otros nombres con proxy (${otrosConProxy.join(', ')}): pasarla a "Full (strict)" los afecta, revisarlo a mano en Cloudflare`] : [])],
   };
 }
 
