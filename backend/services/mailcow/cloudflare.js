@@ -205,4 +205,19 @@ async function quitarCname(nombre, destino) {
   return 'quitado';
 }
 
-module.exports = { applyDnsPlan, getZoneId, asegurarCname, quitarCname, _prueba: { toCloudflare, buscarExistente, entreComillas, sinComillas } };
+/**
+ * La zona de esta cuenta de Cloudflare que contiene a `nombre` (puede ser el nombre mismo: cliente.com.py).
+ * @returns {{zona: string, id: string} | null}  null si no está en la cuenta (o falta el token)
+ */
+async function zonaDe(nombre) {
+  if (!process.env.CLOUDFLARE_API_TOKEN) return null;
+  const partes = String(nombre).toLowerCase().split('.');
+  for (let i = 0; i <= partes.length - 2; i++) {
+    const candidata = partes.slice(i).join('.');
+    const zonas = await cf(`/zones?name=${encodeURIComponent(candidata)}&status=active`);
+    if (zonas && zonas.length) return { zona: candidata, id: zonas[0].id };
+  }
+  return null;
+}
+
+module.exports = { cf, zonaDe, applyDnsPlan, getZoneId, asegurarCname, quitarCname, _prueba: { toCloudflare, buscarExistente, entreComillas, sinComillas } };

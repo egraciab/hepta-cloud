@@ -87,6 +87,17 @@ En el `.env`: `DB_*`, `JWT_SECRET`, `HEPTA_SECRET_KEY` (cifra las credenciales d
 
 No volver a hacer el alta dentro de la petición HTTP: el proxy la corta al minuto y el alta tarda de 2 a 10.
 
+## Dominio propio de un tenant (Admin → Instancias → Editar → Activar dominio)
+
+`backend/services/dominio_tenant.js`. Primero **revisa** (`GET /api/admin/provision/custom-domain/:id?domain=`, no cambia
+nada) y el Admin muestra qué registros se crean o reemplazan; después corre en segundo plano, en este orden: vhost y
+certificado en el perimetral (DNS-01, el subdominio sigue andando) → si la zona está en la cuenta de Cloudflare de HEPTA,
+dominio y `www` como CNAME **con proxy** a `dominio_propio_lb` y la zona en SSL *Full (strict)* → prueba de
+`https://dominio/web/login` → recién ahí el subdominio manda al dominio (301) y Odoo arma sus enlaces con el dominio
+(API de alta `POST /website-domain`). Si la prueba falla, el DNS vuelve a como estaba. Nunca pisa un registro sin que se
+haya visto y confirmado; MX y TXT no se tocan. Zona del cliente: crea él el CNAME, **sin proxy**, a `dns_proxy_host` (un
+CNAME con proxy a nuestro balanceador desde otra cuenta de Cloudflare da error 1014). El `www` redirige al dominio.
+
 ## Pendientes
 
 - [ ] TLS entre HEPTA Cloud y las dos APIs del puerto 8888: la contraseña inicial del cliente viaja sin cifrar

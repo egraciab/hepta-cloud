@@ -247,85 +247,36 @@ router.post('/retopa/create-listing/:id', async (req, res) => {
 
 module.exports = router;
 
-// ── POST /api/admin/provision/custom-domain/:id ───────────────
-// Activa dominio propio para una instancia
-router.post('/custom-domain/:id', async (req, res) => {
-  const { domain } = req.body;
-  if (!domain) return res.status(400).json({ success: false, error: 'domain es requerido' });
+// ── Dominio propio de una instancia (ver services/dominio_tenant.js) ──
+// GET  /api/admin/provision/custom-domain/:id?domain=   → qué hay en el DNS y qué se cambiaría (no cambia nada)
+// POST /api/admin/provision/custom-domain/:id           → { domain, reemplazar } → 202 con un trabajo
+// GET  /api/admin/provision/custom-domain-jobs/:jobId
+// Antes era una sola petición de hasta 2,5 minutos (el proxy la corta al minuto), mandaba el token de Cloudflare a
+// la API del NGINX y no tocaba el DNS.
+const dominioTenant = require('../services/dominio_tenant');
 
-  // Validar formato de dominio
-  if (!/^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$/.test(domain)) {
-    return res.status(400).json({ success: false, error: 'Formato de dominio inválido' });
-  }
-
+router.get('/custom-domain/:id', async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT db_name, label, status FROM instances WHERE id=$1', [req.params.id]
-    );
-    if (!rows[0]) return res.status(404).json({ success: false, error: 'Instancia no encontrada' });
-    if (rows[0].status === 'cancelled')
-      return res.status(400).json({ success: false, error: 'Instancia cancelada' });
-
-    const cfg = await getConfig();
-    const { rows: cfgRows } = await pool.query(
-      "SELECT key,value FROM site_config WHERE key IN ('perimetral_certbot_email','certbot_email','cloudflare_api_token')"
-    );
-    const cfgMap = Object.fromEntries(cfgRows.map(r=>[r.key,r.value]));
-    const certbotEmail = cfgMap.certbot_email || cfgMap.perimetral_certbot_email || 'admin@hepta.com.py';
-    const cfToken = cfgMap.cloudflare_api_token || '';
-
-    console.log(`[custom-domain] Activando: ${domain} → ${rows[0].db_name}`);
-
-    // Llamar API Perimetral
-    const apiRes = await fetch(`${cfg.perimetral_api_url}/vhost`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-API-Key': cfg.perimetral_api_key },
-      body: JSON.stringify({
-        domain,
-        db:                rows[0].db_name,
-        certbot_email:     certbotEmail,
-        cf_token:          cfToken,
-        disable_subdomain: true,
-      }),
-      signal: AbortSignal.timeout(150000), // 2.5 min para certbot
-    });
-
-    const apiData = await apiRes.json();
-    if (!apiRes.ok || !apiData.success)
-      return res.status(500).json({ success: false, error: apiData.detail || apiData.error });
-
-    // Actualizar instancia en HC
-    await pool.query(
-      `UPDATE instances SET
-         custom_domain=$1,
-         custom_domain_status='active',
-         instance_url=$2,
-         updated_at=NOW()
-       WHERE id=$3`,
-      [domain, `https://${domain}`, req.params.id]
-    );
-
-    await logAction(req, 'activate_custom_domain', `instance:${req.params.id}`,
-      { domain, db: rows[0].db_name, ssl: apiData.ssl });
-
-    res.json({
-      success: true,
-      data: {
-        domain,
-        ssl:     apiData.ssl,
-        url:     `https://${domain}`,
-        message: apiData.message,
-      }
-    });
-
+    res.json({ success: true, data: await dominioTenant.revisar(req.params.id, req.query.domain) });
   } catch (err) {
-    if (err.name === 'TimeoutError')
-      return res.status(504).json({ success: false, error: 'Timeout en activación SSL' });
-    console.error('[custom-domain]', err.message);
-    res.status(500).json({ success: false, error: err.message });
+    if (!(err instanceof alta.ErrorAlta)) console.error('[custom-domain]', err.message);
+    res.status(err.status || 500).json({ success: false, error: err.message });
   }
 });
 
-// ── POST /api/portal/domain-request ──────────────────────────
-// Cliente solicita dominio propio desde el portal
-// Se registra como lead interno con tipo domain_request
+router.post('/custom-domain/:id', async (req, res) => {
+  try {
+    const job = await dominioTenant.iniciar(req.params.id, req.body.domain,
+      { reemplazar: req.body.reemplazar === true, actorId: req.user.id });
+    res.status(202).json({ success: true, data: { job } });
+  } catch (err) {
+    if (!(err instanceof alta.ErrorAlta)) console.error('[custom-domain]', err.message);
+    res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+router.get('/custom-domain-jobs/:jobId', (req, res) => {
+  const job = dominioTenant.ver(req.params.jobId);
+  if (!job) return res.status(404).json({ success: false, error: 'No hay registro de ese cambio (¿se reinició el servidor?). Mirá la instancia y admin_logs.' });
+  res.json({ success: true, data: job });
+});

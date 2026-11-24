@@ -175,24 +175,33 @@ $proxy
         proxy_read_timeout 720s;
         proxy_send_timeout 720s;
     }"
+  local ssl="    ssl_certificate     $LIVE/$d/fullchain.pem;
+    ssl_certificate_key $LIVE/$d/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;"
   if [ "$3" = https ]; then
     cat <<EOF
 server {
     listen 443 ssl;
-    server_name $d www.$d;
+    server_name $d;
 $inc
-    ssl_certificate     $LIVE/$d/fullchain.pem;
-    ssl_certificate_key $LIVE/$d/privkey.pem;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+$ssl
 
 $loc
+}
+
+# Una sola dirección: www y http mandan a https://$d (Google no ve dos sitios iguales)
+server {
+    listen 443 ssl;
+    server_name www.$d;
+$ssl
+    return 301 https://$d\$request_uri;
 }
 
 server {
     listen 80;
     server_name $d www.$d;
-    return 301 https://\$host\$request_uri;
+    return 301 https://$d\$request_uri;
 }
 EOF
   else
@@ -206,6 +215,14 @@ $loc
 }
 EOF
   fi
+}
+
+# El certificado de $1 existe y cubre $1 y www.$1
+cubre() {
+  local c="$LIVE/$1/fullchain.pem" san
+  [ -s "$c" ] || return 1
+  san="$(openssl x509 -in "$c" -noout -ext subjectAltName 2>/dev/null)" || return 1
+  grep -qwF "DNS:$1" <<<"$san" && grep -qwF "DNS:www.$1" <<<"$san"
 }
 
 vhost() {
@@ -224,18 +241,20 @@ vhost() {
   escribir() { mkdir -p "$SUSPD"; { echo "$marca"; bloques "$d" "$h" "$1" "$t"; } > "$conf.nuevo"; chmod 644 "$conf.nuevo"; mv "$conf.nuevo" "$conf"; }
 
   # 1. Por HTTP (lo que haya andando sigue igual si ya tenía certificado)
-  if [ -s "$LIVE/$d/fullchain.pem" ]; then escribir https; else escribir http; fi
+  if cubre "$d"; then escribir https; else escribir http; fi
   [ -L "$enlace" ] || ln -s "$conf" "$enlace"
   valida || { deshacer; error "nginx -t falló con el vhost de $d; dejé todo como estaba"; }
   recargar
 
   # 2. Certificado por DNS de Cloudflare (no necesita que el dominio ya apunte acá)
+  # Un certificado que ya estaba (por ejemplo uno viejo por HTTP, solo del dominio) sirve si cubre también el www;
+  # si no, se amplía con --expand en el mismo nombre.
   local ssl=no registro; registro="$(mktemp)"
-  if [ -s "$LIVE/$d/fullchain.pem" ]; then
+  if cubre "$d"; then
     ssl=si
   elif [ -r "$CF_CRED" ]; then
     if timeout 150 "$CERTBOT" certonly --dns-cloudflare --dns-cloudflare-credentials "$CF_CRED" \
-         --dns-cloudflare-propagation-seconds 20 -d "$d" -d "www.$d" \
+         --dns-cloudflare-propagation-seconds 20 --cert-name "$d" --expand -d "$d" -d "www.$d" \
          --non-interactive --agree-tos --keep-until-expiring --email "$correo" >"$registro" 2>&1; then
       ssl=si
     else
@@ -247,7 +266,8 @@ vhost() {
   unlink "$registro"
 
   # 3. Con certificado, el vhost pasa a HTTPS
-  if [ "$ssl" = si ] && ! grep -q 'listen 443' "$conf"; then
+  # (también si ya era HTTPS: así un vhost viejo queda con el formato de ahora, www y http → https://$d)
+  if [ "$ssl" = si ]; then
     local http; http="$(mktemp)"; cp -p "$conf" "$http"
     escribir https
     if ! valida; then cp -p "$http" "$conf"; valida && recargar || true; ssl=no; echo "nginx -t falló con HTTPS: quedó por HTTP"; else recargar; fi

@@ -254,7 +254,8 @@
               <div class="form-group"><label class="form-label">Email notificaciones leads</label><input class="form-input" type="email" id="cfg-notify_leads_email"/><div class="form-hint">Recibe un email por cada nuevo lead.</div></div>
             </div>
             <div class="grid-2">
-              <div class="form-group"><label class="form-label">Host proxy DNS (dominio propio)</label><input class="form-input" id="cfg-dns_proxy_host" placeholder="proxy.hepta.com.py"/><div class="form-hint">Los clientes crean un CNAME apuntando a este host.</div></div>
+              <div class="form-group"><label class="form-label">Host proxy DNS (dominio propio)</label><input class="form-input" id="cfg-dns_proxy_host" placeholder="proxy.hepta.com.py"/><div class="form-hint">Dominios con DNS del cliente: crean un CNAME (sin proxy) apuntando a este host.</div></div>
+              <div class="form-group"><label class="form-label">Balanceador (dominio propio en la cuenta de Cloudflare de HEPTA)</label><input class="form-input" id="cfg-dominio_propio_lb" placeholder="lb.hepta.com.py"/><div class="form-hint">Si la zona del cliente está en nuestra cuenta, el dominio y el www quedan como CNAME con proxy a este host. Vacío: se usa el host de arriba.</div></div>
               <div class="form-group"><label class="form-label">Email certbot SSL</label><input class="form-input" id="cfg-certbot_email" placeholder="admin@hepta.com.py"/></div>
             </div>
             <div class="form-group"><label class="form-label">Mensaje WhatsApp predeterminado</label><input class="form-input" id="cfg-whatsapp_message"/></div>
@@ -1214,7 +1215,7 @@ const cfgKeys=[
   'retopa_label','retopa_text','retopa_pill_name','retopa_pill_sub','retopa_url','retopa_logo_url',
   'footer_link1_label','footer_link1_url','footer_link2_label','footer_link2_url',
   'footer_link3_label','footer_link3_url','footer_group_label','footer_group_url',
-  'hero_panel_image','btn_primary_url','dns_proxy_host','certbot_email','wa_business_link','odoo_erp_crm_enabled','odoo_erp_crm_company_id','odoo_erp_crm_team_id','odoo_erp_crm_user_id'
+  'hero_panel_image','btn_primary_url','dns_proxy_host','dominio_propio_lb','certbot_email','wa_business_link','odoo_erp_crm_enabled','odoo_erp_crm_company_id','odoo_erp_crm_team_id','odoo_erp_crm_user_id'
 ];
 
 async function loadGeneral(){
@@ -2375,22 +2376,54 @@ async function saveInstEdit(){
   else alert(data.error||'No se pudo guardar');
 }
 
+// Dominio propio: primero se revisa qué hay en el DNS y qué se va a cambiar; el cambio corre en segundo plano
+// (certificado, DNS, prueba y recién al final el subdominio pasa al dominio). Ver services/dominio_tenant.js.
 async function activateCustomDomain(){
   const id=document.getElementById('inst-edit-id').value;
   const domain=document.getElementById('inst-edit-domain').value.trim().toLowerCase()
-    .replace(/^https?:\/\//,'').replace(/^www\./,'');
+    .replace(/^https?:\/\//,'').replace(/\/.*$/,'').replace(/^www\./,'');
   if(!domain){alert('Ingresá el dominio');return;}
-  if(!confirm(`¿Activar dominio "${domain}"?\n\nEsto:\n• Crea el vhost en Nginx\n• Genera SSL con certbot\n• Suspende el subdominio *.erp.hepta.com.py\n\nVerificá que el DNS ya apunte a 200.108.133.244`)) return;
-  const btn=document.getElementById('inst-domain-btn');
-  btn.disabled=true; btn.textContent='Activando...';
-  const data=await api('POST',`/admin/provision/custom-domain/${id}`,{domain});
-  if(data.success){
-    alert(`✓ ${data.data.message}`);
-    closeInstEditModal(); loadInstances();
+  const btn=document.getElementById('inst-domain-btn'), st=document.getElementById('inst-edit-domain-status');
+  btn.disabled=true; btn.textContent='Revisando...';
+  const fin=()=>{btn.disabled=false; btn.textContent='Activar dominio';};
+  const rev=await api('GET',`/admin/provision/custom-domain/${id}?domain=${encodeURIComponent(domain)}`);
+  if(!rev.success){alert('Error: '+rev.error); fin(); return;}
+  const r=rev.data;
+  let txt=`¿Activar ${r.dominio} en ${r.instancia}?\n\n`;
+  if(r.modo==='hepta'){
+    txt+=`La zona ${r.zona} está en la cuenta de Cloudflare de HEPTA. Va a quedar:\n`;
+    r.registros.forEach(g=>{
+      txt+=`• ${g.nombre} → CNAME ${r.destino} (con proxy)`;
+      if(g.accion==='nada') txt+=' — ya está así';
+      if(g.accion==='reemplazar') txt+=`\n    REEMPLAZA: ${g.actuales.map(a=>`${a.tipo} ${a.valor}${a.proxy?' (proxy)':''}`).join(', ')}`;
+      txt+='\n';
+    });
+    if(r.ssl_cambia) txt+=`• SSL de la zona: ${r.ssl||'?'} → Full (strict)\n`;
+    txt+=r.correo.length?`• Correo (MX): ${r.correo.join(', ')} — no se toca\n`:'• OJO: la zona no tiene MX (el correo no llega)\n';
+    if(r.bloqueos.length){alert('No se puede:\n'+r.bloqueos.join('\n')); fin(); return;}
   } else {
-    alert('Error: '+data.error);
+    txt+=`El DNS lo maneja el cliente (${r.zona?'sin balanceador configurado':'zona fuera de la cuenta de HEPTA'}).\n`;
+    r.registros.forEach(g=>{txt+=`• ${g.nombre}: ${g.apunta?'apunta bien':'NO apunta todavía'}\n`;});
+    if(!r.listo){alert(`Todavía no se puede.\n\n${r.instrucciones}`); fin(); return;}
   }
-  btn.disabled=false; btn.textContent='Activar dominio';
+  txt+=`\nDespués: certificado, prueba de https://${r.dominio} y recién ahí ${r.db} manda al dominio propio. Si la prueba falla, el DNS vuelve a como estaba.`;
+  if(!confirm(txt)){fin(); return;}
+  btn.textContent='Activando...';
+  const ini=await api('POST',`/admin/provision/custom-domain/${id}`,{domain:r.dominio, reemplazar:r.hay_que_reemplazar===true});
+  if(!ini.success){alert('Error: '+ini.error); fin(); return;}
+  const jobId=ini.data.job.id;
+  while(true){
+    await new Promise(ok=>setTimeout(ok,5000));
+    const j=await api('GET',`/admin/provision/custom-domain-jobs/${jobId}`);
+    if(!j.success){alert(j.error); break;}
+    st.textContent=`${j.data.paso} (${j.data.segundos} s)`;
+    if(j.data.estado==='en_curso') continue;
+    const av=j.data.avisos.length?`\n\n${j.data.avisos.join('\n')}`:'';
+    if(j.data.estado==='ok'){alert(`✓ ${j.data.dominio} activo.${av}`); closeInstEditModal(); loadInstances();}
+    else alert(`No se pudo: ${j.data.error}${av}`);
+    break;
+  }
+  fin();
 }
 
 // ── PAGES ──────────────────────────────────────────────────
