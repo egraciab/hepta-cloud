@@ -170,3 +170,9 @@ CNAME con proxy a nuestro balanceador desde otra cuenta de Cloudflare da error 1
   `certbot`, `tee`, `ln` ni `rm` sueltos. `/vhost` valida dominio, db y correo; `/health` sin la lista de suspendidos.
   Probado suspendiendo y reactivando `spademo` desde el Admin. Una instancia suspendida ya no devuelve un 503 pelado:
   manda a **`/suspendida?i=<tenant>`**, página de Hepta Cloud (servicio en pausa, datos a salvo, portal y WhatsApp).
+- 2026-11-24 — **Dominio propio de tenants con revisión, Cloudflare y vuelta atrás** (`services/dominio_tenant.js`, ver la
+  sección de arriba). Primer caso: `rygtech.com.py` (RYG Tech, Odoo 18 → tenant `rygtech`), por el balanceador
+  `lb.hepta.com.py` con proxy y la zona en SSL strict. Necesita la API de alta 1.4.0 (`POST /website-domain`) y los tokens de
+  Cloudflare con alcance "todas las zonas de la cuenta": el del perimetral (certbot) con Zone Read + DNS Edit, y el de
+  HEPTA Cloud con eso más Zone Settings Edit. La prueba resuelve con DNS públicos: el de la red guarda hasta una hora
+  el "no existe" de un nombre recién creado.
