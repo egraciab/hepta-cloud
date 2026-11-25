@@ -41,6 +41,19 @@ function api(req, body) {
   if (p === '/admin/provision/jobs') return ok([{ id: 'a', tenant: 'ensayo', plan_nombre: 'Crecimiento', estado: 'en_curso', paso: 'Usuario del cliente y marca', segundos: 240 }]);
   if (p === '/admin/provision/health') return { success: true, status: 'ok' };
   if (p === '/admin/mail/health') return ok({ mailcow: 'ok' });
+  // Pedido con Mail y Drive
+  if (p === '/admin/mail/domains' && m === 'POST') { llamadas.push('MAIL ' + JSON.stringify(body)); return ok({ domain: body.domain, created: true }); }
+  if (p === '/admin/mail/domains/nuevo.com.py/mailboxes' && m === 'POST') return ok({ address: `${body.local_part}@nuevo.com.py`, password: 'Clave-Una-Vez-1', force_password_change: true });
+  if (p === '/admin/mail/domains/nuevo.com.py/dns/publish') {
+    llamadas.push('DNS ' + (body && body.dry_run ? 'revision' : 'publicar'));
+    return body && body.dry_run
+      ? ok({ results: [{ record: 'mx', action: 'would_update', name: 'nuevo.com.py', type: 'MX', nuevo: '10 mail.hepta.com.py', actual: '10 mx.viejo.com', igual: false, otros_mx: ['20 mx2.viejo.com'], choca: [] },
+                       { record: 'spf', action: 'would_create', name: 'nuevo.com.py', type: 'TXT', nuevo: '"v=spf1 a:mail.hepta.com.py mx ~all"', actual: null, igual: false, otros_mx: [], choca: [] }] })
+      : ok({ results: [{ record: 'mx', action: 'updated', name: 'nuevo.com.py' }, { record: 'spf', action: 'created', name: 'nuevo.com.py' }] });
+  }
+  if (p === '/admin/drive/validar') return ok({ ok: true, fqdn: 'nuevo.drive.hepta.com.py', usuarios: 1, cuota_total_gb: 5, errores: [], avisos: [] });
+  if (p === '/admin/drive' && m === 'POST') { llamadas.push('DRIVE ' + JSON.stringify(body)); return ok({ trabajo: 77, slug: body.slug, avisos: [] }); }
+  if (p === '/admin/drive/jobs/77') return ok({ id: 77, status: 'done', step: 'Listo', fqdn: 'nuevo.drive.hepta.com.py' });
   if (p === '/admin/drive/health') return ok({});
   if (p === '/admin/drive') return ok({ instancias: [{ slug: 'elenaprono', fqdn: 'elenaprono.drive.hepta.com.py', usuarios: 5, ultima_copia: '2026-11-24 18:00', secretos_pendientes: true, suspendida: false, registro: { cliente: 'Estudio Elena Prono', status: 'active' } }], agente_error: null });
   if (p === '/admin/mail/domains') return ok([{ domain: 'rygtech.com.py', owner_email: 'riglesias@rygtech.com.py', max_mailboxes: 3, def_quota_mb: 10240, status: 'active', dns_verified_at: h(20), owner_tiene_usuario: true }]);
@@ -207,6 +220,50 @@ const server = http.createServer((req, res) => {
       await page.waitForSelector('#j1 + .chip.ok, .chip.ok:text-is("Listo")', { timeout: 15000 });
       check('pedido: alta con el usuario, subdominio y plan elegidos', llamadas.some(l => l === 'ALTA ' + JSON.stringify({ user_id: 22, tenant: 'rygtech2', plan: 'professional', label: 'Sistema de RYG Tech' })), llamadas.filter(l => /provision/.test(l)).slice(-5).join(' | '));
       await foto('pedido-4');
+
+      // Pedido de Mail y Drive solos (sin ERP), con la revisión del DNS antes de publicar
+      await ver('#/inicio', '#vista .kpi');
+      const limpiarAvisos = () => page.evaluate(() => { document.getElementById('toasts').innerHTML = ''; });
+      await limpiarAvisos();
+      await ver(`#/pedido?cliente=${RYG}`, '#u');
+      await page.click('#sig1'); await page.waitForSelector('[data-on=erp]');
+      await page.uncheck('[data-on=erp]');
+      await page.check('[data-on=mail]'); await page.waitForSelector('#m-dom');
+      await page.fill('#m-dom', 'rygtech.com.py'); await page.press('#m-dom', 'Tab');
+      await page.fill('[data-cas="0"][data-k=lp]', 'ventas'); await page.fill('[data-cas="0"][data-k=nombre]', 'Ventas');
+      await page.check('[data-on=drive]'); await page.waitForSelector('#d-slug');
+      await page.fill('#d-slug', 'nuevo');
+      await page.fill('[data-du="0"][data-k=nombre]', 'Ana Gómez'); await page.fill('[data-du="0"][data-k=correo]', 'ana@nuevo.com.py');
+      await page.click('#sig2'); await page.waitForTimeout(400);
+      check('pedido mail: un dominio que ya tiene correo no avanza', await page.isVisible('#m-dom') && /ya tiene correo/.test(await page.textContent('#toasts')));
+      await limpiarAvisos();
+      await page.fill('#m-dom', 'nuevo.com.py'); await page.press('#m-dom', 'Tab');
+      check('pedido mail: lo cargado sobrevive al repintar', (await page.inputValue('[data-cas="0"][data-k=lp]')) === 'ventas' && (await page.inputValue('#d-slug')) === 'nuevo');
+      await foto('pedido-adicionales-2');
+      await page.click('#sig2'); await page.waitForSelector('#conf');
+      const rev = await page.textContent('#vista');
+      check('pedido mail: la revisión muestra casillas y dirección del Drive', /ventas@nuevo\.com\.py/.test(rev) && /nuevo\.drive\.hepta\.com\.py/.test(rev));
+      const altasAntes = llamadas.filter(l => l.startsWith('ALTA ')).length;
+      await page.click('#conf');
+      await page.waitForSelector('#m-dns', { timeout: 15000 });
+      await page.waitForSelector('#a-drive + .chip.ok', { timeout: 15000 });
+      await foto('pedido-adicionales-4');
+      check('pedido mail: no pide el ERP si no se eligió', llamadas.filter(l => l.startsWith('ALTA ')).length === altasAntes);
+      const mailAlta = llamadas.find(l => l.startsWith('MAIL '));
+      check('pedido mail: crea el dominio sin publicar DNS y con 10 GB por casilla', mailAlta && /"publish_dns":false/.test(mailAlta) && /"quota_mb":30720/.test(mailAlta) && /"max_mailboxes":3/.test(mailAlta), mailAlta);
+      check('pedido drive: manda cliente y usuarios', llamadas.some(l => l.startsWith('DRIVE ') && /"slug":"nuevo"/.test(l) && /ana@nuevo\.com\.py/.test(l) && new RegExp(RYG).test(l)));
+      check('pedido mail: muestra la contraseña inicial una vez', /Clave-Una-Vez-1/.test(await page.textContent('#vista')));
+      check('pedido mail: no publica el DNS sin revisión', !llamadas.includes('DNS publicar'));
+      await page.click('#m-dns'); await page.waitForSelector('.modal');
+      const md = await page.textContent('.modal');
+      check('pedido mail: la revisión del DNS avisa qué reemplaza y los otros MX', /Reemplaza: 10 mx\.viejo\.com/.test(md) && /Quedarían otros MX/.test(md) && /20 mx2\.viejo\.com/.test(md));
+      await foto('pedido-adicionales-dns');
+      await page.click('.modal .btn.pri'); await page.waitForSelector('.modal .btn.peligro');
+      await page.click('.modal .btn.peligro');
+      await page.waitForSelector('.chip.ok:text-is("DNS publicado")', { timeout: 10000 });
+      check('pedido mail: publica recién después de confirmar el reemplazo', llamadas.indexOf('DNS publicar') > llamadas.indexOf('DNS revision'));
+      await ver('#/inicio', '#vista .kpi');
+      check('pedido mail: la contraseña no queda en la página al salir', !(await page.content()).includes('Clave-Una-Vez-1'));
 
       // Búsqueda global
       await page.keyboard.press('Control+k');
