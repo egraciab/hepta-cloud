@@ -769,11 +769,11 @@ let CFG = {};
 // "fundadores_restantes" (lugares de fundador que quedan: con 0 o vacío no se ofrece la puesta en marcha sin costo).
 const ADICIONALES_DEF = [
   { id: 'mail', nombre: 'HEPTA Mail', desc: 'Correo con tu dominio (vos@tuempresa.com.py), 10 GB por casilla, en Outlook, Thunderbird o el celular.',
-    precio: 'Gs 120.000', unidad: 'mes · desde 3 casillas', setup: 'Gs 400.000' },
+    precio: '₲ 120.000', unidad: 'mes · desde 3 casillas', setup: '₲ 400.000' },
   { id: 'drive', nombre: 'HEPTA Drive', desc: 'Nube privada para compartir archivos con tu equipo, 100 GB compartidos, desde la compu o el celular.',
-    precio: 'Gs 150.000', unidad: 'mes · desde 3 usuarios', setup: 'Gs 500.000' },
+    precio: '₲ 150.000', unidad: 'mes · desde 3 usuarios', setup: '₲ 500.000' },
   { id: 'dominio', nombre: 'Dominio gestionado', desc: 'Tu .com.py a tu nombre, renovado a tiempo, con certificado y DNS a cargo nuestro.',
-    precio: 'Gs 33.000', unidad: 'mes', setup: 'Gs 110.000' },
+    precio: '₲ 33.000', unidad: 'mes', setup: '₲ 110.000' },
 ];
 function adicionales() {
   try { const a = JSON.parse(CFG.adicionales_json || 'null'); if (Array.isArray(a) && a.length) return a; } catch (e) { /* va el de fábrica */ }
