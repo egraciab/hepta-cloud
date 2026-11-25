@@ -37,6 +37,8 @@ infra/backup/                # respaldos por VM: hepta-backup.sh, configuración
 backend/scripts/             # import_mail, provision_mail, avisar_credenciales, drive_configurar, drive_comprobar (a mano)
 sql/, backend/migrate_*.sql, migracion_*.sql   # migraciones (se aplican a mano; no editar las ya aplicadas)
 tools/webmail_add.sh         # alta de un webmail de cliente en el nginx perimetral
+frontend/public/admin/v2/     # Admin nuevo, en paralelo al actual: módulos ES sin bundler, misma sesión (hc_admin_token);
+                             # sus lecturas en backend/routes/admin_v2.routes.js (/api/admin/v2/*), las acciones usan las rutas de siempre
 utils/old/                   # parches históricos (patch_*.py): solo referencia, no se ejecutan
 ```
 
@@ -112,6 +114,10 @@ CNAME con proxy a nuestro balanceador desde otra cuenta de Cloudflare da error 1
 - [ ] Portal, después del lanzamiento: contratar y cambiar de plan desde el portal (la ruta `POST /api/portal/payment-request`
       existe pero ninguna pantalla la usa) y vincular al cliente con el ERP del grupo en el alta (`users.tenant_partner_id`):
       hasta entonces Facturas no se muestra y Soporte es un formulario que llega por correo.
+- [ ] Admin nuevo (`/admin/v2/`): conviven los dos. Faltan facturación y suscripción desde el ERP, adicionales en Pedido,
+      panel de Respaldos, salud de NGINX/Cloudflare/ERP y pasar las pantallas que hoy enlazan al Admin actual (planes,
+      contenido, legales, configuración, credenciales, usuarios, baja de instancias). Pruebas: `tests/harness_admin_v2.js`
+      (rutas, Postgres efímero) y `tests/harness_admin_v2_ui.js` (Playwright con API simulada).
 - [ ] Admin, después del lanzamiento: menú plegable en celular, Configuración general en pestañas, buscador y paginado en
       Instancias/Usuarios/Leads, reenviar bienvenida, y quitar `plan` de `PUT /api/admin/instances/:id` (no cambia nada en Odoo).
 

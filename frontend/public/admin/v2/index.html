@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin · HEPTA Cloud</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="admin.css?v=1">
+</head>
+<body>
+<!-- Admin nuevo de HEPTA Cloud. Convive con el actual (/admin/): misma sesión, mismas rutas de la API.
+     Lo que todavía no se pasó tiene un enlace al Admin actual. Código en js/ (módulos, sin bundler). -->
+<div id="login" class="login" hidden>
+  <form class="card pad" id="login-form" novalidate>
+    <div style="display:flex;align-items:center;gap:10px"><div class="av" style="background:#0D1F5C;color:#fff">H7</div><b style="letter-spacing:.04em">HEPTA <span class="muted" style="font-weight:400">CLOUD</span></b></div>
+    <h1 style="font-size:18px">Entrar al Admin</h1>
+    <label class="fld">Correo<input type="email" id="l-email" autocomplete="username" required></label>
+    <label class="fld">Contraseña<input type="password" id="l-pass" autocomplete="current-password" required></label>
+    <div class="aviso bad" id="l-err" hidden></div>
+    <button class="btn pri" type="submit" id="l-btn">Entrar</button>
+    <a href="/admin/" class="chico">Ir al Admin actual</a>
+  </form>
+</div>
+
+<div id="app" class="app" hidden>
+  <aside class="sb" id="sb" aria-label="Menú principal">
+    <a class="sb-logo" href="#/inicio"><span class="ic" id="sb-logo">H7</span><span>HEPTA <small>CLOUD</small></span></a>
+    <nav class="nav" id="nav"></nav>
+    <div class="sb-pie">Admin nuevo · <a href="/admin/">volver al actual</a></div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <button class="btn ic burger" type="button" id="burger" aria-label="Abrir el menú" aria-controls="sb"></button>
+      <button class="busca" type="button" id="abrir-busca" aria-keyshortcuts="Control+K"><span><span class="solo-escritorio">Buscar cliente, instancia, dominio o RUC</span><span class="solo-celular">Buscar…</span></span><span class="chip mute solo-escritorio" style="flex:0">Ctrl K</span></button>
+      <div class="btns" style="margin-left:auto">
+        <a class="btn pri" href="#/pedido">+ <span class="solo-escritorio">Nuevo </span>pedido</a>
+        <div class="yo"><div class="av" id="yo-av">·</div><div class="n"><div id="yo-n" style="font-weight:600"></div><div class="muted" id="yo-r"></div></div>
+          <button class="btn ic sm" type="button" id="salir" aria-label="Salir"></button></div>
+      </div>
+    </header>
+    <main class="vista" id="vista" tabindex="-1"></main>
+  </div>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script type="module" src="js/app.js?v=1"></script>
+</body>
+</html>
