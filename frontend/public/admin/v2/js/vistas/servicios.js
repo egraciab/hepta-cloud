@@ -128,12 +128,16 @@ async function drive(cont, rt, salio) {
 
 // ── Dominios propios (de los tenants) ────────────────────────
 async function dominios(cont, salio) {
-  const r = await api('GET', '/admin/instances');
+  cont.innerHTML = html`<div class="cargando">Cargando (pregunta también al agente de HEPTA Drive)…</div>`.s;
+  const [r, d] = await Promise.all([api('GET', '/admin/instances'), api('GET', '/admin/drive', undefined, { silencioso: true })]);
   if (salio()) return;
-  const lista = r.success ? r.data.filter(i => i.custom_domain && i.status !== 'cancelled') : [];
-  cont.innerHTML = html`<section class="card"><div class="tabla-caja"><table><thead><tr><th scope="col">Dominio</th><th scope="col">Instancia</th><th scope="col">Cliente</th><th scope="col">Estado</th></tr></thead><tbody>
-    ${lista.length ? lista.map(i => html`<tr><td><a href="https://${i.custom_domain}" target="_blank" rel="noopener"><b>${i.custom_domain}</b></a></td><td>${i.db_name}</td><td>${i.full_name || i.email || '—'}</td><td>${chipEstado(i.status)}</td></tr>`)
-      : html`<tr><td colspan="4" class="vacio">${r.success ? 'Ninguna instancia tiene dominio propio todavía. Se activa desde HEPTA ERP → ⋯ → Dominio propio.' : r.error}</td></tr>`}
+  const lista = (r.success ? r.data.filter(i => i.custom_domain && i.status !== 'cancelled') : [])
+    .map(i => ({ dominio: i.custom_domain, servicio: 'HEPTA ERP', instancia: i.db_name, cliente: i.full_name || i.email, estado: i.status }))
+    .concat((d.success ? d.data.instancias.filter(i => i.dominio) : [])
+      .map(i => ({ dominio: i.dominio, servicio: 'HEPTA Drive', instancia: i.fqdn || i.slug, cliente: i.registro && i.registro.cliente, estado: i.suspendida ? 'suspended' : (i.registro && i.registro.status) || 'active' })));
+  cont.innerHTML = html`<section class="card"><div class="tabla-caja"><table><thead><tr><th scope="col">Dominio</th><th scope="col">Servicio</th><th scope="col">Instancia</th><th scope="col">Cliente</th><th scope="col">Estado</th></tr></thead><tbody>
+    ${lista.length ? lista.map(i => html`<tr><td><a href="https://${i.dominio}" target="_blank" rel="noopener"><b>${i.dominio}</b></a></td><td>${i.servicio}</td><td>${i.instancia}</td><td>${i.cliente || '—'}</td><td>${chipEstado(i.estado)}</td></tr>`)
+      : html`<tr><td colspan="5" class="vacio">${r.success ? 'Ningún servicio tiene dominio propio todavía. Se activa desde Servicios → ⋯ → Dominio propio.' : r.error}</td></tr>`}
     </tbody></table></div></section>
     <p class="muted chico">El vencimiento en NIC.PY de cada dominio gestionado se va a cargar acá (próxima entrega).</p>`.s;
 }

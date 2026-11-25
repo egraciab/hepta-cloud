@@ -57,7 +57,7 @@ async function mostrar() {
   const vista = document.getElementById('vista');
   vista.innerHTML = '<div class="cargando">Cargando…</div>';
   try {
-    const mod = await import(`./vistas/${nombre}.js?v=1`);
+    const mod = await import(`./vistas/${nombre}.js?v=2`);
     if (yo !== turno) return;          // el usuario ya se fue a otra pantalla
     await mod.render(vista, ruta(), () => yo !== turno);
     document.title = `${vista.querySelector('h1')?.textContent || 'Admin'} · HEPTA Cloud`;

@@ -80,6 +80,9 @@ const FRONTEND = process.env.FRONTEND_PATH || path.join(__dirname, '..', 'fronte
 app.use(express.static(path.join(FRONTEND, 'assets')));
 app.use('/assets', express.static(path.join(FRONTEND, 'assets')));
 app.use('/portal', express.static(path.join(FRONTEND, 'public', 'portal')));
+// Admin nuevo: módulos ES que el navegador no tiene que guardar sin preguntar (si no, después de un despliegue sigue
+// usando la versión vieja). no-cache = revalida con ETag en cada carga: si no cambió, responde 304 sin bajar nada.
+app.use('/admin/v2', express.static(path.join(FRONTEND, 'public', 'admin', 'v2'), { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 app.use('/admin',  express.static(path.join(FRONTEND, 'public', 'admin')));
 
 app.get('/terminos', (req, res) =>

@@ -207,6 +207,9 @@ const server = http.createServer((req, res) => {
       await ver(`#/pedido?cliente=${RYG}`, '#u');
       await foto('pedido-1');
       await page.click('#sig1');
+      await page.waitForSelector('[data-on=erp]');
+      check('pedido: si el cliente ya tiene ERP, no lo propone de nuevo', !(await page.isChecked('[data-on=erp]')) && /Ya tiene: rygtech/.test(await page.textContent('#vista')));
+      await page.check('[data-on=erp]');
       await page.waitForSelector('#sub');
       check('pedido: subdominio sugerido desde el nombre', (await page.inputValue('#sub')) === 'rygtech');
       await page.fill('#sub', 'Mal Nombre');
@@ -227,7 +230,6 @@ const server = http.createServer((req, res) => {
       await limpiarAvisos();
       await ver(`#/pedido?cliente=${RYG}`, '#u');
       await page.click('#sig1'); await page.waitForSelector('[data-on=erp]');
-      await page.uncheck('[data-on=erp]');
       await page.check('[data-on=mail]'); await page.waitForSelector('#m-dom');
       await page.fill('#m-dom', 'rygtech.com.py'); await page.press('#m-dom', 'Tab');
       await page.fill('[data-cas="0"][data-k=lp]', 'ventas'); await page.fill('[data-cas="0"][data-k=nombre]', 'Ventas');
