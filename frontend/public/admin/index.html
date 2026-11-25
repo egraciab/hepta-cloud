@@ -258,6 +258,10 @@
               <div class="form-group"><label class="form-label">Balanceador (dominio propio en la cuenta de Cloudflare de HEPTA)</label><input class="form-input" id="cfg-dominio_propio_lb" placeholder="lb.hepta.com.py"/><div class="form-hint">Si la zona del cliente está en nuestra cuenta, el dominio y el www quedan como CNAME con proxy a este host. Vacío: se usa el host de arriba.</div></div>
               <div class="form-group"><label class="form-label">Email certbot SSL</label><input class="form-input" id="cfg-certbot_email" placeholder="admin@hepta.com.py"/></div>
             </div>
+            <div class="grid-2">
+              <div class="form-group"><label class="form-label">Lugares de fundador que quedan</label><input class="form-input" type="number" min="0" max="10" id="cfg-fundadores_restantes" placeholder="10"/><div class="form-hint">Se muestra en "Sumá a tu plan". Con 0 o vacío, la puesta en marcha de los adicionales se muestra con su precio.</div></div>
+              <div class="form-group"><label class="form-label">Adicionales del sitio (JSON, opcional)</label><textarea class="form-input" id="cfg-adicionales_json" rows="3" placeholder='Vacío = los de fábrica (Mail, Drive, Dominio)'></textarea><div class="form-hint">Lista con id, nombre, desc, precio, unidad y setup. Los id que entiende el formulario: mail, drive, dominio.</div></div>
+            </div>
             <div class="form-group"><label class="form-label">Mensaje WhatsApp predeterminado</label><input class="form-input" id="cfg-whatsapp_message"/></div>
             <div class="form-group"><label class="form-label">Enlace de mensaje WhatsApp Business</label><input class="form-input" id="cfg-wa_business_link" placeholder="https://wa.me/message/XXXXXXXXXXXX"/><div class="form-hint">Usado por el botón "Consultanos" del Plan Empresa (modal de planes en HC y RetoPA). Si lo dejás vacío, se usa el número de WhatsApp con texto prellenado.</div></div>
           </div>
@@ -1215,7 +1219,7 @@ const cfgKeys=[
   'retopa_label','retopa_text','retopa_pill_name','retopa_pill_sub','retopa_url','retopa_logo_url',
   'footer_link1_label','footer_link1_url','footer_link2_label','footer_link2_url',
   'footer_link3_label','footer_link3_url','footer_group_label','footer_group_url',
-  'hero_panel_image','btn_primary_url','dns_proxy_host','dominio_propio_lb','certbot_email','wa_business_link','odoo_erp_crm_enabled','odoo_erp_crm_company_id','odoo_erp_crm_team_id','odoo_erp_crm_user_id'
+  'hero_panel_image','btn_primary_url','dns_proxy_host','dominio_propio_lb','fundadores_restantes','adicionales_json','certbot_email','wa_business_link','odoo_erp_crm_enabled','odoo_erp_crm_company_id','odoo_erp_crm_team_id','odoo_erp_crm_user_id'
 ];
 
 async function loadGeneral(){
@@ -1239,6 +1243,10 @@ async function loadGeneral(){
 async function saveGeneral(){
   const updates={};
   cfgKeys.forEach(k=>{const el=document.getElementById(`cfg-${k}`);if(el) updates[k]=el.value;});
+  if(updates.adicionales_json&&updates.adicionales_json.trim()){
+    try{ if(!Array.isArray(JSON.parse(updates.adicionales_json))) throw new Error('no es una lista'); }
+    catch(e){ showAlert('general-err','error','Adicionales del sitio: el JSON no es válido ('+e.message+'). No se guardó nada.'); return; }
+  }
   const retopa=document.getElementById('cfg-retopa_show_check');
   if(retopa) updates.retopa_show=retopa.checked?'true':'false';
   const data=await api('PUT','/admin/config',updates);

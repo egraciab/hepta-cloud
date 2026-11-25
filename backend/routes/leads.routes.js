@@ -172,7 +172,10 @@ router.post('/', limiter, async (req, res) => {
   const email        = limpio(b.email, 255).toLowerCase();
   const phone        = limpio(b.phone, 50);
   const company_name = limpio(b.company_name, 255);
-  const message      = limpio(b.message, 4000);
+  // Adicionales que marcó en el formulario: solo los conocidos, y van al mensaje (lo ven el Admin, el correo y el ERP)
+  const ADICIONALES  = { mail: 'HEPTA Mail', drive: 'HEPTA Drive', dominio: 'Dominio gestionado' };
+  const adicionales  = [...new Set((Array.isArray(b.adicionales) ? b.adicionales : []).filter(a => ADICIONALES[a]))].map(a => ADICIONALES[a]);
+  const message      = [adicionales.length ? `Adicionales: ${adicionales.join(', ')}` : '', limpio(b.message, 4000)].filter(Boolean).join('\n\n');
   const ruc          = limpio(b.ruc, 30);
   const plan_slug    = limpio(b.plan_slug, 100);
   const intent       = b.intent === 'contratar' ? 'contratar' : 'consulta';
