@@ -176,6 +176,7 @@ td.nw{white-space:nowrap}
 .opcion.on{border:2px solid var(--azul);background:#F5F8FF;padding:11px}
 .opcion[aria-disabled="true"]{opacity:.55;cursor:not-allowed}
 .sum{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:6px 0}
+.sum > span:last-child:not(:first-child){white-space:nowrap}
 dl.kv{display:grid;grid-template-columns:150px minmax(0,1fr);gap:8px 12px;font-size:13px;margin:0}
 dl.kv dt{color:var(--suave)} dl.kv dd{margin:0;font-weight:500;overflow-wrap:anywhere}
 .esqueleto{background:linear-gradient(90deg,#EEF0F3 25%,#F6F7F9 50%,#EEF0F3 75%);background-size:200% 100%;animation:brillo 1.2s infinite;border-radius:8px}

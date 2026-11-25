@@ -124,7 +124,22 @@ async function applyDnsPlan(plan, { onlyRequired = false, dryRun = false } = {})
     const match = buscarExistente(existing, payload);
 
     if (dryRun) {
-      results.push({ record: record.key, action: match ? 'would_update' : 'would_create', name: payload.name });
+      // La revisión muestra qué hay hoy, para que nadie pise un registro sin haberlo visto: el valor actual del que se
+      // reemplaza, los otros MX que quedarían (solo se reemplaza uno) y los registros de otro tipo que chocarían.
+      const mismoNombre = (existing || []).filter((e) => e.name === payload.name);
+      const valor = (e) => (e.type === 'MX' ? `${e.priority} ${e.content}` : e.content);
+      results.push({
+        record: record.key,
+        action: match ? 'would_update' : 'would_create',
+        name: payload.name,
+        type: payload.type,
+        nuevo: payload.type === 'SRV' ? `${payload.data.priority} ${payload.data.weight} ${payload.data.port} ${payload.data.target}`
+          : payload.type === 'MX' ? `${payload.priority} ${payload.content}` : payload.content,
+        actual: match ? valor(match) : null,
+        igual: Boolean(match && sinComillas(match.content) === sinComillas(payload.content)),
+        otros_mx: payload.type === 'MX' ? mismoNombre.filter((e) => e.type === 'MX' && e !== match).map(valor) : [],
+        choca: mismoNombre.filter((e) => e.type !== payload.type && (payload.type === 'CNAME' || e.type === 'CNAME')).map((e) => e.type),
+      });
       continue;
     }
 

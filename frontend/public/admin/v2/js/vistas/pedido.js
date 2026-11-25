@@ -1,126 +1,367 @@
 // Nuevo pedido: cliente → servicios → revisión → avance.
-// En esta versión se da de alta HEPTA ERP (la ruta de siempre, /api/admin/provision, en segundo plano).
-// HEPTA Mail, HEPTA Drive y el dominio gestionado se muestran pero quedan desactivados hasta que el backend
-// tenga el pedido unificado (diseño en el Project: diseno-aprovisionamiento-unificado.md); mientras, se dan
-// de alta desde el Admin actual. La factura y la suscripción en el ERP del grupo, igual: pronto.
-import { html, raw, api, gs, toast, seguir, PLANES } from '../core.js';
+// Cada servicio corre por su lado y con las rutas de siempre:
+//   HEPTA ERP   → POST /api/admin/provision (segundo plano; se sigue /provision/jobs/:id)
+//   HEPTA Mail  → POST /api/admin/mail/domains (sin publicar DNS) + una casilla por vez. El DNS se publica recién
+//                 después de ver qué registros se crean o se reemplazan (dry_run) y confirmarlo.
+//   HEPTA Drive → POST /api/admin/drive (segundo plano; se sigue /drive/jobs/:id), validado antes con /drive/validar.
+// Se pueden pedir solos o juntos. El dominio gestionado y la factura/suscripción en el ERP del grupo: pronto.
+// Las contraseñas iniciales de las casillas se muestran una sola vez y viven solo en esta pantalla.
+import { html, raw, api, gs, toast, seguir, modal, confirmar, PLANES } from '../core.js';
 
 const SUB = /^[a-z0-9]([a-z0-9-]{0,40}[a-z0-9])?$/;
+const DOMINIO = /^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
+const CASILLA = /^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$/;
+const SLUG = /^[a-z][a-z0-9-]{1,30}[a-z0-9]$/;
+const CORREO = /^[a-z0-9._+-]{1,64}@[a-z0-9.-]{3,190}$/;
+const PRECIO_MAIL = 120000, PRECIO_DRIVE = 150000, CUOTA_CASILLA_MB = 10240;
+
+const sinAcentos = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const sugerido = (c) => sinAcentos(c.nombre_comercial || c.razon_social)
+  .replace(/\b(s\.?a\.?|e\.?a\.?s\.?|s\.?r\.?l\.?|unipersonal)\b/g, '').replace(/[^a-z0-9]+/g, '').slice(0, 20);
 
 export async function render(v, rt, salio) {
-  const st = { paso: 1, cliente: null, usuarios: [], usuario: '', plan: 'professional', sub: '', label: '', job: null };
+  const st = {
+    paso: 1, cliente: null, usuarios: [], usuario: '',
+    erp: { on: true, plan: 'professional', sub: '', label: '' },
+    mail: { on: false, dominio: '', max: 3, casillas: [{ lp: '', nombre: '' }] },
+    drive: { on: false, slug: '', cuota: 5, equipo: 0, usuarios: [{ nombre: '', correo: '' }] },
+    revision: { drive: null, mailExiste: false },
+    av: { erp: null, mail: null, drive: null },
+  };
   const [cl, pl] = await Promise.all([api('GET', '/admin/v2/clientes'), api('GET', '/admin/plans', undefined, { silencioso: true })]);
   if (salio()) return;
   const clientes = cl.success ? cl.data : [];
   const planes = (pl.success ? pl.data : []).filter(p => ['starter', 'professional'].includes(p.slug));
   const precio = (slug) => { const p = planes.find(x => x.slug === slug); return p ? Number(p.price) : null; };
   const preCliente = rt.q.get('cliente');
+  const usuarioSel = () => st.usuarios.find(x => String(x.id) === String(st.usuario)) || null;
+  const nombreCliente = () => st.cliente ? (st.cliente.nombre_comercial || st.cliente.razon_social) : '';
 
   const cab = () => html`<div class="cab"><h1>Nuevo pedido</h1>
     <ol class="pasos-cab" aria-label="Pasos">${['Cliente', 'Servicios', 'Revisión', 'Avance'].map((t, i) => html`<li class="${st.paso === i + 1 ? 'on' : st.paso > i + 1 ? 'hecho' : ''}" ${raw(st.paso === i + 1 ? 'aria-current="step"' : '')}><span class="n">${st.paso > i + 1 ? '✓' : i + 1}</span>${t}</li>${i < 3 ? html`<li aria-hidden="true" class="tenue">—</li>` : ''}`)}</ol></div>`;
 
   const resumen = () => {
-    const pp = precio(st.plan);
+    const lineas = [];
+    if (st.erp.on) lineas.push([`HEPTA ERP · ${PLANES[st.erp.plan]}`, precio(st.erp.plan)]);
+    if (st.mail.on) lineas.push([`HEPTA Mail · hasta ${st.mail.max} casillas`, PRECIO_MAIL]);
+    if (st.drive.on) lineas.push(['HEPTA Drive · 3 usuarios, 100 GB', PRECIO_DRIVE]);
+    const total = lineas.reduce((t, [, p]) => t + (Number(p) || 0), 0);
     return html`<aside class="card pad" style="flex:1 1 300px" aria-labelledby="rs"><h2 id="rs" style="margin-bottom:10px">Resumen</h2>
-      <div class="sum"><span>${st.cliente ? (st.cliente.nombre_comercial || st.cliente.razon_social) : 'Sin cliente'}</span></div>
-      <div class="sum"><span>Plan ${PLANES[st.plan]}</span><span>${gs(pp)}</span></div>
-      <div class="sum" style="border-top:1px solid var(--linea);margin-top:6px;padding-top:10px;font-weight:700;font-size:15px"><span>Por mes</span><span>${gs(pp)}</span></div>
-      <div class="aviso info chico" style="margin-top:12px">Al confirmar: alta del sistema en segundo plano (2 a 10 minutos) y correo de bienvenida al usuario. La factura del primer mes y la suscripción se cargan en el ERP como hasta ahora (pronto, automático).</div></aside>`;
+      <div class="sum"><span>${nombreCliente() || 'Sin cliente'}</span></div>
+      ${lineas.length ? lineas.map(([n, p]) => html`<div class="sum"><span>${n}</span><span>${gs(p)}</span></div>`) : html`<div class="sum muted"><span>Ningún servicio elegido</span></div>`}
+      <div class="sum" style="border-top:1px solid var(--linea);margin-top:6px;padding-top:10px;font-weight:700;font-size:15px"><span>Por mes</span><span>${gs(total)}</span></div>
+      <p class="muted chico" style="margin:8px 0 0">Precios de lista con IVA. Los acuerdos especiales se cargan en el ERP.</p>
+      <div class="aviso info chico" style="margin-top:12px">La factura del primer mes y la suscripción se cargan en el ERP del grupo como hasta ahora (pronto, automático).</div></aside>`;
+  };
+
+  // ── Paso 1: cliente ──
+  const paso1 = () => {
+    v.innerHTML = html`${cab()}<div class="btns" style="align-items:flex-start;gap:16px"><section class="card pad" style="flex:999 1 480px;min-width:0" aria-labelledby="pc">
+      <h2 id="pc" style="margin-bottom:12px">¿Para qué cliente?</h2>
+      <label class="fld">Cliente<select id="cli"><option value="">Elegí un cliente…</option>${clientes.map(c => html`<option value="${c.id}" ${raw(st.cliente && st.cliente.id === c.id ? 'selected' : '')}>${c.nombre_comercial || c.razon_social} · RUC ${c.numero_doc}</option>`)}</select>
+        <span class="ayuda">¿No está? <a href="/admin/#clients">Crealo en el Admin actual ↗</a> y volvé.</span></label>
+      <div id="usr" style="margin-top:12px"></div>
+      <div class="btns" style="justify-content:flex-end;margin-top:16px"><button class="btn pri" type="button" id="sig1">Siguiente</button></div></section>${resumen()}</div>`.s;
+    const pintarUsuarios = () => {
+      const caja = v.querySelector('#usr');
+      if (!st.cliente) { caja.innerHTML = ''; return; }
+      caja.innerHTML = st.usuarios.length
+        ? html`<label class="fld">Usuario del portal (titular)<select id="u">${st.usuarios.map(u => html`<option value="${u.id}" ${raw(String(st.usuario) === String(u.id) ? 'selected' : '')}>${u.full_name || u.email} · ${u.email}</option>`)}</select><span class="ayuda">Recibe la bienvenida del sistema y queda como dueño del correo.</span></label>`.s
+        : html`<div class="aviso warn">Este cliente no tiene usuarios del portal. Para HEPTA ERP hace falta uno: crealo en el Admin actual (Usuarios → Nuevo, vinculado al cliente). Mail y Drive se pueden pedir igual.</div>`.s;
+      const u = v.querySelector('#u'); if (u) { st.usuario = u.value; u.addEventListener('change', () => { st.usuario = u.value; }); }
+    };
+    const elegir = async (id) => {
+      st.cliente = clientes.find(c => c.id === id) || null; st.usuarios = []; st.usuario = '';
+      if (st.cliente) { const f = await api('GET', `/admin/v2/clientes/${id}`); st.usuarios = f.success ? f.data.usuarios.filter(u => u.is_active !== false) : []; st.usuario = st.usuarios[0] ? st.usuarios[0].id : ''; }
+      pintarUsuarios();
+    };
+    v.querySelector('#cli').addEventListener('change', (e) => elegir(e.target.value));
+    v.querySelector('#sig1').addEventListener('click', () => {
+      if (!st.cliente) return toast('Elegí el cliente', 'bad');
+      const base = sugerido(st.cliente);
+      if (!st.erp.sub) st.erp.sub = base;
+      if (!st.erp.label) st.erp.label = `Sistema de ${nombreCliente()}`;
+      if (!st.drive.slug) st.drive.slug = base.length >= 3 && /^[a-z]/.test(base) ? base : '';
+      if (!st.usuarios.length) st.erp.on = false;
+      st.paso = 2; pintar();
+    });
+    if (st.cliente) pintarUsuarios();
+    else if (preCliente && clientes.some(c => c.id === preCliente)) { v.querySelector('#cli').value = preCliente; elegir(preCliente); }
+  };
+
+  // ── Paso 2: servicios ──
+  const cabServicio = (clave, titulo, sub, deshab) => html`<label class="btns" style="justify-content:space-between;cursor:${deshab ? 'not-allowed' : 'pointer'}">
+    <span><b style="font-size:15px">${titulo}</b><br><span class="muted chico">${sub}</span></span>
+    <span class="btns"><input type="checkbox" data-on="${clave}" ${raw(st[clave].on ? 'checked' : '')} ${raw(deshab ? 'disabled' : '')} aria-label="Pedir ${titulo}"></span></label>`;
+
+  const paso2 = () => {
+    const sinUsuario = !st.usuarios.length;
+    v.innerHTML = html`${cab()}<div class="btns" style="align-items:flex-start;gap:16px"><div class="col" style="flex:999 1 480px;min-width:0">
+      <section class="card pad" aria-labelledby="s-erp">${cabServicio('erp', 'HEPTA ERP', sinUsuario ? 'Necesita un usuario del portal (paso 1)' : 'Sistema de gestión con su plan', sinUsuario)}
+        ${st.erp.on ? html`<div style="margin-top:12px">
+          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px" role="radiogroup" aria-label="Plan">
+            ${['starter', 'professional'].map(s => html`<label class="opcion ${st.erp.plan === s ? 'on' : ''}"><input type="radio" name="plan" value="${s}" ${raw(st.erp.plan === s ? 'checked' : '')}><span><b>${PLANES[s]}</b><br><span class="muted">${gs(precio(s))} / mes</span></span></label>`)}
+            <label class="opcion" aria-disabled="true" title="Plan Empresa: se cotiza y no tiene alta automática"><input type="radio" disabled><span><b>Empresa</b><br><span class="muted">a cotizar</span></span></label></div>
+          <div class="btns" style="margin-top:12px;align-items:flex-start">
+            <label class="fld" style="flex:1 1 220px">Subdominio<input id="sub" value="${st.erp.sub}" autocomplete="off"><span class="ayuda" id="sub-ok">${st.erp.sub}.erp.hepta.com.py</span></label>
+            <label class="fld" style="flex:1 1 220px">Nombre de la instancia<input id="lab" value="${st.erp.label}"></label></div>
+          <p class="muted chico" style="margin:10px 0 0">Los módulos de rubro y el dominio propio se suman después del alta, desde Servicios → ⋯.</p></div>` : ''}</section>
+
+      <section class="card pad" aria-labelledby="s-mail">${cabServicio('mail', 'HEPTA Mail', `Correo con su dominio · ${gs(PRECIO_MAIL)} / mes hasta 3 casillas de 10 GB`)}
+        ${st.mail.on ? html`<div style="margin-top:12px">
+          <div class="btns" style="align-items:flex-start">
+            <label class="fld" style="flex:2 1 240px">Dominio del correo<input id="m-dom" value="${st.mail.dominio}" placeholder="cliente.com.py" autocomplete="off"><span class="ayuda">Sin www. El cliente tiene que poder cambiar su DNS (o tenerlo en nuestra cuenta de Cloudflare).</span></label>
+            <label class="fld" style="flex:1 1 120px">Máximo de casillas<input id="m-max" type="number" min="1" max="50" value="${st.mail.max}"><span class="ayuda">10 GB cada una</span></label></div>
+          <div class="muted chico" style="margin:12px 0 4px;font-weight:600">Casillas a crear ahora</div>
+          <div id="m-cas">${st.mail.casillas.map((c, i) => html`<div class="btns" style="margin-bottom:6px;flex-wrap:nowrap">
+            <input class="inp" data-cas="${i}" data-k="lp" value="${c.lp}" placeholder="nombre" aria-label="Casilla ${i + 1}" style="flex:1 1 120px;min-width:0">
+            <span class="muted chico" style="white-space:nowrap">@${st.mail.dominio || 'dominio'}</span>
+            <input class="inp" data-cas="${i}" data-k="nombre" value="${c.nombre}" placeholder="Nombre y apellido" aria-label="Nombre de la casilla ${i + 1}" style="flex:2 1 160px;min-width:0">
+            <button class="btn ic sm" type="button" data-quitar-cas="${i}" aria-label="Quitar casilla ${i + 1}" ${raw(st.mail.casillas.length < 2 ? 'disabled' : '')}>×</button></div>`)}</div>
+          <button class="btn sm" type="button" id="m-mas">+ Casilla</button>
+          <p class="muted chico" style="margin:10px 0 0">El DNS no se publica solo: al terminar te muestro qué registros se crean o se reemplazan y confirmás. Si el correo del cliente hoy está en otro lado, se coordina antes (el MX nuevo lo corta).</p></div>` : ''}</section>
+
+      <section class="card pad" aria-labelledby="s-drive">${cabServicio('drive', 'HEPTA Drive', `Nube privada · ${gs(PRECIO_DRIVE)} / mes con 3 usuarios y 100 GB`)}
+        ${st.drive.on ? html`<div style="margin-top:12px">
+          <div class="btns" style="align-items:flex-start">
+            <label class="fld" style="flex:2 1 220px">Nombre de la instancia<input id="d-slug" value="${st.drive.slug}" autocomplete="off"><span class="ayuda" id="d-slug-ok">${st.drive.slug || 'nombre'}.drive.hepta.com.py · no se cambia después</span></label>
+            <label class="fld" style="flex:1 1 110px">GB por usuario<input id="d-cuota" type="number" min="1" max="9999" value="${st.drive.cuota}"></label>
+            <label class="fld" style="flex:1 1 110px">Carpeta Equipo (GB)<input id="d-equipo" type="number" min="0" max="99999" value="${st.drive.equipo}"></label></div>
+          <div class="muted chico" style="margin:12px 0 4px;font-weight:600">Usuarios (reciben la invitación por correo)</div>
+          <div id="d-us">${st.drive.usuarios.map((u, i) => html`<div class="btns" style="margin-bottom:6px;flex-wrap:nowrap">
+            <input class="inp" data-du="${i}" data-k="nombre" value="${u.nombre}" placeholder="Nombre y apellido" aria-label="Nombre del usuario ${i + 1}" style="flex:1 1 150px;min-width:0">
+            <input class="inp" data-du="${i}" data-k="correo" value="${u.correo}" placeholder="correo@cliente.com.py" aria-label="Correo del usuario ${i + 1}" style="flex:1 1 170px;min-width:0" type="email">
+            <button class="btn ic sm" type="button" data-quitar-du="${i}" aria-label="Quitar usuario ${i + 1}" ${raw(st.drive.usuarios.length < 2 ? 'disabled' : '')}>×</button></div>`)}</div>
+          <button class="btn sm" type="button" id="d-mas">+ Usuario</button>
+          ${st.mail.on ? html`<p class="muted chico" style="margin:10px 0 0">Si los usuarios van a usar las casillas nuevas, el correo se crea primero en este mismo pedido; las invitaciones llegan cuando el DNS del correo esté publicado.</p>` : ''}</div>` : ''}</section>
+
+      <section class="card pad" aria-labelledby="s-dom"><div class="btns" style="justify-content:space-between"><span><b style="font-size:15px">Dominio gestionado</b> <span class="chip mute">pronto</span><br><span class="muted chico">HC-DOMINIO · ${gs(33000)} / mes · el registro en NIC.PY sigue siendo a mano</span></span></div></section>
+
+      <div class="btns" style="justify-content:space-between"><button class="btn" type="button" id="atr">Atrás</button><button class="btn pri" type="button" id="sig2">Revisar pedido</button></div></div>${resumen()}</div>`.s;
+
+    v.querySelectorAll('[data-on]').forEach(c => c.addEventListener('change', () => { st[c.dataset.on].on = c.checked; pintar(); }));
+    v.querySelectorAll('input[name=plan]').forEach(r => r.addEventListener('change', () => { st.erp.plan = r.value; pintar(); }));
+    const sub = v.querySelector('#sub');
+    if (sub) sub.addEventListener('input', () => { st.erp.sub = sub.value.trim().toLowerCase(); const ok = SUB.test(st.erp.sub); const o = v.querySelector('#sub-ok'); o.textContent = ok ? `${st.erp.sub}.erp.hepta.com.py` : 'Minúsculas, números y guiones (sin espacios ni puntos)'; o.style.color = ok ? '' : 'var(--bad)'; });
+    const lab = v.querySelector('#lab'); if (lab) lab.addEventListener('input', () => { st.erp.label = lab.value; });
+    const md = v.querySelector('#m-dom');
+    if (md) md.addEventListener('change', () => { st.mail.dominio = md.value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, ''); pintar(); });
+    const mm = v.querySelector('#m-max'); if (mm) mm.addEventListener('input', () => { st.mail.max = Math.max(1, Math.min(50, parseInt(mm.value, 10) || 1)); });
+    v.querySelectorAll('[data-cas]').forEach(i => i.addEventListener('input', () => { st.mail.casillas[Number(i.dataset.cas)][i.dataset.k] = i.dataset.k === 'lp' ? i.value.trim().toLowerCase() : i.value; }));
+    v.querySelectorAll('[data-quitar-cas]').forEach(b => b.addEventListener('click', () => { st.mail.casillas.splice(Number(b.dataset.quitarCas), 1); pintar(); }));
+    const mmas = v.querySelector('#m-mas'); if (mmas) mmas.addEventListener('click', () => { if (st.mail.casillas.length >= st.mail.max) return toast(`El máximo es de ${st.mail.max} casillas`, 'bad'); st.mail.casillas.push({ lp: '', nombre: '' }); pintar(); });
+    const ds = v.querySelector('#d-slug');
+    if (ds) ds.addEventListener('input', () => { st.drive.slug = ds.value.trim().toLowerCase(); const ok = SLUG.test(st.drive.slug) && !st.drive.slug.includes('--'); const o = v.querySelector('#d-slug-ok'); o.textContent = ok ? `${st.drive.slug}.drive.hepta.com.py · no se cambia después` : 'De 3 a 32: minúsculas, números y guiones, empezando con una letra'; o.style.color = ok ? '' : 'var(--bad)'; });
+    const dc = v.querySelector('#d-cuota'); if (dc) dc.addEventListener('input', () => { st.drive.cuota = parseInt(dc.value, 10) || 0; });
+    const de = v.querySelector('#d-equipo'); if (de) de.addEventListener('input', () => { st.drive.equipo = parseInt(de.value, 10) || 0; });
+    v.querySelectorAll('[data-du]').forEach(i => i.addEventListener('input', () => { st.drive.usuarios[Number(i.dataset.du)][i.dataset.k] = i.dataset.k === 'correo' ? i.value.trim().toLowerCase() : i.value; }));
+    v.querySelectorAll('[data-quitar-du]').forEach(b => b.addEventListener('click', () => { st.drive.usuarios.splice(Number(b.dataset.quitarDu), 1); pintar(); }));
+    const dmas = v.querySelector('#d-mas'); if (dmas) dmas.addEventListener('click', () => { st.drive.usuarios.push({ nombre: '', correo: '' }); pintar(); });
+    v.querySelector('#atr').addEventListener('click', () => { st.paso = 1; pintar(); });
+    v.querySelector('#sig2').addEventListener('click', async (e) => {
+      const error = validarLocal();
+      if (error) return toast(error, 'bad');
+      e.target.disabled = true;
+      try { if (await revisarEnServidor()) { st.paso = 3; pintar(); } }
+      finally { if (e.target.isConnected) e.target.disabled = false; }
+    });
+  };
+
+  const validarLocal = () => {
+    if (!st.erp.on && !st.mail.on && !st.drive.on) return 'Elegí al menos un servicio';
+    if (st.erp.on) {
+      if (!st.usuario) return 'HEPTA ERP necesita un usuario del portal';
+      if (!SUB.test(st.erp.sub)) return 'Revisá el subdominio del ERP';
+    }
+    if (st.mail.on) {
+      if (!DOMINIO.test(st.mail.dominio)) return 'Revisá el dominio del correo';
+      const lps = st.mail.casillas.map(c => c.lp).filter(Boolean);
+      if (!lps.length) return 'Cargá al menos una casilla';
+      if (lps.some(l => !CASILLA.test(l))) return 'Las casillas van en minúsculas: letras, números, punto, guion y guion bajo';
+      if (new Set(lps).size !== lps.length) return 'Hay casillas repetidas';
+      if (lps.length > st.mail.max) return `Pediste ${lps.length} casillas y el máximo es ${st.mail.max}`;
+    }
+    if (st.drive.on) {
+      if (!SLUG.test(st.drive.slug) || st.drive.slug.includes('--')) return 'Revisá el nombre de la instancia de Drive';
+      const us = st.drive.usuarios.filter(u => u.nombre.trim() || u.correo);
+      if (!us.length) return 'Cargá al menos un usuario de Drive';
+      if (us.some(u => !u.nombre.trim() || !CORREO.test(u.correo))) return 'Cada usuario de Drive necesita nombre y un correo válido';
+    }
+    return '';
+  };
+
+  const pedidoDrive = () => ({
+    slug: st.drive.slug, cuota_gb: st.drive.cuota, equipo_gb: st.drive.equipo, billing_customer_id: st.cliente.id,
+    usuarios: st.drive.usuarios.filter(u => u.nombre.trim() || u.correo).map(u => ({ nombre: u.nombre.trim(), correo: u.correo })),
+  });
+
+  // Lo que solo sabe el servidor: si el dominio de correo ya existe y si el agente de Drive acepta el pedido
+  const revisarEnServidor = async () => {
+    st.revision = { drive: null, mailExiste: false };
+    if (st.mail.on) {
+      const r = await api('GET', '/admin/mail/domains', undefined, { silencioso: true });
+      if (!r.success) { toast('No pude consultar los dominios de correo: ' + (r.error || ''), 'bad'); return false; }
+      if ((r.data || []).some(d => String(d.domain).toLowerCase() === st.mail.dominio)) {
+        toast(`${st.mail.dominio} ya tiene correo en HEPTA. Las casillas nuevas se suman desde Servicios → HEPTA Mail.`, 'bad', 0);
+        return false;
+      }
+    }
+    if (st.drive.on) {
+      const r = await api('POST', '/admin/drive/validar', pedidoDrive(), { silencioso: true });
+      if (!r.success) { toast('Drive: ' + (r.error || 'no se pudo validar'), 'bad', 0); return false; }
+      st.revision.drive = r.data;
+      if (!r.data.ok) { toast('Drive: ' + ((r.data.errores || []).join(' · ') || 'el agente no acepta el pedido'), 'bad', 0); return false; }
+    }
+    return true;
+  };
+
+  // ── Paso 3: revisión ──
+  const paso3 = () => {
+    const u = usuarioSel() || {};
+    const vd = st.revision.drive;
+    v.innerHTML = html`${cab()}<div class="btns" style="align-items:flex-start;gap:16px"><section class="card pad" style="flex:999 1 480px;min-width:0" aria-labelledby="pr">
+      <h2 id="pr" style="margin-bottom:12px">Revisá antes de confirmar</h2>
+      <dl class="kv"><dt>Cliente</dt><dd>${st.cliente.razon_social}</dd>${u.email ? html`<dt>Titular</dt><dd>${u.full_name || ''} · ${u.email}</dd>` : ''}</dl>
+      ${st.erp.on ? html`<h3 class="chico" style="margin:16px 0 6px">HEPTA ERP</h3><dl class="kv"><dt>Plan</dt><dd>${PLANES[st.erp.plan]}</dd><dt>Dirección</dt><dd>${st.erp.sub}.erp.hepta.com.py</dd><dt>Nombre</dt><dd>${st.erp.label}</dd></dl>` : ''}
+      ${st.mail.on ? html`<h3 class="chico" style="margin:16px 0 6px">HEPTA Mail</h3><dl class="kv"><dt>Dominio</dt><dd>${st.mail.dominio}</dd><dt>Casillas</dt><dd>${st.mail.casillas.filter(c => c.lp).map(c => `${c.lp}@${st.mail.dominio}`).join(', ')} (máximo ${st.mail.max}, 10 GB cada una)</dd><dt>DNS</dt><dd>se revisa y se publica al terminar</dd></dl>` : ''}
+      ${st.drive.on ? html`<h3 class="chico" style="margin:16px 0 6px">HEPTA Drive</h3><dl class="kv"><dt>Dirección</dt><dd>${(vd && vd.fqdn) || st.drive.slug + '.drive.hepta.com.py'}</dd><dt>Usuarios</dt><dd>${pedidoDrive().usuarios.map(x => x.correo).join(', ')}</dd><dt>Espacio</dt><dd>${st.drive.cuota} GB por usuario${st.drive.equipo ? ` + ${st.drive.equipo} GB de Equipo` : ''}${vd && vd.cuota_total_gb ? ` · ${vd.cuota_total_gb} GB en total` : ''}</dd></dl>
+        ${vd && vd.avisos && vd.avisos.length ? html`<div class="aviso warn" style="margin-top:8px">${vd.avisos.join(' · ')}</div>` : ''}` : ''}
+      <div class="aviso warn" style="margin-top:14px">Esto crea los servicios en producción.${st.erp.on ? ' El titular recibe por correo el usuario y la contraseña del sistema.' : ''}${st.drive.on ? ' Los usuarios de Drive reciben su invitación.' : ''} Las direcciones no se cambian después.</div>
+      <div class="btns" style="justify-content:space-between;margin-top:14px"><button class="btn" type="button" id="atr">Atrás</button><button class="btn pri" type="button" id="conf">Confirmar y dar de alta</button></div></section>${resumen()}</div>`.s;
+    v.querySelector('#atr').addEventListener('click', () => { st.paso = 2; pintar(); });
+    v.querySelector('#conf').addEventListener('click', (e) => { e.target.disabled = true; st.paso = 4; pintar(); lanzar(); });
+  };
+
+  // ── Paso 4: avance ──
+  const lanzar = () => {
+    if (st.erp.on) altaErp();
+    if (st.mail.on) altaMail();
+    if (st.drive.on) altaDrive();
+  };
+  const refrescar = () => { if (!salio() && st.paso === 4) pintarAvance(); };
+
+  const altaErp = async () => {
+    st.av.erp = { estado: 'en_curso', paso: 'Pidiendo el alta' }; refrescar();
+    const r = await api('POST', '/admin/provision', { user_id: Number(st.usuario), tenant: st.erp.sub, plan: st.erp.plan, label: st.erp.label });
+    if (!r.success) { st.av.erp = { estado: 'error', error: r.error }; refrescar(); return; }
+    st.av.erp = { ...r.data.job, estado: 'en_curso' }; refrescar();
+    const fin = await seguir(`/admin/provision/jobs/${r.data.job.id}`, (j) => { st.av.erp = j; refrescar(); }, { cada: 8000 });
+    st.av.erp = { ...st.av.erp, ...fin }; refrescar();
+    if (salio()) toast(fin.estado === 'ok' ? `✓ ${st.erp.sub} quedó listo` : `El alta de ${st.erp.sub} falló: ${fin.error || ''}`, fin.estado === 'ok' ? 'ok' : 'bad', 0);
+  };
+
+  const altaMail = async () => {
+    const m = st.av.mail = { estado: 'en_curso', paso: 'Creando el dominio', casillas: [], claves: [] }; refrescar();
+    const u = usuarioSel();
+    const r = await api('POST', '/admin/mail/domains', {
+      domain: st.mail.dominio, owner_email: u ? u.email : undefined, quota_mb: st.mail.max * CUOTA_CASILLA_MB,
+      def_quota_mb: CUOTA_CASILLA_MB, max_mailboxes: st.mail.max, plan_code: 'HC-CORREO-3', publish_dns: false,
+    });
+    if (!r.success) { Object.assign(m, { estado: 'error', error: r.error }); refrescar(); return; }
+    for (const c of st.mail.casillas.filter(x => x.lp)) {
+      m.paso = `Creando ${c.lp}@${st.mail.dominio}`; refrescar();
+      const rc = await api('POST', `/admin/mail/domains/${encodeURIComponent(st.mail.dominio)}/mailboxes`, { local_part: c.lp, name: c.nombre.trim() || c.lp, quota_mb: CUOTA_CASILLA_MB }, { silencioso: true });
+      if (rc.success) { m.casillas.push({ dir: rc.data.address, ok: true }); if (rc.data.password) m.claves.push({ dir: rc.data.address, clave: rc.data.password }); }
+      else m.casillas.push({ dir: `${c.lp}@${st.mail.dominio}`, ok: false, error: rc.error });
+    }
+    Object.assign(m, { estado: m.casillas.some(c => !c.ok) ? 'aviso' : 'ok', paso: 'Dominio y casillas creados; falta el DNS' });
+    refrescar();
+  };
+
+  const altaDrive = async () => {
+    st.av.drive = { status: 'running', step: 'Pidiendo el alta' }; refrescar();
+    const r = await api('POST', '/admin/drive', pedidoDrive());
+    if (!r.success) { st.av.drive = { status: 'failed', error: r.error }; refrescar(); return; }
+    st.av.drive = { status: 'running', step: 'En cola', slug: r.data.slug, avisos: r.data.avisos || [] }; refrescar();
+    const fin = await seguir(`/admin/drive/jobs/${r.data.trabajo}`, (j) => { st.av.drive = { ...st.av.drive, ...j }; refrescar(); }, { cada: 8000, enCurso: (d) => d.status === 'running' });
+    st.av.drive = { ...st.av.drive, ...fin, status: fin.status || (fin.estado === 'error' ? 'failed' : st.av.drive.status) }; refrescar();
+    if (salio()) toast(st.av.drive.status === 'done' ? `✓ HEPTA Drive ${st.drive.slug} quedó listo` : `El alta de Drive ${st.drive.slug} falló`, st.av.drive.status === 'done' ? 'ok' : 'bad', 0);
+  };
+
+  const chipDe = (ok, bad, txtOk = 'Listo') => html`<span class="chip ${ok ? 'ok' : bad ? 'bad' : 'info'}">${ok ? txtOk : bad ? 'Falló' : 'En curso'}</span>`;
+  const linea = (ok, bad, titulo, sub = '') => html`<div class="paso"><span class="d ${ok ? 'ok' : bad ? 'bad' : 'run'}">${ok ? '✓' : bad ? '✕' : '…'}</span><div><b>${titulo}</b>${sub ? html`<div class="muted chico">${sub}</div>` : ''}</div></div>`;
+
+  const pintarAvance = () => {
+    const tarjetas = [];
+    if (st.erp.on) {
+      const j = st.av.erp || {}; const ok = j.estado === 'ok', bad = j.estado === 'error';
+      tarjetas.push(html`<section class="card pad" aria-labelledby="a-erp"><div class="btns" style="justify-content:space-between;margin-bottom:8px"><h2 id="a-erp">HEPTA ERP · ${PLANES[st.erp.plan]}</h2>${chipDe(ok, bad)}</div>
+        ${linea(ok, bad, j.paso || 'Empezando', j.segundos ? `${Math.floor(j.segundos / 60)} min ${j.segundos % 60} s` : '')}
+        ${bad ? html`<div class="aviso bad">${j.error || 'Sin detalle'}</div>` : ''}${j.aviso ? html`<div class="aviso warn">${j.aviso}</div>` : ''}
+        ${ok ? html`<div class="aviso ok">${j.credenciales_enviadas ? 'El titular recibió su usuario y contraseña por correo.' : 'Listo.'}</div>${j.url ? html`<a class="btn sm" href="${j.url}" target="_blank" rel="noopener">Abrir el sistema ↗</a>` : ''}` : html`<p class="muted chico">Sigue aunque cierres esta página: el avance queda en Inicio → Trabajos en curso.</p>`}</section>`);
+    }
+    if (st.mail.on) {
+      const m = st.av.mail || {}; const bad = m.estado === 'error', listo = m.estado === 'ok' || m.estado === 'aviso';
+      tarjetas.push(html`<section class="card pad" aria-labelledby="a-mail"><div class="btns" style="justify-content:space-between;margin-bottom:8px"><h2 id="a-mail">HEPTA Mail · ${st.mail.dominio}</h2>${listo && !m.dnsOk ? html`<span class="chip warn">Falta el DNS</span>` : chipDe(listo, bad)}</div>
+        ${linea(listo, bad, m.paso || 'Empezando')}
+        ${bad ? html`<div class="aviso bad">${m.error || 'Sin detalle'}</div>` : ''}
+        ${(m.casillas || []).map(c => linea(c.ok, !c.ok, c.dir, c.ok ? '' : c.error || 'no se pudo crear'))}
+        ${m.claves && m.claves.length ? html`<div class="aviso warn" style="margin-top:8px"><b>Contraseñas iniciales: copialas ahora.</b> No se guardan y no se vuelven a mostrar; se piden cambiar en el primer ingreso.
+          ${m.claves.map((k, i) => html`<div class="btns" style="margin-top:6px;flex-wrap:nowrap"><code style="flex:1;min-width:0;overflow-wrap:anywhere">${k.dir} · ${k.clave}</code><button class="btn sm" type="button" data-copiar="${i}">Copiar</button></div>`)}</div>` : ''}
+        ${listo ? html`<div class="btns" style="margin-top:10px">${m.dnsOk ? html`<span class="chip ok">DNS publicado</span>` : html`<button class="btn sm pri" type="button" id="m-dns">Revisar y publicar el DNS</button>`}</div>` : ''}</section>`);
+    }
+    if (st.drive.on) {
+      const d = st.av.drive || {}; const ok = d.status === 'done', bad = d.status === 'failed';
+      tarjetas.push(html`<section class="card pad" aria-labelledby="a-drive"><div class="btns" style="justify-content:space-between;margin-bottom:8px"><h2 id="a-drive">HEPTA Drive · ${st.drive.slug}</h2>${chipDe(ok, bad)}</div>
+        ${linea(ok, bad, d.step || 'Empezando')}
+        ${bad ? html`<div class="aviso bad">${d.error || 'Sin detalle'}</div>` : ''}${d.avisos && d.avisos.length ? html`<div class="aviso warn">${d.avisos.join(' · ')}</div>` : ''}
+        ${ok ? html`<div class="aviso ok">Los usuarios recibieron su invitación por correo.</div><div class="btns">${d.fqdn ? html`<a class="btn sm" href="https://${d.fqdn}" target="_blank" rel="noopener">Abrir ↗</a>` : ''}<a class="btn sm" href="/admin/#drive">Bajar los secretos a KeePass ↗</a></div>` : html`<p class="muted chico">Tarda unos minutos y sigue aunque cierres esta página.</p>`}</section>`);
+    }
+    v.innerHTML = html`${cab()}<div class="grid g-3">${tarjetas}
+      <section class="card pad" aria-labelledby="a-erpg"><h2 id="a-erpg" style="margin-bottom:8px">En el ERP del grupo</h2>
+        <div class="paso"><span class="d">1</span><div class="muted">Factura del primer mes y suscripción: se cargan a mano como hasta ahora (pronto, automático).</div></div>
+        <a class="btn sm" href="#/clientes/${st.cliente.id}" style="margin-top:8px">Ver el cliente</a></section></div>`.s;
+    v.querySelectorAll('[data-copiar]').forEach(b => b.addEventListener('click', async () => {
+      const k = st.av.mail.claves[Number(b.dataset.copiar)];
+      try { await navigator.clipboard.writeText(k.clave); toast('Copiada', 'ok', 2500); } catch (e) { toast('No se pudo copiar: seleccionala y copiala a mano', 'bad'); }
+    }));
+    const bdns = v.querySelector('#m-dns'); if (bdns) bdns.addEventListener('click', () => revisarDns());
+  };
+
+  // ── DNS del correo: primero se mira, después se publica ──
+  const revisarDns = async () => {
+    const dom = st.mail.dominio;
+    const r = await api('POST', `/admin/mail/domains/${encodeURIComponent(dom)}/dns/publish`, { dry_run: true }, { silencioso: true });
+    if (!r.success) {
+      // La zona no está en nuestra cuenta de Cloudflare: los registros los carga quien administre ese DNS
+      const p = await api('GET', `/admin/mail/domains/${encodeURIComponent(dom)}/dns`);
+      if (!p.success) return;
+      modal({ titulo: `DNS de ${dom}`, ancho: true,
+        contenido: html`<p style="margin-top:0">${r.error || ''}. Estos registros los tiene que cargar quien administre el DNS del dominio:</p>
+          <pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:var(--fondo);padding:10px;border-radius:8px;max-height:50vh;overflow:auto">${p.data.dns_text || ''}</pre>`,
+        botones: [{ texto: 'Copiar todo', accion: async () => { try { await navigator.clipboard.writeText(p.data.dns_text || ''); toast('Copiado', 'ok', 2500); } catch (e) { toast('No se pudo copiar', 'bad'); } return true; } }, { texto: 'Cerrar', clase: 'pri' }] });
+      return;
+    }
+    const filas = r.data.results || [];
+    const reemplaza = filas.filter(f => f.action === 'would_update' && !f.igual);
+    const otrosMx = [...new Set(filas.flatMap(f => f.otros_mx || []))];
+    const choques = filas.filter(f => (f.choca || []).length);
+    modal({ titulo: `DNS del correo de ${dom}`, ancho: true,
+      contenido: html`<p style="margin-top:0">La zona está en la cuenta de Cloudflare de HEPTA. Esto es lo que quedaría (nada se cambia todavía):</p>
+        ${filas.map(f => html`<div class="row" style="padding:8px 0;align-items:flex-start"><div class="flex"><b>${f.type}</b> ${f.name}<div class="muted chico" style="overflow-wrap:anywhere">${f.nuevo}</div>
+          ${f.action === 'would_update' && !f.igual ? html`<div class="chico" style="color:var(--warn);overflow-wrap:anywhere">Reemplaza: ${f.actual}</div>` : ''}
+          ${(f.choca || []).length ? html`<div class="chico" style="color:var(--bad)">Choca con un registro ${f.choca.join(', ')} del mismo nombre: no se va a poder crear</div>` : ''}</div>
+          <span class="chip ${f.action === 'would_create' ? 'info' : f.igual ? 'mute' : 'warn'}">${f.action === 'would_create' ? 'crear' : f.igual ? 'ya está' : 'reemplazar'}</span></div>`)}
+        ${otrosMx.length ? html`<div class="aviso warn" style="margin-top:10px"><b>Quedarían otros MX:</b> ${otrosMx.join(' · ')}. Se reemplaza uno solo: los demás hay que borrarlos a mano en Cloudflare, o el correo llega a dos lados.</div>` : ''}
+        ${reemplaza.some(f => f.type === 'MX') ? html`<div class="aviso warn" style="margin-top:10px">Cambia el MX: desde que se publica, el correo nuevo del dominio entra a HEPTA Mail. Si hoy está en otro servidor, coordinalo antes.</div>` : ''}
+        ${choques.length ? html`<div class="aviso bad" style="margin-top:10px">Hay registros que chocan. Revisalos en Cloudflare antes de publicar.</div>` : ''}`,
+      botones: [{ texto: 'Cancelar' }, { texto: reemplaza.length ? 'Publicar y reemplazar' : 'Publicar', clase: 'pri', accion: async () => {
+        if (reemplaza.length && !(await confirmar({ titulo: 'Reemplazar registros DNS', texto: `Se reemplazan ${reemplaza.length} registro(s) de ${dom}: ${reemplaza.map(f => `${f.type} ${f.name}`).join(', ')}.`, boton: 'Reemplazar', peligro: true }))) return true;
+        const pub = await api('POST', `/admin/mail/domains/${encodeURIComponent(dom)}/dns/publish`, {});
+        if (!pub.success) return true;
+        const fallos = (pub.data.results || []).filter(x => x.action === 'failed');
+        if (fallos.length) toast(`DNS publicado con ${fallos.length} error(es): ${fallos.map(x => `${x.name} (${x.error})`).join(' · ')}`, 'bad', 0);
+        else toast('DNS del correo publicado', 'ok');
+        st.av.mail.dnsOk = !fallos.length; refrescar();
+        return false;
+      } }] });
   };
 
   const pintar = () => {
-    if (st.paso === 1) {
-      v.innerHTML = html`${cab()}<div class="btns" style="align-items:flex-start;gap:16px"><section class="card pad" style="flex:999 1 480px;min-width:0" aria-labelledby="pc">
-        <h2 id="pc" style="margin-bottom:12px">¿Para qué cliente?</h2>
-        <label class="fld">Cliente<select id="cli"><option value="">Elegí un cliente…</option>${clientes.map(c => html`<option value="${c.id}" ${raw(st.cliente && st.cliente.id === c.id ? 'selected' : '')}>${c.nombre_comercial || c.razon_social} · RUC ${c.numero_doc}</option>`)}</select>
-          <span class="ayuda">¿No está? <a href="/admin/#clients">Crealo en el Admin actual ↗</a> y volvé.</span></label>
-        <div id="usr" style="margin-top:12px"></div>
-        <div class="btns" style="justify-content:flex-end;margin-top:16px"><button class="btn pri" type="button" id="sig1">Siguiente</button></div></section>${resumen()}</div>`.s;
-      const pintarUsuarios = () => {
-        const caja = v.querySelector('#usr');
-        if (!st.cliente) { caja.innerHTML = ''; return; }
-        caja.innerHTML = st.usuarios.length
-          ? html`<label class="fld">Usuario que recibe el sistema<select id="u">${st.usuarios.map(u => html`<option value="${u.id}" ${raw(String(st.usuario) === String(u.id) ? 'selected' : '')}>${u.full_name || u.email} · ${u.email}</option>`)}</select><span class="ayuda">Le llega la bienvenida con su usuario y contraseña.</span></label>`.s
-          : html`<div class="aviso warn">Este cliente no tiene usuarios del portal. Creale uno en el Admin actual (Usuarios → Nuevo, vinculado al cliente) y volvé.</div>`.s;
-        const u = v.querySelector('#u'); if (u) { st.usuario = u.value; u.addEventListener('change', () => { st.usuario = u.value; }); }
-      };
-      const elegir = async (id) => {
-        st.cliente = clientes.find(c => c.id === id) || null; st.usuarios = []; st.usuario = '';
-        if (st.cliente) { const f = await api('GET', `/admin/v2/clientes/${id}`); st.usuarios = f.success ? f.data.usuarios.filter(u => u.is_active !== false) : []; st.usuario = st.usuarios[0] ? st.usuarios[0].id : ''; }
-        pintarUsuarios();
-      };
-      v.querySelector('#cli').addEventListener('change', (e) => elegir(e.target.value));
-      v.querySelector('#sig1').addEventListener('click', () => {
-        if (!st.cliente) return toast('Elegí el cliente', 'bad');
-        if (!st.usuario) return toast('El cliente necesita un usuario del portal', 'bad');
-        if (!st.sub) st.sub = String(st.cliente.nombre_comercial || st.cliente.razon_social).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\b(s\.?a\.?|e\.?a\.?s\.?|s\.?r\.?l\.?|unipersonal)\b/g, '').replace(/[^a-z0-9]+/g, '').slice(0, 20);
-        if (!st.label) st.label = `Sistema de ${st.cliente.nombre_comercial || st.cliente.razon_social}`;
-        st.paso = 2; pintar();
-      });
-      if (st.cliente) pintarUsuarios();
-      else if (preCliente && clientes.some(c => c.id === preCliente)) { v.querySelector('#cli').value = preCliente; elegir(preCliente); }
-      return;
-    }
-    if (st.paso === 2) {
-      v.innerHTML = html`${cab()}<div class="btns" style="align-items:flex-start;gap:16px"><div class="col" style="flex:999 1 480px;min-width:0">
-        <section class="card pad" aria-labelledby="pp"><h2 id="pp" style="margin-bottom:12px">Plan del sistema</h2>
-          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px" role="radiogroup" aria-label="Plan">
-            ${['starter', 'professional'].map(s => html`<label class="opcion ${st.plan === s ? 'on' : ''}"><input type="radio" name="plan" value="${s}" ${raw(st.plan === s ? 'checked' : '')}><span><b>${PLANES[s]}</b><br><span class="muted">${gs(precio(s))} / mes</span></span></label>`)}
-            <label class="opcion" aria-disabled="true" title="Plan Empresa: se cotiza y no tiene alta automática"><input type="radio" disabled><span><b>Empresa</b><br><span class="muted">a cotizar</span></span></label></div>
-          <div class="btns" style="margin-top:14px;align-items:flex-start">
-            <label class="fld" style="flex:1 1 220px">Subdominio<input id="sub" value="${st.sub}" autocomplete="off"><span class="ayuda" id="sub-ok">${st.sub}.erp.hepta.com.py</span></label>
-            <label class="fld" style="flex:1 1 220px">Nombre de la instancia<input id="lab" value="${st.label}"></label></div>
-          <p class="muted chico" style="margin:10px 0 0">Los módulos de rubro (Boutique, Belleza y SPA) se instalan después del alta, desde Servicios → ⋯ → Módulos adicionales. El dominio propio, también al final.</p></section>
-        <section class="card pad" aria-labelledby="pa"><h2 id="pa" style="margin-bottom:4px">Adicionales</h2>
-          <p class="muted chico" style="margin:0 0 10px">Todavía se dan de alta desde el Admin actual. Cuando el pedido unificado esté listo, se eligen acá y cada uno corre como un trabajo aparte.</p>
-          ${[['HEPTA Mail', 'HC-CORREO-3 · ₲ 120.000 / mes', '/admin/#mail'], ['HEPTA Drive', 'HC-NUBE-3 · ₲ 150.000 / mes', '/admin/#drive'], ['Dominio gestionado', 'HC-DOMINIO · ₲ 33.000 / mes', '#/servicios/dominios']].map(([n, d, u]) =>
-            html`<div class="row" style="padding:10px 0"><input type="checkbox" disabled aria-label="${n} (pronto)"><div class="flex"><b>${n}</b> <span class="chip mute">pronto</span><div class="muted chico">${d}</div></div><a class="btn sm" href="${u}">Hacerlo ahora ↗</a></div>`)}
-        </section>
-        <div class="btns" style="justify-content:space-between"><button class="btn" type="button" id="atr">Atrás</button><button class="btn pri" type="button" id="sig2">Revisar pedido</button></div></div>${resumen()}</div>`.s;
-      v.querySelectorAll('input[name=plan]').forEach(r => r.addEventListener('change', () => { st.plan = r.value; pintar(); }));
-      const sub = v.querySelector('#sub');
-      sub.addEventListener('input', () => { st.sub = sub.value.trim().toLowerCase(); const ok = SUB.test(st.sub); v.querySelector('#sub-ok').textContent = ok ? `${st.sub}.erp.hepta.com.py` : 'Minúsculas, números y guiones (sin espacios ni puntos)'; v.querySelector('#sub-ok').style.color = ok ? '' : 'var(--bad)'; });
-      v.querySelector('#lab').addEventListener('input', (e) => { st.label = e.target.value; });
-      v.querySelector('#atr').addEventListener('click', () => { st.paso = 1; pintar(); });
-      v.querySelector('#sig2').addEventListener('click', () => { if (!SUB.test(st.sub)) return toast('Revisá el subdominio', 'bad'); st.paso = 3; pintar(); });
-      return;
-    }
-    if (st.paso === 3) {
-      const u = st.usuarios.find(x => String(x.id) === String(st.usuario)) || {};
-      v.innerHTML = html`${cab()}<div class="btns" style="align-items:flex-start;gap:16px"><section class="card pad" style="flex:999 1 480px;min-width:0" aria-labelledby="pr">
-        <h2 id="pr" style="margin-bottom:12px">Revisá antes de confirmar</h2>
-        <dl class="kv"><dt>Cliente</dt><dd>${st.cliente.razon_social}</dd><dt>Usuario</dt><dd>${u.full_name || ''} · ${u.email || ''}</dd>
-          <dt>Sistema</dt><dd>HEPTA ERP · Plan ${PLANES[st.plan]}</dd><dt>Dirección</dt><dd>${st.sub}.erp.hepta.com.py</dd><dt>Nombre</dt><dd>${st.label}</dd></dl>
-        <div class="aviso warn" style="margin-top:14px">Esto crea el sistema en producción y le manda al cliente su usuario y contraseña. Revisá el subdominio: después no se cambia.</div>
-        <div class="btns" style="justify-content:space-between;margin-top:14px"><button class="btn" type="button" id="atr">Atrás</button><button class="btn pri" type="button" id="conf">Confirmar y dar de alta</button></div></section>${resumen()}</div>`.s;
-      v.querySelector('#atr').addEventListener('click', () => { st.paso = 2; pintar(); });
-      v.querySelector('#conf').addEventListener('click', async (e) => {
-        e.target.disabled = true;
-        const r = await api('POST', '/admin/provision', { user_id: Number(st.usuario), tenant: st.sub, plan: st.plan, label: st.label });
-        if (!r.success) { e.target.disabled = false; return; }
-        st.job = r.data.job; st.paso = 4; pintar();
-        const fin = await seguir(`/admin/provision/jobs/${st.job.id}`, (j) => { if (!salio()) { st.job = j; pintarAvance(); } }, { cada: 8000 });
-        if (salio()) { if (fin.estado === 'ok') toast(`✓ ${st.sub} quedó listo`, 'ok', 0); else toast(`El alta de ${st.sub} falló: ${fin.error || ''}`, 'bad', 0); return; }
-        st.job = { ...st.job, ...fin }; pintarAvance();
-      });
-      return;
-    }
-    pintarAvance();
+    if (st.paso === 1) return paso1();
+    if (st.paso === 2) return paso2();
+    if (st.paso === 3) return paso3();
+    return pintarAvance();
   };
-
-  const pintarAvance = () => {
-    const j = st.job || {};
-    const listo = j.estado === 'ok', fallo = j.estado === 'error';
-    v.innerHTML = html`${cab()}<div class="grid g-3">
-      <section class="card pad" aria-labelledby="j1"><div class="btns" style="justify-content:space-between;margin-bottom:8px"><h2 id="j1">HEPTA ERP · ${PLANES[st.plan]}</h2>
-        <span class="chip ${listo ? 'ok' : fallo ? 'bad' : 'info'}">${listo ? 'Listo' : fallo ? 'Falló' : 'En curso'}</span></div>
-        <div class="paso"><span class="d ${listo ? 'ok' : fallo ? 'bad' : 'run'}">${listo ? '✓' : fallo ? '✕' : '…'}</span><div><b>${j.paso || 'Empezando'}</b><div class="muted chico">${j.segundos ? `${Math.floor(j.segundos / 60)} min ${j.segundos % 60} s` : ''}</div></div></div>
-        ${fallo ? html`<div class="aviso bad">${j.error || 'Sin detalle'}</div>` : ''}
-        ${j.aviso ? html`<div class="aviso warn">${j.aviso}</div>` : ''}
-        ${listo ? html`<div class="aviso ok">${j.credenciales_enviadas ? 'El cliente recibió su usuario y contraseña por correo.' : 'Listo.'}</div><div class="btns">${j.url ? html`<a class="btn sm" href="${j.url}" target="_blank" rel="noopener">Abrir el sistema ↗</a>` : ''}<a class="btn sm pri" href="#/clientes/${st.cliente.id}">Ver el cliente</a></div>` : html`<p class="muted chico">Sigue aunque cierres esta página: el avance queda en Inicio → Trabajos en curso.</p>`}</section>
-      <section class="card pad" aria-labelledby="j2"><h2 id="j2" style="margin-bottom:8px">En el ERP del grupo</h2>
-        <div class="paso"><span class="d">1</span><div class="muted">Factura del primer mes y suscripción: se cargan a mano como hasta ahora (pronto, automático).</div></div></section></div>`.s;
-  };
-
   pintar();
 }

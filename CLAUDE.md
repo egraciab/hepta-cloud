@@ -114,7 +114,8 @@ CNAME con proxy a nuestro balanceador desde otra cuenta de Cloudflare da error 1
 - [ ] Portal, después del lanzamiento: contratar y cambiar de plan desde el portal (la ruta `POST /api/portal/payment-request`
       existe pero ninguna pantalla la usa) y vincular al cliente con el ERP del grupo en el alta (`users.tenant_partner_id`):
       hasta entonces Facturas no se muestra y Soporte es un formulario que llega por correo.
-- [ ] Admin nuevo (`/admin/v2/`): conviven los dos. Faltan facturación y suscripción desde el ERP, adicionales en Pedido,
+- [ ] Admin nuevo (`/admin/v2/`): conviven los dos. El Pedido ya da de alta ERP, Mail y Drive (juntos o solos; el DNS del correo se
+      publica recién después de ver qué se crea o reemplaza). Faltan facturación y suscripción desde el ERP, dominio gestionado,
       panel de Respaldos, salud de NGINX/Cloudflare/ERP y pasar las pantallas que hoy enlazan al Admin actual (planes,
       contenido, legales, configuración, credenciales, usuarios, baja de instancias). Pruebas: `tests/harness_admin_v2.js`
       (rutas, Postgres efímero) y `tests/harness_admin_v2_ui.js` (Playwright con API simulada).
