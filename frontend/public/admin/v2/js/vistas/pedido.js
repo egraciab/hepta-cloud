@@ -21,7 +21,7 @@ const sugerido = (c) => sinAcentos(c.nombre_comercial || c.razon_social)
 
 export async function render(v, rt, salio) {
   const st = {
-    paso: 1, cliente: null, usuarios: [], usuario: '',
+    paso: 1, cliente: null, usuarios: [], usuario: '', instancias: [],
     erp: { on: true, plan: 'professional', sub: '', label: '' },
     mail: { on: false, dominio: '', max: 3, casillas: [{ lp: '', nombre: '' }] },
     drive: { on: false, slug: '', cuota: 5, equipo: 0, usuarios: [{ nombre: '', correo: '' }] },
@@ -71,8 +71,13 @@ export async function render(v, rt, salio) {
       const u = v.querySelector('#u'); if (u) { st.usuario = u.value; u.addEventListener('change', () => { st.usuario = u.value; }); }
     };
     const elegir = async (id) => {
-      st.cliente = clientes.find(c => c.id === id) || null; st.usuarios = []; st.usuario = '';
-      if (st.cliente) { const f = await api('GET', `/admin/v2/clientes/${id}`); st.usuarios = f.success ? f.data.usuarios.filter(u => u.is_active !== false) : []; st.usuario = st.usuarios[0] ? st.usuarios[0].id : ''; }
+      st.cliente = clientes.find(c => c.id === id) || null; st.usuarios = []; st.usuario = ''; st.instancias = [];
+      if (st.cliente) {
+        const f = await api('GET', `/admin/v2/clientes/${id}`);
+        st.usuarios = f.success ? f.data.usuarios.filter(u => u.is_active !== false) : [];
+        st.instancias = f.success ? (f.data.instancias || []).filter(i => ['active', 'suspended'].includes(i.status)) : [];
+        st.usuario = st.usuarios[0] ? st.usuarios[0].id : '';
+      }
       pintarUsuarios();
     };
     v.querySelector('#cli').addEventListener('change', (e) => elegir(e.target.value));
@@ -82,7 +87,8 @@ export async function render(v, rt, salio) {
       if (!st.erp.sub) st.erp.sub = base;
       if (!st.erp.label) st.erp.label = `Sistema de ${nombreCliente()}`;
       if (!st.drive.slug) st.drive.slug = base.length >= 3 && /^[a-z]/.test(base) ? base : '';
-      if (!st.usuarios.length) st.erp.on = false;
+      // Sin usuario no hay alta de ERP; si ya tiene uno, lo normal es sumarle servicios (se puede tildar para otra instancia)
+      if (!st.usuarios.length || st.instancias.length) st.erp.on = false;
       st.paso = 2; pintar();
     });
     if (st.cliente) pintarUsuarios();
@@ -97,7 +103,7 @@ export async function render(v, rt, salio) {
   const paso2 = () => {
     const sinUsuario = !st.usuarios.length;
     v.innerHTML = html`${cab()}<div class="btns" style="align-items:flex-start;gap:16px"><div class="col" style="flex:999 1 480px;min-width:0">
-      <section class="card pad" aria-labelledby="s-erp">${cabServicio('erp', 'HEPTA ERP', sinUsuario ? 'Necesita un usuario del portal (paso 1)' : 'Sistema de gestión con su plan', sinUsuario)}
+      <section class="card pad" aria-labelledby="s-erp">${cabServicio('erp', 'HEPTA ERP', sinUsuario ? 'Necesita un usuario del portal (paso 1)' : st.instancias.length ? `Ya tiene: ${st.instancias.map(i => (i.custom_domain || i.db_name)).join(', ')}. Tildalo solo para sumar otra instancia.` : 'Sistema de gestión con su plan', sinUsuario)}
         ${st.erp.on ? html`<div style="margin-top:12px">
           <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px" role="radiogroup" aria-label="Plan">
             ${['starter', 'professional'].map(s => html`<label class="opcion ${st.erp.plan === s ? 'on' : ''}"><input type="radio" name="plan" value="${s}" ${raw(st.erp.plan === s ? 'checked' : '')}><span><b>${PLANES[s]}</b><br><span class="muted">${gs(precio(s))} / mes</span></span></label>`)}
