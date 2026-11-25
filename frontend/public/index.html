@@ -157,6 +157,10 @@
     .adic-opts{display:flex;flex-wrap:wrap;gap:8px}
     .adic-opt{display:flex;align-items:center;gap:6px;border:1px solid var(--gray-200);border-radius:8px;padding:7px 10px;font-size:13px;cursor:pointer}
     .adic-opt input{accent-color:var(--blue)}
+    .adic-opt .adic-precio{color:var(--gray-600);font-size:12px}
+    .adic-resumen{margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--blue-pale);font-size:13px;line-height:1.5;color:var(--gray-800)}
+    .adic-resumen[hidden],#ok-pago-adic[hidden]{display:none}
+    .adic-resumen .total{font-weight:700}
     .btn-wa-ok{display:flex;align-items:center;justify-content:center;gap:8px;background:#25D366;color:#fff;text-decoration:none;font-weight:600;padding:11px;border-radius:var(--radius-md);margin-top:14px}
     .btn-wa-ok:hover{background:#1fb457}
     @media(max-width:900px){.addons-grid{grid-template-columns:1fr}}
@@ -573,7 +577,7 @@
           <div class="form-group" id="grp-plan"><label for="f-plan">Plan que te interesa</label><select id="f-plan"><option value="">Todavía no sé</option></select></div>
           <div class="form-group"><label for="f-ruc">RUC <span class="opc">(opcional)</span></label><input type="text" id="f-ruc" placeholder="80012345-6" inputmode="numeric" maxlength="14"/></div>
         </div>
-        <fieldset class="adic-group" id="grp-adic" hidden><legend>Sumá adicionales <span class="opc">(opcional)</span></legend><div class="adic-opts" id="adic-opts"></div></fieldset>
+        <fieldset class="adic-group" id="grp-adic" hidden><legend>Sumá adicionales <span class="opc">(opcional)</span></legend><div class="adic-opts" id="adic-opts"></div><div class="adic-resumen" id="adic-resumen" aria-live="polite" hidden></div></fieldset>
         <div class="form-group"><label for="f-msg" id="f-msg-label">¿Qué necesitás resolver?</label><textarea id="f-msg" placeholder="Contanos brevemente..." maxlength="2000"></textarea></div>
         <div class="hp" aria-hidden="true"><label>No completar <input type="text" id="f-website" tabindex="-1" autocomplete="off"/></label></div>
         <label class="acepta" id="grp-acepta" hidden><input type="checkbox" id="f-acepta"/> <span>Leí y acepto los <a href="/terminos" target="_blank" rel="noopener">términos del servicio</a> y la <a href="/privacidad" target="_blank" rel="noopener">política de privacidad</a>.</span></label>
@@ -594,6 +598,7 @@
         <ol class="pasos" aria-label="Pasos para contratar"><li class="hecho">1. Pedido ✓</li><li class="ahora">2. Pago del primer mes</li><li>3. Alta de tu sistema</li></ol>
         <div class="pago-box">
           <div class="pago-plan" id="ok-pago-plan"></div>
+          <p class="pago-nota" id="ok-pago-adic" hidden></p>
           <a class="btn-primary pago-btn" id="ok-pago-link" href="#" target="_blank" rel="noopener">Pagar ahora con tPago</a>
           <p class="pago-nota">Se abre tPago en otra pestaña. También te mandamos este link por correo. Cuando confirmamos el pago damos de alta tu sistema y te llega otro correo con tu usuario y contraseña. Si preferís pagar por transferencia o QR, te escribimos con los datos.</p>
         </div>
@@ -793,10 +798,37 @@ function renderAdicionales() {
   const f = $m('fundador');
   f.hidden = !quedan;
   if (quedan) f.innerHTML = `Primeros 10 clientes fundadores: puesta en marcha sin costo · <strong>quedan ${quedan} lugar${quedan === 1 ? '' : 'es'}</strong>`;
-  $m('adic-opts').innerHTML = lista.map(a => `<label class="adic-opt"><input type="checkbox" name="adic" value="${escH(a.id)}"/> ${escH(a.nombre)}</label>`).join('');
+  $m('adic-opts').innerHTML = lista.map(a => `<label class="adic-opt"><input type="checkbox" name="adic" value="${escH(a.id)}"/> ${escH(a.nombre)} <span class="adic-precio">${escH(a.precio)}/mes</span></label>`).join('');
   $m('grp-adic').hidden = !lista.length;
   $m('addons').hidden = !lista.length;
 }
+// Resumen del pedido debajo de los adicionales: cuánto suma por mes y qué se paga ahora. Los precios de los
+// adicionales son texto ("₲ 120.000"); se toman solo los dígitos.
+const gsNum = (t) => parseInt(String(t || '').replace(/\D/g, ''), 10) || 0;
+const gsTxt = (n) => '₲ ' + String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+function adicElegidos() {
+  const lista = adicionales();
+  return [...document.querySelectorAll('#adic-opts input:checked')].map(c => lista.find(a => a.id === c.value)).filter(Boolean);
+}
+function resumenPedido() {
+  const caja = $m('adic-resumen');
+  const elegidos = adicElegidos();
+  if (!elegidos.length) { caja.hidden = true; caja.innerHTML = ''; return; }
+  const contratar = MODO === 'contratar';
+  const plan = contratar ? PLAN_ELEGIDO : PLANES.find(p => p.slug === $m('f-plan').value);
+  const montoPlan = plan ? Number(plan.price) || 0 : 0;
+  const partes = (montoPlan ? [`${escH(plan.name)} ${gsTxt(montoPlan)}`] : []).concat(elegidos.map(a => `${escH(a.nombre)} ${gsTxt(gsNum(a.precio))}`));
+  const total = montoPlan + elegidos.reduce((t, a) => t + gsNum(a.precio), 0);
+  const setup = elegidos.reduce((t, a) => t + gsNum(a.setup), 0);
+  const quedan = restantesFundador();
+  caja.innerHTML = `${partes.join(' + ')} = <span class="total">${gsTxt(total)} / mes</span>, IVA incluido.`
+    + (setup ? `<br>Puesta en marcha de los adicionales: ${quedan ? `<s>${gsTxt(setup)}</s> <b>sin costo para fundadores</b>` : `${gsTxt(setup)}, una vez`}.` : '')
+    + (contratar ? '<br>Ahora pagás solo el primer mes del plan. Los adicionales los coordinamos con vos y se suman a tu primera factura.' : '');
+  caja.hidden = false;
+}
+document.addEventListener('change', (e) => {
+  if (e.target && (e.target.id === 'f-plan' || (e.target.closest && e.target.closest('#adic-opts')))) resumenPedido();
+});
 function renderPlans(plans) {
   PLANES = plans;
   const sel = document.getElementById('f-plan');
@@ -849,6 +881,7 @@ function openModal(slug, adicional) {
   $m('form-msg').className = 'form-msg';
   document.querySelectorAll('#contact-form .mal').forEach(el => el.classList.remove('mal'));
   document.querySelectorAll('#adic-opts input').forEach(c => { c.checked = c.value === adicional; });
+  resumenPedido();
   if (adicional && !plan) $m('modal-title').textContent = 'Sumar adicionales a mi pedido';
   $m('modal-form-view').hidden = false;
   $m('modal-ok-view').hidden = true;
@@ -912,7 +945,7 @@ async function submitForm(e) {
     const data = await res.json().catch(() => ({ success: false, error: res.status === 429 ? 'Recibimos varios pedidos seguidos desde tu conexión. Probá de nuevo en un rato o escribinos por WhatsApp.' : 'Error al enviar. Intentá de nuevo.' }));
     if (!data.success) throw new Error(data.error || 'Error desconocido');
     // Antes de limpiar el formulario: el mensaje para acelerar por WhatsApp
-    const elegidos = [...document.querySelectorAll('#adic-opts input:checked')].map(c => (adicionales().find(a => a.id === c.value) || {}).nombre).filter(Boolean);
+    const elegidos = adicElegidos().map(a => a.nombre);
     const planTxt = contratar ? PLAN_ELEGIDO.name : (PLANES.find(p => p.slug === $m('f-plan').value) || {}).name;
     const quien = [$m('f-name').value.trim(), $m('f-company').value.trim()].filter(Boolean).join(', de ');
     const pedido = [planTxt, ...elegidos].filter(Boolean).join(' + ');
@@ -933,6 +966,9 @@ async function submitForm(e) {
       $m('ok-pago-plan').textContent = `${pago.plan}${pago.precio ? ' · ' + pago.precio : ''}`;
       $m('ok-pago-link').href = pago.link;
     }
+    const notaAdic = $m('ok-pago-adic');
+    notaAdic.hidden = !(conPago && elegidos.length);
+    notaAdic.textContent = notaAdic.hidden ? '' : `Este pago es solo del plan. ${elegidos.join(' y ')}: los coordinamos con vos y se suman a tu primera factura.`;
     $m('modal-form-view').hidden = true;
     $m('modal-ok-view').hidden = false;
   } catch(err) {
