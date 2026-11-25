@@ -36,7 +36,7 @@ CREATE TABLE client_services (id serial PRIMARY KEY, service text, slug text, bi
   status text, params jsonb DEFAULT '{}', created_at timestamptz DEFAULT now());
 CREATE TABLE provisioning_jobs (id serial PRIMARY KEY, client_service_id int, status text, step text, error text,
   started_at timestamptz DEFAULT now());
-CREATE TABLE admin_logs (id serial PRIMARY KEY, user_id int, action text, target text, detail text, created_at timestamptz DEFAULT now());`;
+CREATE TABLE admin_logs (id serial PRIMARY KEY, user_id int REFERENCES users(id) ON DELETE SET NULL, action varchar(100) NOT NULL, target varchar(100), detail jsonb, ip_address inet, created_at timestamptz DEFAULT now());`;
 
 (async () => {
   const { Pool } = require('pg');
