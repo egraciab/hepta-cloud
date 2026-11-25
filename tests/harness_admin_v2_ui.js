@@ -236,6 +236,18 @@ const server = http.createServer((req, res) => {
       await page.check('[data-on=drive]'); await page.waitForSelector('#d-slug');
       await page.fill('#d-slug', 'nuevo');
       await page.fill('[data-du="0"][data-k=nombre]', 'Ana Gómez'); await page.fill('[data-du="0"][data-k=correo]', 'ana@nuevo.com.py');
+      // Precios escalonados: 5 casillas = 120.000 + 40.000 (4.ª) + 36.000 (5.ª); Drive 6 usuarios y 200 GB = Paquete Equipo
+      await page.fill('#m-max', '5'); await page.press('#m-max', 'Tab'); await page.waitForTimeout(100);
+      check('pedido mail: 5 casillas suman por tramo (196.000)', /196\.000/.test(await page.textContent('aside.card')) || /196\.000/.test(await page.textContent('aside.card')));
+      await page.fill('#m-max', '10'); await page.press('#m-max', 'Tab'); await page.waitForTimeout(100);
+      check('pedido mail: desde la 10.ª casilla se cotiza', /a cotizar/.test(await page.textContent('aside.card')));
+      await page.fill('#m-max', '3'); await page.press('#m-max', 'Tab'); await page.waitForTimeout(100);
+      await page.selectOption('#d-gb', '200'); await page.waitForTimeout(100);
+      await page.fill('#d-cont', '6'); await page.press('#d-cont', 'Tab'); await page.waitForTimeout(100);
+      check('pedido drive: 6 usuarios y 200 GB es el Paquete Equipo (270.000)', /Paquete Equipo/.test(await page.textContent('aside.card')) && /270\.000/.test(await page.textContent('aside.card')));
+      await page.selectOption('#d-gb', '100'); await page.waitForTimeout(100);
+      await page.fill('#d-cont', '3'); await page.press('#d-cont', 'Tab'); await page.waitForTimeout(100);
+      check('pedido: base 120.000 + 150.000 = 270.000', /270\.000/.test(await page.textContent('aside.card')) && !/Paquete/.test(await page.textContent('aside.card')));
       await page.click('#sig2'); await page.waitForTimeout(400);
       check('pedido mail: un dominio que ya tiene correo no avanza', await page.isVisible('#m-dom') && /ya tiene correo/.test(await page.textContent('#toasts')));
       await limpiarAvisos();
@@ -252,7 +264,7 @@ const server = http.createServer((req, res) => {
       await foto('pedido-adicionales-4');
       check('pedido mail: no pide el ERP si no se eligió', llamadas.filter(l => l.startsWith('ALTA ')).length === altasAntes);
       const mailAlta = llamadas.find(l => l.startsWith('MAIL '));
-      check('pedido mail: crea el dominio sin publicar DNS y con 10 GB por casilla', mailAlta && /"publish_dns":false/.test(mailAlta) && /"quota_mb":30720/.test(mailAlta) && /"max_mailboxes":3/.test(mailAlta), mailAlta);
+      check('pedido mail: crea el dominio sin publicar DNS y con 5 GB por casilla', mailAlta && /"publish_dns":false/.test(mailAlta) && /"quota_mb":15360/.test(mailAlta) && /"max_mailboxes":3/.test(mailAlta), mailAlta);
       check('pedido drive: manda cliente y usuarios', llamadas.some(l => l.startsWith('DRIVE ') && /"slug":"nuevo"/.test(l) && /ana@nuevo\.com\.py/.test(l) && new RegExp(RYG).test(l)));
       check('pedido mail: muestra la contraseña inicial una vez', /Clave-Una-Vez-1/.test(await page.textContent('#vista')));
       check('pedido mail: no publica el DNS sin revisión', !llamadas.includes('DNS publicar'));
