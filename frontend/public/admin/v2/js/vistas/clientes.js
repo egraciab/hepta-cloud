@@ -72,7 +72,9 @@ async function ficha(v, id, salio) {
             <div class="flex"><b>HEPTA Mail · ${d.domain}</b><div class="muted chico">dueño ${d.owner_email}${d.max_mailboxes ? ` · hasta ${d.max_mailboxes} casillas` : ''}</div></div>
             <a class="btn sm" href="#/servicios/mail?q=${encodeURIComponent(d.domain)}">Ver</a></div>`)}
           ${servicios.map(s => html`<div class="row" style="align-items:flex-start">${chipEstado(s.status)}
-            <div class="flex"><b>HEPTA ${s.service === 'drive' ? 'Drive' : s.service} · ${s.slug}</b><div class="muted chico">${s.fqdn || ''}</div></div>
+            <div class="flex"><b>HEPTA ${s.service === 'drive' ? 'Drive' : s.service} · ${s.slug}</b><div class="muted chico">${s.params && s.params.dominio
+              ? html`<a href="https://${s.params.dominio}" target="_blank" rel="noopener">${s.params.dominio}</a>${s.fqdn ? ` (también ${s.fqdn})` : ''}`
+              : s.fqdn ? html`<a href="https://${s.fqdn}" target="_blank" rel="noopener">${s.fqdn}</a>` : ''}</div></div>
             <a class="btn sm" href="#/servicios/drive?q=${encodeURIComponent(s.slug)}">Ver</a></div>`)}
           ${!instancias.length && !correo.length && !servicios.length ? html`<div class="vacio">Sin servicios todavía. <a href="#/pedido?cliente=${c.id}">Armar un pedido</a></div>` : ''}
         </section>
