@@ -16,6 +16,9 @@ router.use('/credentials', require('./credentials.routes'));
 // Clientes: entidades fiscales (billing_customers)
 router.use('/clients', require('./clients.routes'));
 
+// Datos agregados para el Admin nuevo (/admin/v2/): solo lectura
+router.use(require('./admin_v2.routes'));
+
 // ── Site config ──────────────────────────────────────────────
 router.get('/config', async (req, res) => {
   try {

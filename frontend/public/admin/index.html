@@ -160,6 +160,7 @@
         <div class="user-info"><div class="user-name" id="user-name">Admin</div><div class="user-role" id="user-role">godmode</div></div>
         <button class="btn-logout" onclick="doLogout()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
       </div>
+      <a href="/admin/v2/" style="display:block;margin-top:10px;font-size:12px;color:#C7D2F0">Probar el Admin nuevo →</a>
     </div>
   </aside>
 
@@ -1150,7 +1151,10 @@ async function showApp(){
   document.getElementById('user-name').textContent=currentUser.full_name||currentUser.email;
   document.getElementById('user-role').textContent=currentUser.role;
   document.getElementById('user-avatar').textContent=(currentUser.full_name||currentUser.email)[0].toUpperCase();
-  loadDashboard();
+  // /admin/#<sección> abre esa sección (lo usan los enlaces del Admin nuevo, /admin/v2/)
+  const irA=(location.hash||'').slice(1);
+  if(/^[a-z_]+$/.test(irA)&&document.getElementById('section-'+irA)) showSection(irA,document.querySelector(`.menu-item[onclick*="'${irA}'"]`));
+  else loadDashboard();
   cargarAlertasCredenciales();
   // cargar logo en sidebar
   try{
@@ -1171,8 +1175,8 @@ function showSection(name,el){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.menu-item').forEach(m=>m.classList.remove('active'));
   document.getElementById(`section-${name}`).classList.add('active');
-  el.classList.add('active');
-  document.getElementById('topbar-title').textContent=sectionTitles[name];
+  if(el) el.classList.add('active');
+  document.getElementById('topbar-title').textContent=sectionTitles[name]||(el&&el.textContent.trim())||'';
   if(sectionLoaders[name]) sectionLoaders[name]();
 }
 
