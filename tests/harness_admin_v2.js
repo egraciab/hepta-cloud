@@ -30,7 +30,7 @@ CREATE TABLE instances (id serial PRIMARY KEY, user_id int, label text, instance
 CREATE TABLE integration_credentials (id serial PRIMARY KEY, servicio text, etiqueta text, expira_el date, activo boolean DEFAULT true);
 CREATE TABLE leads (id serial PRIMARY KEY, full_name text, company_name text, email text, phone text, ruc text,
   status text DEFAULT 'new', plan_slug text, created_at timestamptz DEFAULT now());
-CREATE TABLE payment_requests (id serial PRIMARY KEY, full_name text, email text, plan text, amount numeric, status text, created_at timestamptz DEFAULT now());
+CREATE TABLE payment_requests (id serial PRIMARY KEY, user_id int REFERENCES users(id), plan text, amount numeric, tpago_link text, status text, notes text, created_at timestamptz DEFAULT now());
 CREATE TABLE mail_domains (domain text PRIMARY KEY, owner_email text, created_at timestamptz DEFAULT now());
 CREATE TABLE client_services (id serial PRIMARY KEY, service text, slug text, billing_customer_id uuid, fqdn text,
   status text, params jsonb DEFAULT '{}', created_at timestamptz DEFAULT now());
@@ -57,7 +57,7 @@ CREATE TABLE admin_logs (id serial PRIMARY KEY, user_id int REFERENCES users(id)
   const D2 = (await q("INSERT INTO client_services (service,slug,billing_customer_id,status) VALUES ('drive','otro',$1,'failed') RETURNING id", [OTROC])).rows[0].id;
   await q("INSERT INTO provisioning_jobs (client_service_id,status,step,error) VALUES ($1,'failed','vhost','límite de Let''s Encrypt')", [D2]);
   await q("INSERT INTO leads (full_name, company_name, email, ruc, created_at) VALUES ('Juan','Mburucuyá Bistró','juan@x.com',null, now() - interval '30 hours'), ('Rodri','RYG','riglesias@rygtech.com.py','80164156-0', now()), ('Contadora','RYG por RUC','otra@x.com','80164156-0', now())");
-  await q("INSERT INTO payment_requests (full_name, plan, amount, status) VALUES ('Ensayo T82','professional',329000,'pending'),('Viejo','starter',169000,'provisioned')");
+  await q("INSERT INTO payment_requests (user_id, plan, amount, status) VALUES (1,'professional',329000,'pending'),(1,'starter',169000,'provisioned')");
   await q("INSERT INTO integration_credentials (servicio, etiqueta, expira_el) VALUES ('odoo','ERP del grupo', CURRENT_DATE + 5),('x','lejos', CURRENT_DATE + 90)");
   await q("INSERT INTO site_config VALUES ('fundadores_restantes','8')");
   await q('INSERT INTO admin_logs (user_id, action, target, detail) VALUES ($1,$2,$3,$4),($1,$5,$6,$7)',

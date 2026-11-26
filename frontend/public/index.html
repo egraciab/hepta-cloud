@@ -952,7 +952,7 @@ async function submitForm(e) {
     const wa = $m('ok-wa');
     wa.hidden = !CFG.whatsapp_number;
     if (CFG.whatsapp_number) wa.href = `https://wa.me/${String(CFG.whatsapp_number).replace(/\D/g, '')}?text=` + encodeURIComponent(
-      `Hola, soy ${quien}. Acabo de dejar un pedido en cloud.hepta.com.py${data.data && data.data.id ? ' (#' + data.data.id + ')' : ''}` +
+      `Hola, soy ${quien.replace(/\.+$/, '')}. Acabo de dejar un pedido en cloud.hepta.com.py${data.data && data.data.id ? ' (#' + data.data.id + ')' : ''}` +
       `${pedido ? ': ' + pedido : ''}. ¿Lo podemos acelerar?`);
     $m('contact-form').reset();
     const pago = data.data && data.data.pago;
