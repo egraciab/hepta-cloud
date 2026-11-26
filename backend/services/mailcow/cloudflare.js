@@ -43,14 +43,18 @@ async function cf(path, { method = 'GET', body } = {}) {
   return data.result;
 }
 
+// La zona de la cuenta que contiene al dominio: puede ser el dominio mismo (cliente.com.py) o una zona madre
+// (rodan.heptacloud.com.py vive en heptacloud.com.py). Los nombres de los registros van completos, así que sirven en
+// cualquiera de las dos.
 async function getZoneId(domain) {
-  const zones = await cf(`/zones?name=${encodeURIComponent(domain)}&status=active`);
-  if (!zones || zones.length === 0) {
-    const err = new Error(`La zona ${domain} no está en esta cuenta de Cloudflare`);
-    err.status = 404;
-    throw err;
+  const partes = String(domain).toLowerCase().split('.');
+  for (let i = 0; i <= partes.length - 2; i++) {
+    const zones = await cf(`/zones?name=${encodeURIComponent(partes.slice(i).join('.'))}&status=active`);
+    if (zones && zones.length) return zones[0].id;
   }
-  return zones[0].id;
+  const err = new Error(`La zona ${domain} no está en esta cuenta de Cloudflare`);
+  err.status = 404;
+  throw err;
 }
 
 // ── Formato de los registros ──

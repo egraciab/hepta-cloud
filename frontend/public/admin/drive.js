@@ -416,7 +416,7 @@
         <td>${reg.status === 'creating' && reg.ultimo_trabajo ? `<button class="btn btn-secondary btn-sm" onclick="driveVerTrabajo(${Number(reg.ultimo_trabajo)})">Ver avance</button>` : ''}</td></tr>`;
     }
     const resp = i.respaldo === 'enrolado' ? `<span class="badge badge-green">al día</span><div class="text-muted text-sm">${esc(fecha(i.ultima_copia))}</div>`
-      : i.respaldo === 'pendiente' ? '<span class="badge badge-blue">dándose de alta</span>' : '<span class="badge badge-red">sin configurar</span>';
+      : i.respaldo === 'pendiente' ? '<span class="badge badge-blue" title="hcsvrnd01 enrola la instancia y hace la primera copia en su próxima pasada">primera copia pendiente</span>' : '<span class="badge badge-red">sin configurar</span>';
     const sec = i.secretos_pendientes
       ? `<span class="badge badge-red">pendientes</span>${esGod() ? `<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">
            <button class="btn btn-secondary btn-sm" onclick="driveSecretos('${esc(i.slug)}')">Bajar</button>
