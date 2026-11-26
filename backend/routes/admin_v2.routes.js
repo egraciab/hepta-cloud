@@ -51,8 +51,9 @@ router.get('/v2/inicio', async (req, res) => {
   // Lo que requiere atención: cada tipo con su consulta, de lo más urgente a lo menos
   const atencion = [];
   const pagosPend = await bloque(errores, 'atencion_pagos', () => filas(
-    `SELECT id, full_name, email, plan, amount, created_at FROM payment_requests
-      WHERE status = 'pending' ORDER BY created_at LIMIT 10`), []);
+    `SELECT pr.id, u.full_name, u.email, pr.plan, pr.amount, pr.created_at
+       FROM payment_requests pr LEFT JOIN users u ON u.id = pr.user_id
+      WHERE pr.status = 'pending' ORDER BY pr.created_at LIMIT 10`), []);
   for (const p of pagosPend) atencion.push({ tipo: 'pago', id: p.id, titulo: p.full_name || p.email || `Pago #${p.id}`,
     detalle: { plan: p.plan, monto: Number(p.amount) || 0 }, desde: p.created_at });
 
