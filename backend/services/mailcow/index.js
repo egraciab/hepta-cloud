@@ -16,8 +16,9 @@ const pool = require('../../config/db');
 const mc = require('./client');
 const { buildDnsRecords, renderDnsText } = require('./dns');
 
-const DEFAULT_DOMAIN_QUOTA_MB = 10240;
-const DEFAULT_MAILBOX_QUOTA_MB = 1024;
+// Paquete base de HEPTA Mail: 3 casillas de 5 GB (15 GB del dominio). 10 GB por casilla para estudios o a pedido.
+const DEFAULT_DOMAIN_QUOTA_MB = 15360;
+const DEFAULT_MAILBOX_QUOTA_MB = 5120;
 const DEFAULT_MAX_MAILBOXES = 50;
 
 const LOCAL_PART_RE = /^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$/;

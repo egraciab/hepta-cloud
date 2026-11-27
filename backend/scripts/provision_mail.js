@@ -11,15 +11,15 @@
  *   docker compose exec backend node scripts/provision_mail.js \
  *     --domain adelanta.com.py \
  *     --owner contacto@adelanta.com.py \
- *     --quota 10240 --defquota 1024 --max-mailboxes 20 \
+ *     --quota 15360 --defquota 5120 --max-mailboxes 3 \
  *     --mailbox info \
  *     --publish-dns
  *
  * Flags:
  *   --domain          dominio a dar de alta (requerido)
  *   --owner           email del cliente dueño en HEPTA Cloud (requerido)
- *   --quota           cuota total del dominio en MB (default 10240)
- *   --defquota        cuota por defecto de cada casilla en MB (default 1024)
+ *   --quota           cuota total del dominio en MB (default 15360: 3 casillas de 5 GB)
+ *   --defquota        cuota por defecto de cada casilla en MB (default 5120: 5 GB)
  *   --max-mailboxes   tope de casillas (default 50)
  *   --mailbox NAME    crea la casilla NAME@dominio (repetible)
  *   --publish-dns     publica además los registros en Cloudflare
