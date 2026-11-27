@@ -2597,11 +2597,11 @@ if(TOKEN) showApp();
         <div class="form-hint">Tiene que coincidir con su usuario del portal: el acceso se resuelve por email. Si lo dejás vacío, el dominio queda bajo custodia de godmode y se lo delegás después.</div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
         <div class="form-group"><label class="form-label">Cuota total (MB)</label>
-          <input class="form-input" type="number" id="mail-p-quota" value="10240"/></div>
+          <input class="form-input" type="number" id="mail-p-quota" value="15360"/></div>
         <div class="form-group"><label class="form-label">Por casilla (MB)</label>
-          <input class="form-input" type="number" id="mail-p-def" value="1024"/></div>
+          <input class="form-input" type="number" id="mail-p-def" value="5120"/></div>
         <div class="form-group"><label class="form-label">Máx. casillas</label>
-          <input class="form-input" type="number" id="mail-p-max" value="20"/></div>
+          <input class="form-input" type="number" id="mail-p-max" value="3"/></div>
       </div>
       <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
         <input type="checkbox" id="mail-p-dns" checked/> Publicar los registros DNS en Cloudflare</label>
@@ -2722,7 +2722,7 @@ if(TOKEN) showApp();
           <input class="form-input" id="mail-box-lp" placeholder="info"/></div>
         <div class="form-group" style="margin:0;width:120px">
           <label class="form-label">Cuota (MB)</label>
-          <input class="form-input" type="number" id="mail-box-quota-in" placeholder="1024"/></div>
+          <input class="form-input" type="number" id="mail-box-quota-in" placeholder="5120"/></div>
         <button class="btn btn-primary" onclick="mailCreateBox()" id="mail-box-btn">Crear</button>
       </div>
 
@@ -2830,8 +2830,8 @@ if(TOKEN) showApp();
     const body = {
       domain: document.getElementById('mail-p-domain').value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, ''),
       owner_email: document.getElementById('mail-p-owner').value.trim().toLowerCase(),
-      quota_mb: Number(document.getElementById('mail-p-quota').value) || 10240,
-      def_quota_mb: Number(document.getElementById('mail-p-def').value) || 1024,
+      quota_mb: Number(document.getElementById('mail-p-quota').value) || 15360,
+      def_quota_mb: Number(document.getElementById('mail-p-def').value) || 5120,
       max_mailboxes: Number(document.getElementById('mail-p-max').value) || 20,
       publish_dns: document.getElementById('mail-p-dns').checked,
     };
@@ -3213,7 +3213,7 @@ if(TOKEN) showApp();
           <span>${fmt(d.quota_available_mb)} libres · ${d.mailboxes.length}/${d.max_mailboxes} casillas</span>
         </div>
         <div class="mail-bar ${pct > 90 ? 'full' : pct > 75 ? 'warn' : ''}"><i style="width:${Math.min(100, pct)}%"></i></div>`;
-      document.getElementById('mail-box-quota-in').placeholder = String(d.def_quota_mb || 1024);
+      document.getElementById('mail-box-quota-in').placeholder = String(d.def_quota_mb || 5120);
 
       tb.innerHTML = d.mailboxes.length ? d.mailboxes.map((m) => `
         <tr>

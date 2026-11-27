@@ -82,8 +82,8 @@ const get = (path) => request('GET', path);
 
 const addDomain = ({
   domain,
-  quotaMb = 10240,
-  defQuotaMb = 1024,
+  quotaMb = 15360,
+  defQuotaMb = 5120,
   maxQuotaMb = null,
   mailboxes = 50,
   aliases = 400,
