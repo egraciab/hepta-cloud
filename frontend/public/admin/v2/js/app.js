@@ -10,7 +10,7 @@ const MENU = [
   { id: 'clientes', texto: 'Clientes', ic: 'clientes' },
   { id: 'servicios', texto: 'Servicios', ic: 'servicios' },
   { id: 'pedido', texto: 'Pedidos y altas', ic: 'pedido' },
-  { id: 'respaldos', texto: 'Respaldos', ic: 'respaldo', pronto: true },
+  { id: 'estado', texto: 'Estado y respaldos', ic: 'estado', cnt: 'estado' },
   { grupo: 'Comercial' },
   { id: 'leads', texto: 'Leads', ic: 'leads', cnt: 'leads' },
   { id: 'pagos', texto: 'Pagos', ic: 'pagos', cnt: 'pagos' },
@@ -25,8 +25,9 @@ const MENU = [
   { viejo: 'users', texto: 'Equipo y usuarios', ic: 'llave' },
   { id: 'actividad', texto: 'Registro de actividad', ic: 'lista' },
 ];
-const VISTAS = { inicio: 'inicio', clientes: 'clientes', servicios: 'servicios', pedido: 'pedido', leads: 'leads', pagos: 'pagos', actividad: 'actividad', respaldos: 'respaldos' };
-const contadores = { leads: 0, pagos: 0 };
+const VISTAS = { inicio: 'inicio', clientes: 'clientes', servicios: 'servicios', pedido: 'pedido', leads: 'leads', pagos: 'pagos', actividad: 'actividad', estado: 'estado', respaldos: 'estado' };
+const contadores = { leads: 0, pagos: 0, estado: 0 };
+let estadoGrave = false;     // alguna falla (rojo) o solo avisos (amarillo)
 
 function pintarMenu() {
   const actual = ruta().partes[0];
@@ -34,15 +35,24 @@ function pintarMenu() {
     if (m.grupo) return html`<div class="grp">${m.grupo}</div>`;
     if (m.viejo) return html`<a href="/admin/#${m.viejo}" title="Se abre en el Admin actual">${icono(m.ic)}${m.texto}<span class="ext" aria-label="(Admin actual)">↗</span></a>`;
     const n = m.cnt ? contadores[m.cnt] : 0;
-    return html`<a href="#/${m.id}" class="${actual === m.id ? 'on' : ''}" ${raw(actual === m.id ? 'aria-current="page"' : '')}>${icono(m.ic)}${m.texto}${m.pronto ? html`<span class="ext">pronto</span>` : ''}${n ? html`<span class="chip ${m.cnt === 'pagos' ? 'warn' : 'info'} cnt">${n}</span>` : ''}</a>`;
+    return html`<a href="#/${m.id}" class="${actual === m.id ? 'on' : ''}" ${raw(actual === m.id ? 'aria-current="page"' : '')}>${icono(m.ic)}${m.texto}${m.pronto ? html`<span class="ext">pronto</span>` : ''}${n ? html`<span class="chip ${m.cnt === 'estado' ? (estadoGrave ? 'bad' : 'warn') : m.cnt === 'pagos' ? 'warn' : 'info'} cnt" ${raw(m.cnt === 'estado' ? 'title="Áreas para revisar"' : '')}>${n}</span>` : ''}</a>`;
   }).join('');
 }
 
+function contarEstado(d) {
+  contadores.estado = d.cuenta.falla + d.cuenta.aviso;
+  estadoGrave = d.cuenta.falla > 0;
+}
 async function actualizarContadores() {
-  const r = await api('GET', '/admin/v2/inicio', undefined, { silencioso: true });
-  if (!r.success) return;
-  contadores.leads = (r.data.kpis.leads && r.data.kpis.leads.nuevos) || 0;
-  contadores.pagos = r.data.kpis.pagos_pendientes || 0;
+  const [r, e] = await Promise.all([
+    api('GET', '/admin/v2/inicio', undefined, { silencioso: true }),
+    api('GET', '/admin/v2/estado', undefined, { silencioso: true }),
+  ]);
+  if (r.success) {
+    contadores.leads = (r.data.kpis.leads && r.data.kpis.leads.nuevos) || 0;
+    contadores.pagos = r.data.kpis.pagos_pendientes || 0;
+  }
+  if (e.success) contarEstado(e.data);
   pintarMenu();
 }
 
@@ -57,7 +67,7 @@ async function mostrar() {
   const vista = document.getElementById('vista');
   vista.innerHTML = '<div class="cargando">Cargando…</div>';
   try {
-    const mod = await import(`./vistas/${nombre}.js?v=2`);
+    const mod = await import(`./vistas/${nombre}.js?v=3`);
     if (yo !== turno) return;          // el usuario ya se fue a otra pantalla
     await mod.render(vista, ruta(), () => yo !== turno);
     document.title = `${vista.querySelector('h1')?.textContent || 'Admin'} · HEPTA Cloud`;
@@ -127,6 +137,7 @@ async function entrar() {
   actualizarContadores();
   setInterval(actualizarContadores, 120000);
   window.addEventListener('hc:contadores', actualizarContadores);
+  window.addEventListener('hc:estado', (ev) => { contarEstado(ev.detail); pintarMenu(); });
   // Logo del sitio, si hay
   api('GET', '/admin/config', undefined, { silencioso: true }).then(r => {
     const u = r.success && r.data.logo_url;

@@ -147,3 +147,9 @@ La dirección de la señal es una credencial (quien la tiene puede hacer que el 
 repo ni al chat. Para cambiar qué se revisa sin tocar el programa, agregar en `/etc/hepta-vigia.conf` líneas
 `CHEQUEO=http|Nombre|https://...` o `CHEQUEO=tcp|Nombre|host:puerto` (si hay alguna, reemplazan a la lista de fábrica).
 Estado entre pasadas: `/var/lib/hepta-vigia/estado.json`.
+
+**Panel "Estado" del Admin nuevo.** En cada pasada el vigía también manda lo revisado a HEPTA Cloud
+(`POST /api/monitor/vigia`, cabecera `X-Monitor-Key`), que lo muestra junto con ERP, Mail y Drive, y los respaldos
+como un grupo propio. Si el reporte no llega por más de 15 minutos, el panel lo marca. La clave nace en KeePass
+(40 caracteres o más, letras y números): en `hcsvrnd01` va a `/etc/hepta-vigia.conf` con `hepta-vigia --configurar-panel`
+(no se muestra), y en HEPTA Cloud se guarda solo su SHA-256 en `site_config.monitor_api_key`.
