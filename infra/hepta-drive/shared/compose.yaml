@@ -14,6 +14,7 @@ services:
     restart: unless-stopped
     volumes:
       - /srv/nextcloud/_shared/clamav:/var/lib/clamav
+      - ./clamd.conf:/etc/clamav/clamd.conf:ro
     networks: [shared]
 networks:
   shared:

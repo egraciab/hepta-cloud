@@ -22,6 +22,7 @@ un cliente vive en `/srv/nextcloud/<cliente>/` (`html/`, `data/`, `db/`), en el 
 | `respaldo/hepta-drive-enrolar.sh` | `hcsvrnd01` | Cada 10 min: crea en el servidor de respaldos el repositorio de un cliente nuevo, hace la primera copia y la verifica |
 | `alta-cliente.sh` | VM `hepta-drive` (`hepta-drive-alta`) | Alta, verificación, estado y baja de un cliente |
 | `agente/` | VM `hepta-drive` (`/opt/hepta-drive/agente`, servicio `hepta-drive-agente`) | Puerta del Admin de HEPTA Cloud: `10.10.50.220:8888`, TLS con certificado propio, clave y filtro de origen. Valida, crea en segundo plano, informa y entrega los secretos. Todo termina en `hepta-drive-alta` |
+| `salud/hepta-drive-salud.py` | VM `hepta-drive` (`/usr/local/sbin/hepta-drive-salud`, cron cada 15 min) | Salud de adentro de la VM: ClamAV responde como lo ve Nextcloud, firmas de ≤ 2 días, RAM disponible y disco de datos. Señal a healthchecks.io |
 | `marca/logo.png` | `/opt/hepta-drive/plantilla/marca/` | Logo de Hepta Cloud: el que lleva una instancia si el cliente no trae el suyo (`--logo`) |
 | `../../tools/drive_vhost_add.sh` | NGINX perimetral | Vhost `<cliente>.drive.hepta.com.py` |
 | `../backup/conf/hepta-drive.conf` | `/etc/hepta-backup.conf` de la VM | Configuración y volcados cada 6 h, como las demás VM |
@@ -78,6 +79,35 @@ escritorio y celular quedan atadas a ella. El dominio del cliente se **suma** (A
 
 Para quitarlo: `hepta-drive-alta dominio-quitar <cliente>` en la VM y `drive_vhost_add.sh <cliente> --quitar-dominio <nombre>`
 en el NGINX. Un cliente tiene un solo dominio propio.
+
+## Antivirus y salud de la VM
+
+ClamAV es uno solo para todos los clientes (`shared-clamav-1`, `clamav:3310` en la red `hd-shared`). Cada Nextcloud lo
+usa en modo daemon, borra lo infectado y **rechaza las subidas si no lo alcanza** ("No connection to anti virus"):
+mejor un archivo rechazado que uno sin revisar. Su configuración es `shared/clamd.conf`, montado en solo lectura. El
+ajuste del 2026-11-27 (bloques de 100 MB, 12 análisis a la vez, cola de 200) salió de la primera sincronización
+masiva, que lo saturaba con 4 vCPU; la VM pasó a 8 vCPU y 12 GiB.
+
+```bash
+# en la VM, después de un cambio de shared/clamd.conf
+cd /opt/hepta-drive/shared && docker compose up -d clamav
+docker exec shared-clamav-1 grep -E '^(StreamMaxLength|MaxThreads|MaxQueue|ReadTimeout)' /etc/clamav/clamd.conf
+```
+
+`hepta-drive-salud` revisa cada 15 minutos lo que el vigía de `hcsvrnd01` no ve desde afuera: que ClamAV responda
+(desde un contenedor de cliente, como Nextcloud), que las firmas tengan como mucho 2 días, que queden 4 GiB de RAM y
+que el volumen de datos no pase del 85 %. Manda una señal a healthchecks.io, "bien" o "falla" con el detalle; si la
+señal deja de llegar, healthchecks.io avisa igual. En healthchecks.io: un chequeo aparte con período 15 minutos y
+gracia 30, con aviso al mismo correo de afuera que el del vigía.
+
+```bash
+install -m 755 hepta-drive-salud.py /usr/local/sbin/hepta-drive-salud
+hepta-drive-salud --estado        # cómo está cada cosa, sin mandar señal
+hepta-drive-salud --configurar    # pide la dirección de la señal sin mostrarla y la guarda en /etc/hepta-drive-salud.conf (600)
+echo '*/15 * * * * root /usr/local/sbin/hepta-drive-salud >> /var/log/hepta-drive-salud.log 2>&1' > /etc/cron.d/hepta-drive-salud
+```
+
+Los umbrales se cambian en el mismo `.conf` (`FIRMAS_MAX_DIAS`, `RAM_MIN_GIB`, `DISCO_MAX_PCT`).
 
 ## Restaurar
 
