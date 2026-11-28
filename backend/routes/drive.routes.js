@@ -30,6 +30,12 @@ router.get('/health', async (req, res) => {
   catch (err) { res.json({ success: false, error: err.message }); }
 });
 
+// ── Salud de la VM (antivirus, firmas, RAM, disco) ──
+router.get('/salud', async (req, res) => {
+  try { res.json({ success: true, data: await drive.saludVm() }); }
+  catch (err) { res.json({ success: false, error: err.message }); }
+});
+
 // ── Instancias ──
 router.get('/', async (req, res) => {
   try { res.json({ success: true, data: await drive.listar() }); }
