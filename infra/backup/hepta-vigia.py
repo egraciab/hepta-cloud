@@ -19,7 +19,7 @@ propio también está caído.
 Qué revisa: la lista de abajo (CHEQUEOS), o las líneas CHEQUEO= de /etc/hepta-vigia.conf si las hay.
 El correo sale con los datos de /etc/hepta-backup-correo.conf (los mismos de los informes de respaldos).
 """
-import getpass, html, json, os, re, smtplib, socket, ssl, sys, urllib.request
+import getpass, html, json, os, re, smtplib, subprocess, socket, ssl, sys, urllib.request
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
@@ -167,12 +167,28 @@ def senal(url, falla=False, texto=''):
         return False
 
 
+INFORME = os.environ.get('HEPTA_INFORME', '/usr/local/sbin/hepta-backup-informe')
+
+
+def respaldos_detalle():
+    """Detalle de los respaldos por VM (lo arma hepta-backup-informe panel, que lee el NAS). None si no se pudo."""
+    try:
+        r = subprocess.run([INFORME, 'panel'], capture_output=True, text=True, timeout=60)
+        return json.loads(r.stdout) if r.returncode == 0 else None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
 def reportar_panel(conf, res):
     """Manda lo revisado al panel "Estado" del Admin de HEPTA Cloud. Si falla, el vigía sigue igual."""
     url, clave = conf.get('PANEL_URL', ''), conf.get('PANEL_KEY', '')
     if not url or not clave:
         return None
-    datos = json.dumps({'chequeos': [{k: r[k] for k in ('id', 'nombre', 'destino', 'ok', 'motivo')} for r in res]}).encode('utf-8')
+    cuerpo_ = {'chequeos': [{k: r[k] for k in ('id', 'nombre', 'destino', 'ok', 'motivo')} for r in res]}
+    detalle = respaldos_detalle()
+    if detalle is not None:
+        cuerpo_['respaldos'] = detalle
+    datos = json.dumps(cuerpo_).encode('utf-8')
     try:
         req = urllib.request.Request(url, data=datos, method='POST', headers={
             'Content-Type': 'application/json', 'X-Monitor-Key': clave, 'User-Agent': 'hepta-vigia/1'})

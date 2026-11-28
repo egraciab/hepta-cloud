@@ -37,7 +37,7 @@ async function getJson(url, ms = ESPERA_MS) {
   const r = await fetch(url, { signal: AbortSignal.timeout(ms), redirect: 'manual', headers: { 'User-Agent': 'hepta-cloud-estado/1' } });
   let json = null;
   try { json = await r.json(); } catch (e) { /* no era JSON */ }
-  return { status: r.status, json, ms: Date.now() - t };
+  return { status: r.status, json, ms: Date.now() - t, location: r.headers && r.headers.get ? r.headers.get('location') : null };
 }
 
 function puerto(host, port, ms = 5000) {
@@ -74,19 +74,40 @@ async function grupoErp() {
   };
 
   const { rows: tenants } = await pool.query(
-    `SELECT id, label, db_name, custom_domain FROM instances WHERE status = 'active' ORDER BY COALESCE(label, db_name)`);
+    `SELECT id, label, db_name, instance_url, custom_domain FROM instances WHERE status = 'active' ORDER BY COALESCE(label, db_name)`);
+  // Dirección del tenant: su dominio propio; si no, el nombre de la base (los del alta actual se llaman como su
+  // dirección, por dbfilter ^%h$); si la base no tiene forma de dirección (tenants anteriores al alta), instance_url.
+  const hostDe = (t) => {
+    if (t.custom_domain) return t.custom_domain;
+    if (String(t.db_name || '').includes('.')) return t.db_name;
+    try { return new URL(t.instance_url).hostname; } catch (e) { return t.db_name; }
+  };
   const pruebas = await deA(6, tenants, async (t) => {
-    const host = t.custom_domain || t.db_name;
+    const host = hostDe(t);
     try {
       const r = await getJson(`https://${host}/web/health`);
-      return { t, host, ok: r.status === 200, det: r.status === 200 ? `${r.ms} ms` : `respondió ${r.status}` };
-    } catch (e) { return { t, host, ok: false, det: motivo(e) }; }
+      if (r.status === 200) return { t, host, estado: 'ok', det: `${r.ms} ms` };
+      // Redirige a otro nombre (un dominio propio cargado a mano, fuera del flujo del Admin): si ese responde,
+      // el tenant anda, pero queda como aviso hasta registrar el dominio en la instancia.
+      let destino = null;
+      try { destino = r.location ? new URL(r.location, `https://${host}/`).hostname : null; } catch (e) { /* Location rota */ }
+      if (r.status >= 300 && r.status < 400 && destino && destino !== host) {
+        try {
+          const r2 = await getJson(`https://${destino}/web/health`);
+          if (r2.status === 200) return { t, host, estado: 'aviso', det: `redirige a ${destino}, que responde (${r2.ms} ms) · falta registrar ese dominio propio en la instancia` };
+          return { t, host, estado: 'falla', det: `redirige a ${destino}, que respondió ${r2.status}` };
+        } catch (e) { return { t, host, estado: 'falla', det: `redirige a ${destino}, que no responde (${motivo(e)})` }; }
+      }
+      return { t, host, estado: 'falla', det: `respondió ${r.status}` };
+    } catch (e) { return { t, host, estado: 'falla', det: motivo(e) }; }
   });
-  const caidos = pruebas.filter(p => !p.ok);
+  const caidos = pruebas.filter(p => p.estado === 'falla');
+  const avisos = pruebas.filter(p => p.estado === 'aviso');
   const tenantsC = !tenants.length ? c('ok', 'Tenants activos', 'no hay tenants activos')
-    : c(caidos.length ? 'falla' : 'ok', 'Tenants activos',
-      caidos.length ? `${caidos.length} de ${tenants.length} no responden` : `los ${tenants.length} responden`,
-      { items: pruebas.map(p => ({ estado: p.ok ? 'ok' : 'falla', nombre: p.t.label || p.host, detalle: `${p.host} · ${p.det}`,
+    : c(caidos.length ? 'falla' : avisos.length ? 'aviso' : 'ok', 'Tenants activos',
+      caidos.length ? `${caidos.length} de ${tenants.length} no responden` + (avisos.length ? ` y ${avisos.length} para estandarizar` : '')
+        : avisos.length ? `los ${tenants.length} responden · ${avisos.length} para estandarizar` : `los ${tenants.length} responden`,
+      { items: pruebas.map(p => ({ estado: p.estado, nombre: p.t.label || p.host, detalle: `${p.host} · ${p.det}`,
         enlace: `#/servicios/erp?q=${encodeURIComponent(p.host)}` })) });
 
   return { id: 'erp', nombre: 'HEPTA ERP', enlace: '#/servicios/erp', chequeos: [
@@ -156,13 +177,49 @@ async function gruposVigia() {
   const vigia = c(viejo ? 'aviso' : 'ok', 'Vigía de hcsvrnd01',
     viejo ? `último reporte hace ${Math.round(min)} min: puede estar caído hcsvrnd01 o su cron` : `reportó hace ${Math.max(0, Math.round(min))} min`);
   const conv = (x) => c(x.ok ? 'ok' : 'falla', x.nombre, x.ok ? (x.destino || '') : (x.motivo || 'falla'));
-  const resp = lista.filter(x => x.id === 'respaldos').map(x => c(x.ok ? 'ok' : 'falla', 'Copias y retiro al NAS',
-    x.ok ? 'sin alertas · última copia al NAS de menos de 4 h' : (x.motivo || 'falla')));
+  const resp = datos && datos.respaldos ? chequeosRespaldos(datos.respaldos)
+    : lista.filter(x => x.id === 'respaldos').map(x => c(x.ok ? 'ok' : 'falla', 'Copias y retiro al NAS',
+      x.ok ? 'sin alertas · última copia al NAS de menos de 4 h' : (x.motivo || 'falla')));
   return [
-    { id: 'respaldos', nombre: 'Respaldos', chequeos: [...(resp.length ? resp : [c('sin_dato', 'Copias y retiro al NAS', 'el reporte no trae respaldos')]), ...(viejo ? [vigia] : [])] },
+    { id: 'respaldos', nombre: 'Respaldos', nota: datos && datos.respaldos ? 'Copias cada 6 h en cada VM, retiradas al NAS cada 3 h, y copia cifrada fuera de sitio.' : undefined,
+      chequeos: [...(resp.length ? resp : [c('sin_dato', 'Copias y retiro al NAS', 'el reporte no trae respaldos')]), ...(viejo ? [vigia] : [])] },
     { id: 'afuera', nombre: 'Vista de afuera', nota: 'Lo que ve el vigía de hcsvrnd01 a través de Cloudflare y el perimetral, como un cliente.',
       chequeos: [vigia, ...lista.filter(x => x.id !== 'respaldos').map(conv)] },
   ];
+}
+
+// Detalle de respaldos (hepta-backup-informe panel, vía el vigía) → chequeos del grupo
+const tam = (b) => {
+  if (!b) return '0 B';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0, n = b;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return `${n.toFixed(n < 10 && i ? 1 : 0)} ${u[i]}`;
+};
+const horasDesde = (iso) => (iso ? (Date.now() - new Date(iso).getTime()) / 3600000 : null);
+const haceH = (h) => (h === null ? '' : h < 1 ? `hace ${Math.max(1, Math.round(h * 60))} min` : h < 48 ? `hace ${Math.round(h)} h` : `hace ${Math.round(h / 24)} días`);
+function chequeosRespaldos(r) {
+  const out = [];
+  const vms = r.vms || [];
+  if (vms.length) {
+    const mal = vms.filter(v => v.estado !== 'ok');
+    out.push(c(peor(vms.map(v => v.estado)), 'Copias de cada VM',
+      mal.length ? `${mal.length} de ${vms.length} para revisar: ${mal.map(v => v.nombre || v.vm || 'sin nombre').join(', ')}` : `las ${vms.length} con copia buena en las últimas 7 h`,
+      { items: vms.map(v => ({ estado: v.estado, nombre: v.nombre || v.vm || 'sin nombre',
+        detalle: [v.ultima ? `última buena ${haceH(horasDesde(v.ultima))}` : 'sin copia buena',
+          v.volcados ? `${v.volcados} volcado${v.volcados > 1 ? 's' : ''} · ${tam(v.bytes)}` : '',
+          v.buenas_24h !== null ? `${v.buenas_24h} buenas en 24 h${v.fallidas_24h ? ` y ${v.fallidas_24h} fallidas` : ''}` : '',
+          ...v.notas, ...(v.estado !== 'ok' ? v.errores : [])].filter(Boolean).join(' · ') })) }));
+  }
+  if (r.retiro) {
+    const libre = r.retiro.total ? ` · NAS con ${Math.round(r.retiro.libre * 100 / r.retiro.total)}% libre (${tam(r.retiro.libre)})` : '';
+    out.push(c(r.retiro.estado, 'Retiro al NAS', [r.retiro.horas_desde_ultimo !== null ? `último sin problemas ${haceH(r.retiro.horas_desde_ultimo)}` : '',
+      ...r.retiro.notas, ...r.retiro.alertas].filter(Boolean).join(' · ') + libre));
+  }
+  for (const x of r.fuera_de_sitio || []) out.push(c(x.estado, x.titulo.replace(/ \((diario|semanal)\)$/, '').replace(/ a Drive$/, ' a Google Drive'), [x.detalle, ...x.notas].filter(Boolean).join(' · ')));
+  if (r.export) out.push(c(r.export.estado, 'Export semanal de las VM completas',
+    [r.export.fecha ? `último lote ${haceH(horasDesde(r.export.fecha))}` : '', r.export.vms ? `${r.export.vms} VM · ${tam(r.export.bytes)}` : '', ...r.export.notas].filter(Boolean).join(' · ')));
+  if (r.restauracion) out.push(c(r.restauracion.estado, 'Prueba de restauración del ERP', [r.restauracion.detalle, ...r.restauracion.notas].filter(Boolean).join(' · ')));
+  return out;
 }
 
 // ── Junta todo ───────────────────────────────────────────────
@@ -203,7 +260,25 @@ function sanearReporte(cuerpo) {
   const lista = Array.isArray(cuerpo && cuerpo.chequeos) ? cuerpo.chequeos.slice(0, 50) : null;
   if (!lista) return null;
   const txt = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, ' ').slice(0, n);
-  return { chequeos: lista.map(x => ({ id: txt(x.id, 120), nombre: txt(x.nombre, 80), destino: txt(x.destino, 160), ok: x.ok === true, motivo: txt(x.motivo, 300) })) };
+  const datos = { chequeos: lista.map(x => ({ id: txt(x.id, 120), nombre: txt(x.nombre, 80), destino: txt(x.destino, 160), ok: x.ok === true, motivo: txt(x.motivo, 300) })) };
+  const r = cuerpo.respaldos;
+  if (r && typeof r === 'object') {
+    const est = (v) => (['ok', 'aviso', 'falla'].includes(v) ? v : 'sin_dato');
+    const num = (v) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Number(v) : null);
+    const fecha = (v) => (v && !isNaN(Date.parse(v)) ? new Date(v).toISOString() : null);
+    const textos = (a, n, largo = 240) => (Array.isArray(a) ? a.slice(0, n).map(x => txt(x, largo)) : []);
+    datos.respaldos = {
+      vms: (Array.isArray(r.vms) ? r.vms.slice(0, 20) : []).map(v => ({ vm: txt(v.vm, 40), nombre: txt(v.nombre, 60), estado: est(v.estado),
+        ultima: fecha(v.ultima), bytes: num(v.bytes), volcados: num(v.volcados), buenas_24h: num(v.buenas_24h), fallidas_24h: num(v.fallidas_24h),
+        notas: textos(v.notas, 3), errores: textos(v.errores, 2) })),
+      retiro: r.retiro ? { estado: est(r.retiro.estado), notas: textos(r.retiro.notas, 3), alertas: textos(r.retiro.alertas, 5, 300),
+        horas_desde_ultimo: num(r.retiro.horas_desde_ultimo), libre: num(r.retiro.libre), total: num(r.retiro.total) } : null,
+      export: r.export ? { estado: est(r.export.estado), notas: textos(r.export.notas, 3), fecha: fecha(r.export.fecha), vms: num(r.export.vms), bytes: num(r.export.bytes) } : null,
+      fuera_de_sitio: (Array.isArray(r.fuera_de_sitio) ? r.fuera_de_sitio.slice(0, 6) : []).map(x => ({ titulo: txt(x.titulo, 80), estado: est(x.estado), detalle: txt(x.detalle, 200), notas: textos(x.notas, 2) })),
+      restauracion: r.restauracion ? { estado: est(r.restauracion.estado), detalle: txt(r.restauracion.detalle, 200), notas: textos(r.restauracion.notas, 3) } : null,
+    };
+  }
+  return datos;
 }
 async function guardarReporte(origen, cuerpo) {
   const datos = sanearReporte(cuerpo);

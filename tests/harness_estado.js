@@ -27,6 +27,7 @@ global.fetch = async (url) => {
   if (u.hostname === 'provision.test') return resp(200, { status: 'ok' });
   if (u.hostname === 'perimetral.test') { const e = new Error('fetch failed'); e.cause = { code: 'ECONNREFUSED' }; throw e; }
   if (caidos.has(u.hostname)) { const e = new Error('fetch failed'); e.cause = { code: 'ENOTFOUND' }; throw e; }
+  if (u.hostname === 'viejo2.erp.hepta.com.py') return { status: 301, json: async () => null, headers: { get: (h) => h === 'location' ? 'https://viejo2.com.py/web/health' : null } };
   return resp(200, {});
 };
 const drive = require(path.join(ROOT, 'backend/services/drive'));
@@ -53,13 +54,14 @@ net.connect = () => {            // los puertos de correo "abren" al instante
     CREATE TABLE token_blacklist (jti text);
     CREATE TABLE users (id serial PRIMARY KEY, email text, full_name text, role text, is_active boolean DEFAULT true);
     CREATE TABLE site_config (key text PRIMARY KEY, value text);
-    CREATE TABLE instances (id serial PRIMARY KEY, user_id int, label text, db_name text, status text, custom_domain text);`);
+    CREATE TABLE instances (id serial PRIMARY KEY, user_id int, label text, db_name text, instance_url text, status text, custom_domain text);`);
   await q(require('fs').readFileSync(path.join(ROOT, 'sql/2026-11-28_monitor_reportes.sql'), 'utf8'));
   const ADM = (await q("INSERT INTO users (email, full_name, role) VALUES ('steve@hepta.com.py','Esteban','godmode') RETURNING id")).rows[0].id;
   await q(`INSERT INTO site_config VALUES ('provision_api_url','https://provision.test'),('perimetral_api_url','https://perimetral.test')`);
   await q(`INSERT INTO instances (label, db_name, status, custom_domain) VALUES
     ('Bien','bien.erp.hepta.com.py','active',null), ('Caído','caido.erp.hepta.com.py','active',null),
     ('Propio','propio.erp.hepta.com.py','active','propio.com.py'), ('Pausada','pausada.erp.hepta.com.py','suspended',null)`);
+  await q("INSERT INTO instances (label, db_name, instance_url, status) VALUES ('Viejo','viejo','https://viejo.erp.hepta.com.py','active'),('Viejo 2','viejo2.erp.hepta.com.py',null,'active')");
 
   const estado = require(path.join(ROOT, 'backend/services/estado'));
   const express = require('express'), jwt = require('jsonwebtoken');
@@ -88,8 +90,10 @@ net.connect = () => {            // los puertos de correo "abren" al instante
   const erp = grupo(d, 'erp');
   check('ERP: API de alta ok, perimetral caído', erp.chequeos[0].estado === 'ok' && erp.chequeos[1].estado === 'falla' && /ECONNREFUSED/.test(erp.chequeos[1].detalle));
   const ten = erp.chequeos[2];
-  check('ERP: 1 de 3 tenants activos no responde (la suspendida no cuenta)', ten.estado === 'falla' && ten.detalle === '1 de 3 no responden' && ten.items.length === 3, ten.detalle);
+  check('ERP: 1 de 5 tenants no responde y 1 para estandarizar (la suspendida no cuenta)', ten.estado === 'falla' && ten.detalle === '1 de 5 no responden y 1 para estandarizar' && ten.items.length === 5, ten.detalle);
+  check('ERP: tenant que redirige a un dominio que responde es aviso, con el destino', ten.items.some(i => i.estado === 'aviso' && /redirige a viejo2.com.py/.test(i.detalle)));
   check('ERP: el tenant con dominio propio se prueba por su dominio', ten.items.some(i => i.detalle.startsWith('propio.com.py')));
+  check('ERP: tenant viejo (base sin forma de dirección) se prueba por instance_url', ten.items.some(i => i.detalle.startsWith('viejo.erp.hepta.com.py') && i.estado === 'ok'));
   check('ERP: grupo en falla', erp.estado === 'falla');
   const mail = grupo(d, 'mail');
   check('Mail: contenedor parado es falla y se nombra', mail.chequeos[1].estado === 'falla' && /sogo-mailcow/.test(mail.chequeos[1].detalle), mail.chequeos[1].detalle);
@@ -140,6 +144,21 @@ net.connect = () => {            // los puertos de correo "abren" al instante
   check('respaldos: grupo propio en falla con el motivo', resp.estado === 'falla' && /7 horas/.test(resp.chequeos[0].detalle));
   check('vista de afuera: el vigía al día y el sitio caído', af.chequeos[0].estado === 'ok' && af.chequeos.some(x => x.nombre === 'RYG <script>' && x.estado === 'falla'));
   check('vista de afuera: no repite los respaldos', !af.chequeos.some(x => /Respaldos/.test(x.nombre)));
+
+  // Con el detalle de hepta-backup-informe panel
+  const detalle = JSON.parse(require('fs').readFileSync(process.env.PANEL_JSON || '/tmp/claude-0/panel.json', 'utf8'));
+  detalle.vms[0].nombre = 'Hepta <img src=x>';
+  r = await pedir('POST', '/api/monitor/vigia', { token: null, cuerpo: { ...reporte, respaldos: { ...detalle, basura: 'x', vms: [...detalle.vms, { estado: 'raro' }] } }, cab: { 'X-Monitor-Key': CLAVE } });
+  check('reporte con detalle de respaldos: 200', r.status === 200);
+  const g2 = (await q("SELECT datos FROM monitor_reportes WHERE origen='vigia'")).rows[0].datos.respaldos;
+  check('detalle saneado: sin campos de más y estado desconocido → sin_dato', !('basura' in g2) && g2.vms[g2.vms.length - 1].estado === 'sin_dato');
+  r = await pedir('GET', '/api/admin/v2/estado');
+  const rg = grupo(r.body.data, 'respaldos');
+  const porVm = rg.chequeos.find(x => x.nombre === 'Copias de cada VM');
+  check('respaldos: copias por VM con el detalle de cada una', porVm && porVm.items.length === 5 && /ERP del grupo/.test(porVm.detalle) && porVm.estado === 'falla', porVm && porVm.detalle);
+  check('respaldos: el error de la VM que falla se ve', porVm.items.some(i => i.nombre === 'ERP del grupo' && /conexión rechazada/.test(i.detalle)));
+  check('respaldos: retiro al NAS con espacio libre (aviso al 12 %)', rg.chequeos.some(x => x.nombre === 'Retiro al NAS' && x.estado === 'aviso' && /12% libre/.test(x.detalle)));
+  check('respaldos: copia fuera de sitio, export semanal y prueba de restauración', ['Respaldos de datos a Google Drive', 'Export semanal de las VM completas', 'Prueba de restauración del ERP'].every(n => rg.chequeos.some(x => x.nombre === n)), rg.chequeos.map(x => x.nombre).join(' | '));
 
   await q("UPDATE monitor_reportes SET recibido = now() - interval '40 minutes'");
   estado._test.reiniciar();

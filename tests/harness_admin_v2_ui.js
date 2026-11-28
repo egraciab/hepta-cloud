@@ -45,7 +45,13 @@ function api(req, body) {
       { estado: 'falla', nombre: 'Tenants activos', detalle: '1 de 4 no responden', items: [{ estado: 'ok', nombre: 'Estudio Elena Prono', detalle: 'elenaprono.com.py · 120 ms', enlace: '#/servicios/erp?q=elenaprono.com.py' }, { estado: 'falla', nombre: 'Sistema de Rodri <b>x</b>', detalle: 'rygtech.com.py · ENOTFOUND', enlace: '#/servicios/erp?q=rygtech.com.py' }] }] },
     { id: 'mail', nombre: 'HEPTA Mail', enlace: '#/servicios/mail', estado: 'ok', chequeos: [{ estado: 'ok', nombre: 'API de mailcow', detalle: 'responde' }, { estado: 'ok', nombre: 'Contenedores de mailcow', detalle: 'los 18 en marcha' }] },
     { id: 'drive', nombre: 'HEPTA Drive', enlace: '#/servicios/drive', estado: 'aviso', chequeos: [{ estado: 'ok', nombre: 'ClamAV', detalle: 'responde' }, { estado: 'aviso', nombre: 'Firmas de ClamAV', detalle: 'hace 5 días' }] },
-    { id: 'respaldos', nombre: 'Respaldos', estado: 'ok', chequeos: [{ estado: 'ok', nombre: 'Copias y retiro al NAS', detalle: 'sin alertas' }] },
+    { id: 'respaldos', nombre: 'Respaldos', nota: 'Copias cada 6 h en cada VM, retiradas al NAS cada 3 h, y copia cifrada fuera de sitio.', estado: 'ok', chequeos: [
+      { estado: 'ok', nombre: 'Copias de cada VM', detalle: 'las 7 con copia buena en las últimas 7 h', items: [
+        { estado: 'ok', nombre: 'Hepta Cloud', detalle: 'última buena hace 2 h · 1 volcado · 48 MB · 4 buenas en 24 h' },
+        { estado: 'ok', nombre: 'Tenants Odoo', detalle: 'última buena hace 2 h · 9 volcados · 1.2 GB · 4 buenas en 24 h' }] },
+      { estado: 'ok', nombre: 'Retiro al NAS', detalle: 'último sin problemas hace 1 h · NAS con 61% libre (2.1 TB)' },
+      { estado: 'ok', nombre: 'Respaldos de datos a Google Drive', detalle: 'Última subida verificada: 28-nov 02:00 · 7 VM · 3,2 GB' },
+      { estado: 'ok', nombre: 'Prueba de restauración del ERP', detalle: 'Última prueba: 01-nov 05:00 · resultado OK · 4 min' }] },
     { id: 'afuera', nombre: 'Vista de afuera', nota: 'Lo que ve el vigía.', estado: 'ok', chequeos: [{ estado: 'ok', nombre: 'Vigía de hcsvrnd01', detalle: 'reportó hace 2 min' }] }] });
   if (p === '/admin/mail/health') return ok({ mailcow: 'ok' });
   // Pedido con Mail y Drive
