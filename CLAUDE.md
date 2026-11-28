@@ -115,10 +115,11 @@ CNAME con proxy a nuestro balanceador desde otra cuenta de Cloudflare da error 1
       existe pero ninguna pantalla la usa) y vincular al cliente con el ERP del grupo en el alta (`users.tenant_partner_id`):
       hasta entonces Facturas no se muestra y Soporte es un formulario que llega por correo.
 - [ ] Admin nuevo (`/admin/v2/`): conviven los dos. El Pedido ya da de alta ERP, Mail y Drive (juntos o solos; el DNS del correo se
-      publica recién después de ver qué se crea o reemplaza). Faltan facturación y suscripción desde el ERP, dominio gestionado,
-      panel de Respaldos, salud de NGINX/Cloudflare/ERP y pasar las pantallas que hoy enlazan al Admin actual (planes,
+      publica recién después de ver qué se crea o reemplaza). **Estado y respaldos** (`services/estado.js`,
+      `GET /api/admin/v2/estado`): ERP, Mail, Drive, respaldos y vista de afuera, con el reporte del vigía por `POST /api/monitor/vigia`.
+      Faltan facturación y suscripción desde el ERP, dominio gestionado, el ERP del grupo en Estado y pasar las pantallas que hoy enlazan al Admin actual (planes,
       contenido, legales, configuración, credenciales, usuarios, baja de instancias). Pruebas: `tests/harness_admin_v2.js`
-      (rutas, Postgres efímero) y `tests/harness_admin_v2_ui.js` (Playwright con API simulada).
+      (rutas, Postgres efímero), `tests/harness_estado.js` (panel Estado) y `tests/harness_admin_v2_ui.js` (Playwright con API simulada).
 - [ ] Admin, después del lanzamiento: menú plegable en celular, Configuración general en pestañas, buscador y paginado en
       Instancias/Usuarios/Leads, reenviar bienvenida, y quitar `plan` de `PUT /api/admin/instances/:id` (no cambia nada en Odoo).
 

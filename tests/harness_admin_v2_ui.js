@@ -40,6 +40,13 @@ function api(req, body) {
     actividad: LOG, errores: [] });
   if (p === '/admin/provision/jobs') return ok([{ id: 'a', tenant: 'ensayo', plan_nombre: 'Crecimiento', estado: 'en_curso', paso: 'Usuario del cliente y marca', segundos: 240 }]);
   if (p === '/admin/provision/health') return { success: true, status: 'ok' };
+  if (p === '/admin/v2/estado') return ok({ revisado: h(0.01), duracion_ms: 900, estado: 'falla', cuenta: { ok: 3, aviso: 1, falla: 1, sin_dato: 0 }, grupos: [
+    { id: 'erp', nombre: 'HEPTA ERP', enlace: '#/servicios/erp', estado: 'falla', chequeos: [{ estado: 'ok', nombre: 'API de alta de tenants', detalle: 'responde · 40 ms' }, { estado: 'ok', nombre: 'API del NGINX perimetral', detalle: 'responde · 30 ms' },
+      { estado: 'falla', nombre: 'Tenants activos', detalle: '1 de 4 no responden', items: [{ estado: 'ok', nombre: 'Estudio Elena Prono', detalle: 'elenaprono.com.py · 120 ms', enlace: '#/servicios/erp?q=elenaprono.com.py' }, { estado: 'falla', nombre: 'Sistema de Rodri <b>x</b>', detalle: 'rygtech.com.py · ENOTFOUND', enlace: '#/servicios/erp?q=rygtech.com.py' }] }] },
+    { id: 'mail', nombre: 'HEPTA Mail', enlace: '#/servicios/mail', estado: 'ok', chequeos: [{ estado: 'ok', nombre: 'API de mailcow', detalle: 'responde' }, { estado: 'ok', nombre: 'Contenedores de mailcow', detalle: 'los 18 en marcha' }] },
+    { id: 'drive', nombre: 'HEPTA Drive', enlace: '#/servicios/drive', estado: 'aviso', chequeos: [{ estado: 'ok', nombre: 'ClamAV', detalle: 'responde' }, { estado: 'aviso', nombre: 'Firmas de ClamAV', detalle: 'hace 5 días' }] },
+    { id: 'respaldos', nombre: 'Respaldos', estado: 'ok', chequeos: [{ estado: 'ok', nombre: 'Copias y retiro al NAS', detalle: 'sin alertas' }] },
+    { id: 'afuera', nombre: 'Vista de afuera', nota: 'Lo que ve el vigía.', estado: 'ok', chequeos: [{ estado: 'ok', nombre: 'Vigía de hcsvrnd01', detalle: 'reportó hace 2 min' }] }] });
   if (p === '/admin/mail/health') return ok({ mailcow: 'ok' });
   // Pedido con Mail y Drive
   if (p === '/admin/mail/domains' && m === 'POST') { llamadas.push('MAIL ' + JSON.stringify(body)); return ok({ domain: body.domain, created: true }); }
@@ -125,7 +132,22 @@ const server = http.createServer((req, res) => {
     await page.waitForFunction(() => /Secretos/.test(document.getElementById('att-lista').textContent));
     check(`[${tag}] inicio: secretos de Drive sin bajar se suman solos`, true);
     check(`[${tag}] menú con contadores`, /Leads\s*3/.test(await page.textContent('#nav')) && /Pagos\s*1/.test(await page.textContent('#nav')));
+    await page.waitForFunction(() => /Estado y respaldos\s*2/.test(document.getElementById('nav').textContent));
+    check(`[${tag}] menú: estado con 2 áreas para revisar, en rojo`, !!(await page.$('#nav a[href="#/estado"] .chip.bad')));
+    t = await page.textContent('#plat-lista');
+    check(`[${tag}] inicio: plataforma por área con el primer problema`, /HEPTA ERP/.test(t) && /Tenants activos: 1 de 4 no responden/.test(t) && /Respaldos/.test(t), t.slice(0, 120));
     await foto('inicio');
+
+    await ver('#/estado', '.card.estado-falla');
+    const orden = await page.$$eval('#e-grupos h2', hs => hs.map(h => h.textContent));
+    check(`[${tag}] estado: lo que falla primero, después avisos`, orden[0] === 'HEPTA ERP' && orden[1] === 'HEPTA Drive', orden.join(','));
+    check(`[${tag}] estado: tenants con detalle abierto porque hay uno caído`, !!(await page.$('details.det[open]')) && /rygtech.com.py · ENOTFOUND/.test(await page.textContent('details.det')));
+    check(`[${tag}] estado: texto escapado`, (await page.$$('#e-grupos details b b')).length === 0 && /Sistema de Rodri <b>x<\/b>/.test(await page.textContent('details.det')));
+    check(`[${tag}] estado: resumen arriba`, /2 áreas para revisar/.test(await page.textContent('#e-res')));
+    await foto('estado');
+    await page.click('#e-re');
+    await ver('#/respaldos', '.card.estado-falla');
+    check(`[${tag}] #/respaldos lleva al panel Estado`, (await page.textContent('#vista h1')) === 'Estado');
 
     await ver('#/clientes', 'tr.clic');
     await foto('clientes');

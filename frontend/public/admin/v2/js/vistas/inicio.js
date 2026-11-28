@@ -1,6 +1,7 @@
 // Inicio: los números del día, lo que requiere atención, trabajos en curso, estado de la plataforma y actividad.
 import { html, api, gs, hace, fechaHora, wa, PLANES } from '../core.js';
 import { describir } from './actividad.js';
+import { ETIQUETA, CHIP, resumen } from './estado.js';
 
 export async function render(v, rt, salio) {
   v.innerHTML = html`<div class="cab"><div><h1>Inicio</h1><p>${new Date().toLocaleDateString('es-PY', { weekday: 'long', day: 'numeric', month: 'long' })}</p></div><span id="plat-resumen"></span></div>
@@ -9,7 +10,7 @@ export async function render(v, rt, salio) {
       <section class="card" aria-labelledby="att"><div class="card-cab"><h2 id="att">Requiere atención</h2><span id="att-n"></span></div><div id="att-lista"><div class="cargando">Cargando…</div></div></section>
       <div class="col">
         <section class="card" aria-labelledby="jobs"><div class="card-cab"><h2 id="jobs">Trabajos en curso</h2><a href="#/pedido" class="chico">Nuevo pedido</a></div><div id="jobs-lista"><div class="cargando">Cargando…</div></div></section>
-        <section class="card" aria-labelledby="plat"><div class="card-cab"><h2 id="plat">Plataforma</h2><button class="btn sm" type="button" id="plat-re">Volver a probar</button></div><div id="plat-lista"></div></section>
+        <section class="card" aria-labelledby="plat"><div class="card-cab"><h2 id="plat">Plataforma</h2><a href="#/estado" class="chico">Ver el estado completo</a></div><div id="plat-lista"><div class="cargando">Revisando…</div></div></section>
         <section class="card" aria-labelledby="act"><div class="card-cab"><h2 id="act">Actividad reciente</h2><a href="#/actividad" class="chico">Registro completo</a></div><div id="act-lista"></div></section>
       </div>
     </div>`.s;
@@ -71,22 +72,15 @@ export async function render(v, rt, salio) {
   v.querySelector('#act-lista').innerHTML = act.length ? act.map(l => html`<div class="row"><span class="muted chico" style="width:108px;flex-shrink:0;white-space:nowrap">${fechaHora(l.created_at)}</span><div class="flex"><b>${(l.usuario || l.usuario_email || 'Sistema').split(' ')[0]}</b> ${describir(l)}</div></div>`).join('')
     : html`<div class="vacio">Sin actividad registrada.</div>`.s;
 
-  // ── Plataforma ──
-  const probar = async () => {
-    const SERV = [
-      { n: 'Alta de tenants', ruta: '/admin/provision/health', ok: (d) => d.success && d.status === 'ok', det: (d) => d.success ? `API ${d.status}` : d.error },
-      { n: 'mailcow', ruta: '/admin/mail/health', ok: (d) => d.success, det: (d) => d.success ? 'responde' : d.error },
-      { n: 'Agente HEPTA Drive', ruta: '/admin/drive/health', ok: (d) => d.success, det: (d) => d.success ? 'responde (TLS)' : d.error },
-    ];
-    const caja = v.querySelector('#plat-lista');
-    caja.innerHTML = SERV.map(s => html`<div class="row"><span class="punto"></span><div class="flex">${s.n}</div><span class="muted chico">probando…</span></div>`).join('');
-    const res = await Promise.all(SERV.map(async s => { const t = Date.now(); const d = await api('GET', s.ruta, undefined, { silencioso: true }); return { s, d, ms: Date.now() - t }; }));
-    if (salio()) return;
-    caja.innerHTML = res.map(({ s, d, ms }) => html`<div class="row"><span class="punto ${s.ok(d) ? 'ok' : 'bad'}"></span><div class="flex">${s.n}</div><span class="muted chico" title="${s.det(d) || ''}">${s.ok(d) ? `${s.det(d)} · ${ms} ms` : 'no responde'}</span></div>`).join('')
-      + html`<div class="row"><span class="punto"></span><div class="flex">NGINX perimetral, Cloudflare y ERP del grupo <span class="muted chico">· se suman a este panel en la próxima entrega</span></div></div>`.s;
-    const caidos = res.filter(x => !x.s.ok(x.d)).length;
-    v.querySelector('#plat-resumen').innerHTML = (caidos ? html`<span class="chip bad">${caidos} servicio${caidos > 1 ? 's' : ''} sin responder</span>` : html`<span class="chip ok">Plataforma en orden</span>`).s;
-  };
-  v.querySelector('#plat-re').addEventListener('click', probar);
-  probar();
+  // ── Plataforma: un renglón por área, del panel Estado (el backend lo guarda 60 s) ──
+  const e = await api('GET', '/admin/v2/estado', undefined, { silencioso: true });
+  if (salio()) return;
+  const caja = v.querySelector('#plat-lista');
+  if (!e.success) { caja.innerHTML = html`<div class="vacio">${e.error || 'No se pudo revisar'}</div>`.s; return; }
+  const PUNTO = { ok: 'ok', aviso: 'warn', falla: 'bad', sin_dato: '' };
+  caja.innerHTML = e.data.grupos.map(g => {
+    const mal = g.chequeos.filter(x => x.estado !== 'ok');
+    return html`<a class="row sin-subrayado" href="#/estado"><span class="punto ${PUNTO[g.estado]}"></span><div class="flex">${g.nombre}${mal.length ? html`<div class="muted chico">${mal[0].nombre}: ${mal[0].detalle}${mal.length > 1 ? ` (y ${mal.length - 1} más)` : ''}</div>` : ''}</div><span class="chip ${CHIP[g.estado]}">${ETIQUETA[g.estado]}</span></a>`;
+  }).join('');
+  v.querySelector('#plat-resumen').innerHTML = resumen(e.data).s;
 }

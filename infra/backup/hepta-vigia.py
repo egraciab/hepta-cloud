@@ -13,11 +13,13 @@ propio también está caído.
   hepta-vigia.py --estado       muestra cómo está cada cosa ahora, sin avisar a nadie
   hepta-vigia.py --configurar   pide la dirección de la señal de healthchecks.io y la guarda
   hepta-vigia.py --probar       manda un correo y una señal de prueba
+  hepta-vigia.py --configurar-panel   dirección y clave para reportar al panel "Estado" del Admin de HEPTA Cloud
+                                      (la clave se pide sin mostrarla; en el Admin se guarda solo su SHA-256)
 
 Qué revisa: la lista de abajo (CHEQUEOS), o las líneas CHEQUEO= de /etc/hepta-vigia.conf si las hay.
 El correo sale con los datos de /etc/hepta-backup-correo.conf (los mismos de los informes de respaldos).
 """
-import html, json, os, re, smtplib, socket, ssl, sys, urllib.request
+import getpass, html, json, os, re, smtplib, socket, ssl, sys, urllib.request
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
@@ -165,6 +167,38 @@ def senal(url, falla=False, texto=''):
         return False
 
 
+def reportar_panel(conf, res):
+    """Manda lo revisado al panel "Estado" del Admin de HEPTA Cloud. Si falla, el vigía sigue igual."""
+    url, clave = conf.get('PANEL_URL', ''), conf.get('PANEL_KEY', '')
+    if not url or not clave:
+        return None
+    datos = json.dumps({'chequeos': [{k: r[k] for k in ('id', 'nombre', 'destino', 'ok', 'motivo')} for r in res]}).encode('utf-8')
+    try:
+        req = urllib.request.Request(url, data=datos, method='POST', headers={
+            'Content-Type': 'application/json', 'X-Monitor-Key': clave, 'User-Agent': 'hepta-vigia/1'})
+        with urllib.request.urlopen(req, timeout=ESPERA, context=ssl.create_default_context()) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def guardar_conf(quitar, agregar):
+    """Reescribe el .conf sin las claves de `quitar` y con las líneas de `agregar` (600)."""
+    lineas = []
+    try:
+        with open(CONF, encoding='utf-8') as f:
+            lineas = [l for l in f.read().splitlines() if not any(l.startswith(k + '=') for k in quitar)]
+    except OSError:
+        lineas = ['# Vigía de servicios HEPTA. Solo root (600).']
+    old = os.umask(0o077)
+    try:
+        with open(CONF, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(lineas + agregar) + '\n')
+    finally:
+        os.umask(old)
+    os.chmod(CONF, 0o600)
+
+
 def cuerpo(titulo, color, bloques, ahora):
     filas = ''
     for encabezado, c, items in bloques:
@@ -213,6 +247,20 @@ def main():
         if url:
             print('  señal recibida por healthchecks.io' if senal(url) else '  NO se pudo enviar la señal: revisá la dirección')
         return 0
+
+    if '--configurar-panel' in args:
+        url = input('Dirección del panel [https://cloud.hepta.com.py/api/monitor/vigia]: ').strip() or 'https://cloud.hepta.com.py/api/monitor/vigia'
+        if not re.match(r'^https://[A-Za-z0-9.-]+/[A-Za-z0-9/_-]+$', url):
+            print('No parece una dirección https válida; no se guardó nada.'); return 1
+        clave = getpass.getpass('Clave del monitor (la de KeePass; no se muestra): ').strip()
+        if not re.match(r'^[A-Za-z0-9_-]{40,128}$', clave):
+            print('La clave tiene que tener de 40 a 128 letras, números, guion o guion bajo; no se guardó nada.'); return 1
+        guardar_conf(('PANEL_URL', 'PANEL_KEY'), [f"PANEL_URL='{url}'", f"PANEL_KEY='{clave}'"])
+        conf, _ = leer_conf(CONF)
+        print(f"Guardado en {CONF} (600). Probando…")
+        ok = reportar_panel(conf, revisar(chequeos, ahora))
+        print('  el panel recibió el reporte' if ok else '  NO llegó: revisá la clave cargada en el Admin (monitor_api_key) y la dirección')
+        return 0 if ok else 1
 
     res = revisar(chequeos, ahora)
     caidos = [r for r in res if not r['ok']]
@@ -290,6 +338,9 @@ def main():
         ok_senal = senal(url_senal, falla=bool(avisados), texto='\n'.join(f"CAIDO {r['nombre']}: {r['motivo']}" for r in avisados))
         if ok_senal is False:
             print(f"{datetime.now():%F %T} no se pudo enviar la señal a healthchecks.io", file=sys.stderr)
+
+    if reportar_panel(conf, res) is False:
+        print(f"{datetime.now():%F %T} no se pudo reportar al panel de HEPTA Cloud", file=sys.stderr)
 
     os.makedirs(os.path.dirname(ESTADO), exist_ok=True)
     with open(ESTADO + '.tmp', 'w', encoding='utf-8') as f:

@@ -10,12 +10,14 @@
 //    GET /api/admin/v2/clientes        → clientes (entidades fiscales) con cuántos servicios tiene cada uno
 //    GET /api/admin/v2/clientes/:id    → la ficha: datos, usuarios, instancias, drive, correo, leads, actividad
 //    GET /api/admin/v2/buscar?q=       → búsqueda global (Ctrl K)
+//    GET /api/admin/v2/estado          → estado de ERP, Mail, Drive, respaldos y vista de afuera (?fresco=1)
 //
 //  Cada bloque se consulta por separado: si una tabla falla, el resto llega igual y el error va en
 //  `errores` (el Admin muestra "no disponible" en ese bloque en lugar de romperse entero).
 // ============================================================
 const router = require('express').Router();
 const pool   = require('../config/db');
+const estado = require('../services/estado');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -30,6 +32,12 @@ async function bloque(errores, nombre, fn, porDefecto) {
 }
 const filas = async (sql, params) => (await pool.query(sql, params)).rows;
 const uno   = async (sql, params) => (await pool.query(sql, params)).rows[0] || null;
+
+// ── Estado de la plataforma ──────────────────────────────────
+router.get('/v2/estado', async (req, res) => {
+  try { res.json({ success: true, data: await estado.estado({ fresco: req.query.fresco === '1' }) }); }
+  catch (err) { console.error('[admin/v2 estado]', err.message); res.status(500).json({ success: false, error: 'No se pudo revisar el estado' }); }
+});
 
 // ── Inicio ───────────────────────────────────────────────────
 router.get('/v2/inicio', async (req, res) => {

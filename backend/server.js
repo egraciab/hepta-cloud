@@ -47,6 +47,7 @@ app.use('/api/leads',  leadsRoutes);
 app.use('/api/admin',     adminRoutes);
 app.use('/api/admin/provision', provisionRoutes);
 app.use('/api/admin/drive', require('./routes/drive.routes'));   // HEPTA Drive (Nextcloud por cliente)
+app.use('/api/monitor', require('./routes/monitor.routes'));      // reportes del vigía (clave propia)
 app.use('/api', paymentsRoutes);
 app.use('/api',        publicRoutes);
 
