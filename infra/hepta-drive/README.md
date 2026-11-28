@@ -22,7 +22,7 @@ un cliente vive en `/srv/nextcloud/<cliente>/` (`html/`, `data/`, `db/`), en el 
 | `respaldo/hepta-drive-enrolar.sh` | `hcsvrnd01` | Cada 10 min: crea en el servidor de respaldos el repositorio de un cliente nuevo, hace la primera copia y la verifica |
 | `alta-cliente.sh` | VM `hepta-drive` (`hepta-drive-alta`) | Alta, verificación, estado y baja de un cliente |
 | `agente/` | VM `hepta-drive` (`/opt/hepta-drive/agente`, servicio `hepta-drive-agente`) | Puerta del Admin de HEPTA Cloud: `10.10.50.220:8888`, TLS con certificado propio, clave y filtro de origen. Valida, crea en segundo plano, informa y entrega los secretos. Todo termina en `hepta-drive-alta` |
-| `salud/hepta-drive-salud.py` | VM `hepta-drive` (`/usr/local/sbin/hepta-drive-salud`, cron cada 15 min) | Salud de adentro de la VM: ClamAV responde como lo ve Nextcloud, firmas de ≤ 2 días, RAM disponible y disco de datos. Señal a healthchecks.io |
+| `salud/hepta-drive-salud.py` | VM `hepta-drive` (`/usr/local/sbin/hepta-drive-salud`, cron cada 15 min) | Salud de adentro de la VM: ClamAV responde como lo ve Nextcloud, firmas de ≤ 4 días, RAM disponible y disco de datos. Señal a healthchecks.io |
 | `marca/logo.png` | `/opt/hepta-drive/plantilla/marca/` | Logo de Hepta Cloud: el que lleva una instancia si el cliente no trae el suyo (`--logo`) |
 | `../../tools/drive_vhost_add.sh` | NGINX perimetral | Vhost `<cliente>.drive.hepta.com.py` |
 | `../backup/conf/hepta-drive.conf` | `/etc/hepta-backup.conf` de la VM | Configuración y volcados cada 6 h, como las demás VM |
@@ -95,7 +95,7 @@ docker exec shared-clamav-1 grep -E '^(StreamMaxLength|MaxThreads|MaxQueue|ReadT
 ```
 
 `hepta-drive-salud` revisa cada 15 minutos lo que el vigía de `hcsvrnd01` no ve desde afuera: que ClamAV responda
-(desde un contenedor de cliente, como Nextcloud), que las firmas tengan como mucho 2 días, que queden 4 GiB de RAM y
+(desde un contenedor de cliente, como Nextcloud), que las firmas tengan como mucho 4 días (ClamAV a veces pasa 2 o 3 días sin publicar), que queden 4 GiB de RAM y
 que el volumen de datos no pase del 85 %. Manda una señal a healthchecks.io, "bien" o "falla" con el detalle; si la
 señal deja de llegar, healthchecks.io avisa igual. En healthchecks.io: un chequeo aparte con período 15 minutos y
 gracia 30, con aviso al mismo correo de afuera que el del vigía.

@@ -6,7 +6,8 @@ dentro de la VM. Esto revisa lo de adentro:
 
   - ClamAV responde, y lo prueba como lo ve Nextcloud: desde un contenedor de cliente, por la red hd-shared, a
     clamav:3310. Si no responde, Nextcloud rechaza las subidas ("No connection to anti virus").
-  - Las firmas tienen como mucho FIRMAS_MAX_DIAS días (freshclam las baja solas varias veces por día).
+  - Las firmas tienen como mucho FIRMAS_MAX_DIAS días (4). freshclam revisa varias veces por día, pero ClamAV
+    a veces pasa 2 o 3 días sin publicar una base nueva: menos de 4 avisaría en falso.
   - La RAM disponible no baja de RAM_MIN_GIB (si baja, es hora de darle más a la VM).
   - El volumen de datos (/srv/nextcloud) no pasa de DISCO_MAX_PCT por ciento.
 
@@ -21,7 +22,7 @@ Configuración en /etc/hepta-drive-salud.conf: SENAL=https://hc-ping.com/... y, 
 FIRMAS_MAX_DIAS, RAM_MIN_GIB, DISCO_MAX_PCT, DATOS. La dirección de la señal es una credencial: no va al repo ni al chat.
 """
 import getpass, os, re, shutil, subprocess, sys, urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 
 CONF = os.environ.get('HEPTA_DRIVE_SALUD_CONF', '/etc/hepta-drive-salud.conf')
 RED = 'hd-shared'
@@ -87,8 +88,8 @@ def probar_clamav(max_dias):
         return [(False, 'ClamAV', f'no responde desde {c}: {motivo}'), (False, 'Firmas de ClamAV', 'sin dato')]
     res = [(True, 'ClamAV', f'responde desde {c} (versión {m.group(1)})')]
     try:
-        fecha = datetime.strptime(m.group(3).strip(), '%a %b %d %H:%M:%S %Y')
-        dias = (datetime.utcnow() - fecha).total_seconds() / 86400
+        fecha = datetime.strptime(m.group(3).strip(), '%a %b %d %H:%M:%S %Y').replace(tzinfo=timezone.utc)
+        dias = (datetime.now(timezone.utc) - fecha).total_seconds() / 86400
         texto = f'base {m.group(2)}, del {fecha:%Y-%m-%d %H:%M} UTC (hace {dias:.1f} días)'
         res.append((dias <= max_dias, 'Firmas de ClamAV', texto))
     except ValueError:
@@ -118,7 +119,7 @@ def probar_disco(ruta, max_pct):
 
 
 def revisar(c):
-    res = probar_clamav(numero(c, 'FIRMAS_MAX_DIAS', 2))
+    res = probar_clamav(numero(c, 'FIRMAS_MAX_DIAS', 4))
     res.append(probar_ram(numero(c, 'RAM_MIN_GIB', 4)))
     res.append(probar_disco(c.get('DATOS', '/srv/nextcloud'), numero(c, 'DISCO_MAX_PCT', 85)))
     return res
