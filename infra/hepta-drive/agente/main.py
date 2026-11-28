@@ -6,6 +6,7 @@ Es la puerta por la que el Admin de HEPTA Cloud pide el alta de un cliente de dr
 cuenta: cada pedido termina en /usr/local/sbin/hepta-drive-alta, el mismo script que se usa por consola.
 
   GET  /health                         está vivo (no dice nada más)
+  GET  /salud                          salud de la VM: ClamAV, firmas, RAM y disco (hepta-drive-salud --json)
   GET  /clientes                       estado de todas las instancias
   GET  /clientes/{slug}                estado de una
   POST /validar                        revisa un pedido sin cambiar nada
@@ -41,10 +42,11 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import APIKeyHeader
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 API_KEY = os.getenv("DRIVE_API_KEY", "")
 ALLOWED_IPS = {ip.strip() for ip in os.getenv("ALLOWED_IPS", "").split(",") if ip.strip()}
 ALTA = os.getenv("HD_ALTA", "/usr/local/sbin/hepta-drive-alta")
+SALUD = os.getenv("HD_SALUD", "/usr/local/sbin/hepta-drive-salud")
 VAR = os.getenv("HD_VAR", "/var/lib/hepta-drive")
 TRABAJOS_DIR = os.path.join(VAR, "agente", "trabajos")
 LOG_FILE = os.getenv("LOG_FILE", "/var/log/hepta-drive-agente.log")
@@ -235,6 +237,21 @@ def hacer_trabajo(t, args, usuarios):
 @app.get("/health")
 def health():
     return {"ok": True, "version": VERSION}
+
+
+@app.get("/salud", dependencies=[Depends(con_clave)])
+def salud():
+    """Solo lee: corre hepta-drive-salud --json, que no manda la señal a healthchecks.io."""
+    try:
+        r = subprocess.run([SALUD, "--json"], capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="la revisión de salud no respondió a tiempo")
+    except OSError:
+        raise HTTPException(status_code=503, detail=f"falta instalar {SALUD} en la VM")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        raise HTTPException(status_code=500, detail=(r.stderr.strip() or "respuesta que no se entiende")[-300:])
 
 
 @app.get("/clientes", dependencies=[Depends(con_clave)])

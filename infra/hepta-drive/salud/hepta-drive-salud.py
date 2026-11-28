@@ -16,12 +16,13 @@ cron roto) también avisa healthchecks.io, desde afuera.
 
   hepta-drive-salud.py               revisión normal (la que corre el cron)
   hepta-drive-salud.py --estado      muestra cómo está cada cosa, sin mandar señal
+  hepta-drive-salud.py --json        lo mismo en JSON, sin mandar señal (lo usa el agente para el Admin)
   hepta-drive-salud.py --configurar  pide la dirección de la señal (sin mostrarla) y la guarda en el .conf (600)
 
 Configuración en /etc/hepta-drive-salud.conf: SENAL=https://hc-ping.com/... y, si hace falta cambiarlos,
 FIRMAS_MAX_DIAS, RAM_MIN_GIB, DISCO_MAX_PCT, DATOS. La dirección de la señal es una credencial: no va al repo ni al chat.
 """
-import getpass, os, re, shutil, subprocess, sys, urllib.request
+import getpass, json, os, re, shutil, subprocess, sys, urllib.request
 from datetime import datetime, timezone
 
 CONF = os.environ.get('HEPTA_DRIVE_SALUD_CONF', '/etc/hepta-drive-salud.conf')
@@ -169,6 +170,10 @@ def main():
     if '--estado' in sys.argv:
         print(texto)
         return 1 if fallas else 0
+    if '--json' in sys.argv:
+        print(json.dumps({'ok': not fallas, 'revisado': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                          'chequeos': [{'ok': ok, 'nombre': n, 'detalle': d} for ok, n, d in res]}, ensure_ascii=False))
+        return 0
     ahora = f'{datetime.now():%F %T}'
     if fallas:
         print(f'{ahora} ' + ' · '.join(f'{n}: {d}' for _, n, d in fallas), file=sys.stderr)

@@ -177,6 +177,13 @@ async function salud() {
   return r.json;
 }
 
+// Salud de la VM (ClamAV, firmas, RAM, disco). Solo lectura: la VM no manda la señal externa por esto.
+async function saludVm() {
+  const r = await pedir('GET', '/salud', undefined, { timeoutMs: 70000 });
+  if (!r.ok) throw new ErrorDrive(502, detalle(r));
+  return r.json;
+}
+
 // Lo que hay en la VM (la verdad sobre qué existe) más lo que sabe HEPTA Cloud (de quién es, quién lo pidió).
 async function listar() {
   reanudar().catch(() => {});
@@ -568,4 +575,4 @@ async function secretosGuardados(slug) {
   return true;
 }
 
-module.exports = { ErrorDrive, salud, listar, validar, crear, verTrabajo, verificar, usuarios, agregarUsuarios, estadoUsuario, eliminarUsuario, publicar, dominioPropio, suspension, baja, secretos, secretosGuardados, reanudar };
+module.exports = { ErrorDrive, salud, saludVm, listar, validar, crear, verTrabajo, verificar, usuarios, agregarUsuarios, estadoUsuario, eliminarUsuario, publicar, dominioPropio, suspension, baja, secretos, secretosGuardados, reanudar };

@@ -44,6 +44,7 @@
         </div>
         <button class="btn btn-secondary btn-sm" onclick="loadDrive()">Actualizar</button>
       </div>
+      <div id="drive-salud" style="border-top:1px solid var(--gray-200);padding:10px 20px 14px;font-size:13px;color:var(--gray-600)">Salud del servidor: revisando…</div>
     </div>
 
     <div class="card" id="drive-job-card" style="display:none;margin-bottom:16px">
@@ -453,6 +454,21 @@
     if (abierta && !sondeo) seguirTrabajo(abierta.registro.ultimo_trabajo);
   }
 
+  // Salud de la VM: antivirus (como lo ve Nextcloud), firmas, RAM y disco. Si falla el antivirus, Nextcloud
+  // rechaza las subidas: por eso va arriba de todo y en rojo.
+  async function cargarSalud() {
+    const caja = $('drive-salud');
+    const r = await api('GET', '/admin/drive/salud');
+    if (!r || !r.success) { caja.innerHTML = `<span style="color:var(--red)">Salud del servidor: ${esc((r && r.error) || 'no se pudo revisar')}</span>`; return; }
+    const d = r.data;
+    const hora = d.revisado ? new Date(d.revisado).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' }) : '';
+    caja.innerHTML = `<div style="margin-bottom:6px"><strong style="color:${d.ok ? '#047857' : 'var(--red)'}">${d.ok ? 'Todo en orden' : 'Hay algo para revisar'}</strong>
+        <span class="text-muted text-sm">· revisado ${esc(hora)}</span></div>` +
+      (d.chequeos || []).map(c => `<div style="display:flex;gap:8px;align-items:baseline;margin-top:3px">
+        <span style="flex:none;width:8px;height:8px;border-radius:50%;background:${c.ok ? '#10B981' : 'var(--red)'}"></span>
+        <span><strong>${esc(c.nombre)}</strong>: <span${c.ok ? '' : ' style="color:var(--red)"'}>${esc(c.detalle)}</span></span></div>`).join('');
+  }
+
   window.driveVerTrabajo = id => seguirTrabajo(id);
 
   window.driveSuspension = async function (slug, suspender, btn) {
@@ -516,7 +532,7 @@
     cargarTabla();
   };
 
-  function loadDrive() { $('drive-ok').className = 'alert alert-success'; $('drive-err').className = 'alert alert-error'; return cargarTabla(); }
+  function loadDrive() { $('drive-ok').className = 'alert alert-success'; $('drive-err').className = 'alert alert-error'; $('drive-salud').textContent = 'Salud del servidor: revisando…'; cargarSalud(); return cargarTabla(); }
   window.loadDrive = loadDrive;
   try { sectionTitles.drive = 'HEPTA Drive'; } catch (e) { /* sin navegación */ }
   try { sectionLoaders.drive = loadDrive; } catch (e) { /* sin navegación */ }

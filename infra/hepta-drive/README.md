@@ -22,6 +22,7 @@ un cliente vive en `/srv/nextcloud/<cliente>/` (`html/`, `data/`, `db/`), en el 
 | `respaldo/hepta-drive-enrolar.sh` | `hcsvrnd01` | Cada 10 min: crea en el servidor de respaldos el repositorio de un cliente nuevo, hace la primera copia y la verifica |
 | `alta-cliente.sh` | VM `hepta-drive` (`hepta-drive-alta`) | Alta, verificación, estado y baja de un cliente |
 | `agente/` | VM `hepta-drive` (`/opt/hepta-drive/agente`, servicio `hepta-drive-agente`) | Puerta del Admin de HEPTA Cloud: `10.10.50.220:8888`, TLS con certificado propio, clave y filtro de origen. Valida, crea en segundo plano, informa y entrega los secretos. Todo termina en `hepta-drive-alta` |
+| `hepta-drive-desplegar.sh` | `hcsvrnd01` (`/usr/local/sbin/hepta-drive-desplegar`) | Lleva a la VM el alta, la salud y el agente desde el clon del repo de la VM `hepta-cloud`, con `lxc file` (sin git ni claves en la DMZ). Sin `--aplicar` solo muestra las diferencias. `shared/` solo lo compara |
 | `salud/hepta-drive-salud.py` | VM `hepta-drive` (`/usr/local/sbin/hepta-drive-salud`, cron cada 15 min) | Salud de adentro de la VM: ClamAV responde como lo ve Nextcloud, firmas de ≤ 4 días, RAM disponible y disco de datos. Señal a healthchecks.io |
 | `marca/logo.png` | `/opt/hepta-drive/plantilla/marca/` | Logo de Hepta Cloud: el que lleva una instancia si el cliente no trae el suyo (`--logo`) |
 | `../../tools/drive_vhost_add.sh` | NGINX perimetral | Vhost `<cliente>.drive.hepta.com.py` |
@@ -108,6 +109,9 @@ echo '*/15 * * * * root /usr/local/sbin/hepta-drive-salud >> /var/log/hepta-driv
 ```
 
 Los umbrales se cambian en el mismo `.conf` (`FIRMAS_MAX_DIAS`, `RAM_MIN_GIB`, `DISCO_MAX_PCT`).
+
+El Admin de HEPTA Cloud muestra lo mismo arriba de todo en **HEPTA Drive** (agente `GET /salud`, que corre
+`hepta-drive-salud --json`: solo lee y no manda la señal).
 
 ## Restaurar
 
