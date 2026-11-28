@@ -5,6 +5,8 @@
   hepta-backup-informe.py semanal    resumen de los últimos 7 días y del export semanal de las VM completas
   ... --ver archivo.html             no envía: deja el informe en ese archivo para mirarlo
   ... --prueba                       envía el informe con "[PRUEBA]" en el asunto
+  hepta-backup-informe.py panel      no envía nada: imprime en JSON el estado de ahora (últimas 24 h), para el
+                                     panel "Estado" del Admin de HEPTA Cloud (lo llama el vigía en cada pasada)
 
 Lee solo el NAS: lo que dejan hepta-backup-retirar.sh (historial de corridas y de pasadas) y export-vms.sh.
 Colores: verde = todo bien · naranja = hay algo para mirar, pero hay respaldo · rojo = falta un respaldo.
@@ -21,7 +23,7 @@ EXPORTS = os.environ.get('HEPTA_EXPORTS', MONTAJE + '/lxd-exports')
 CONF = os.environ.get('HEPTA_CORREO_CONF', '/etc/hepta-backup-correo.conf')
 VMS = os.environ.get('HEPTA_VMS', 'hepta-cloud retopa-core HGSVRLNX104 HGSVRLNX111 dkr-hgsvrlnx003 v-HGSVRLNX004 hepta-drive').split()
 NOMBRES = {'hepta-cloud': 'Hepta Cloud', 'retopa-core': 'RetoPA', 'HGSVRLNX104': 'Tenants Odoo', 'HGSVRLNX111': 'ERP del grupo',
-           'dkr-hgsvrlnx003': 'Nginx perimetral', 'v-HGSVRLNX004': 'Correo (mailcow)'}
+           'dkr-hgsvrlnx003': 'Nginx perimetral', 'v-HGSVRLNX004': 'Correo (mailcow)', 'hepta-drive': 'HEPTA Drive'}
 PY = timezone(timedelta(hours=-3))          # hora de Paraguay
 CADA_H, MAX_H = 6, 7                         # los respaldos corren cada 6 h; más de 7 h sin uno bueno es error
 OK, AVISO, ERROR = 0, 1, 2
@@ -405,8 +407,37 @@ def enviar(asunto, cuerpo, texto):
         s.send_message(m, to_addrs=[d.strip() for d in c['SMTP_DESTINATARIOS'].split(',') if d.strip()])
 
 
+def panel(ahora):
+    """Lo mismo que mira el informe diario, en JSON y sin HTML. Estados: ok · aviso · falla."""
+    EST = {OK: 'ok', AVISO: 'aviso', ERROR: 'falla'}
+    limpio = lambda t: html.unescape(re.sub(r'<[^>]+>', '', str(t or ''))).strip()
+    iso = lambda d: d.isoformat() if d else None
+    vms = []
+    for v in (evaluar_vm(x, ahora, 1) for x in VMS):
+        vms.append({'vm': v['vm'], 'nombre': v['nombre'], 'estado': EST[v['estado']], 'ultima': iso(v['ultima']),
+                    'bytes': v['bytes'], 'volcados': v['volcados'], 'buenas_24h': v['buenas'], 'fallidas_24h': v['fallidas'],
+                    'notas': v['notas'][:3], 'errores': v['errores'][-2:]})
+    ret = evaluar_retiro(ahora, 1)
+    exp = evaluar_export(ahora)
+    res = evaluar_restauracion(ahora)
+    return {
+        'vms': vms,
+        'retiro': {'estado': EST[ret['estado']], 'notas': ret['notas'][:3], 'alertas': ret['alertas'][:5],
+                   'horas_desde_ultimo': round(ret['ultimo'], 1) if 'ultimo' in ret else None,
+                   'libre': ret.get('libre'), 'total': ret.get('total')},
+        'export': {'estado': EST[exp['estado']], 'notas': exp['notas'][:3], 'fecha': iso(exp['fecha']), 'vms': len(exp['vms']), 'bytes': exp['total']},
+        'fuera_de_sitio': [{'titulo': x['titulo'], 'estado': EST[x['estado']], 'detalle': limpio(x['detalle']), 'notas': x['notas'][:2]}
+                           for x in evaluar_drive(ahora)],
+        'restauracion': {'estado': EST[res['estado']], 'detalle': limpio(res['detalle']), 'notas': [limpio(n) for n in res['notas'][:3]]},
+    }
+
+
 def main():
     args = sys.argv[1:]
+    if args and args[0] == 'panel':
+        ahora = datetime.fromisoformat(os.environ['HEPTA_AHORA']) if os.environ.get('HEPTA_AHORA') else datetime.now(timezone.utc)
+        print(json.dumps(panel(ahora), ensure_ascii=False))
+        return 0
     if not args or args[0] not in ('diario', 'semanal'):
         print(__doc__); return 2
     ahora = datetime.now(timezone.utc)

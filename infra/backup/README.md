@@ -152,4 +152,6 @@ Estado entre pasadas: `/var/lib/hepta-vigia/estado.json`.
 (`POST /api/monitor/vigia`, cabecera `X-Monitor-Key`), que lo muestra junto con ERP, Mail y Drive, y los respaldos
 como un grupo propio. Si el reporte no llega por más de 15 minutos, el panel lo marca. La clave nace en KeePass
 (40 caracteres o más, letras y números): en `hcsvrnd01` va a `/etc/hepta-vigia.conf` con `hepta-vigia --configurar-panel`
-(no se muestra), y en HEPTA Cloud se guarda solo su SHA-256 en `site_config.monitor_api_key`.
+(no se muestra), y en HEPTA Cloud se guarda solo su SHA-256 en `site_config.monitor_api_key`. El detalle de los respaldos (cada VM, retiro al
+NAS, copia a Google Drive, export semanal y prueba de restauración) lo arma `hepta-backup-informe panel`, que el
+vigía llama en cada pasada: lee el NAS igual que el informe diario y no envía nada.
